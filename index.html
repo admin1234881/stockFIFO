@@ -1267,7 +1267,7 @@
     border: none;
     font-size: 1.5rem;
     box-shadow: 0 6px 18px rgba(13,110,253,0.4);
-    z-index: 999998;
+    z-index: 1050;
     cursor: pointer;
     transition: transform 0.2s ease;
     display: flex;
@@ -1302,7 +1302,7 @@
     background: #fff;
     border-radius: 18px;
     box-shadow: 0 12px 36px rgba(0,0,0,0.2);
-    z-index: 999999;
+    z-index: 1049;
     display: none;
     flex-direction: column;
     overflow: hidden;
@@ -1401,12 +1401,6 @@
 .contact-status { font-size: 0.72rem; color: #adb5bd; }
 .contact-status.online { color: #28a745; }
 .support-back-btn { background: none; border: none; color: #fff; font-size: 1.1rem; margin-right: 6px; cursor: pointer; }
-.auto-filled-field {
-    background-color: #fff8e1 !important;
-    border: 1.5px solid #ffc107 !important;
-    color: #7a5c00 !important;
-    font-weight: 600;
-}
 </style>
 <body>
 <!-- ========================================= -->
@@ -1449,7 +1443,7 @@
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li><a class="dropdown-item"
-                                href="https://drive.google.com/uc?export=download&id=1IS5KmKwYZ7B7imUt5hR95Y347PDeYFHP"><i
+                                href="https://drive.google.com/uc?export=download&id=1zjfdGjKeu557tvc-ybq89-cBuStTF5CT"><i
                                     class="bi bi-file-earmark-pdf-fill me-2 text-danger"></i>คู่มือระบบ STOCK FG</a>
                         </li>
                         <li><a class="dropdown-item"
@@ -1595,8 +1589,9 @@
     </div>
     </div>
         <!-- 💬 ปุ่มแชทลอยแจ้งปัญหาการใช้งาน -->
-        <button type="button" class="support-fab" id="support-fab-btn" title="แจ้งปัญหาการใช้งาน" style="display:none;">
+    <button type="button" class="support-fab" id="support-fab-btn" title="แจ้งปัญหาการใช้งาน" style="display:none;">
         <i class="bi bi-headset"></i>
+        <span class="support-fab-badge" id="support-fab-badge" style="display:none;">0</span>
     </button>
     <div class="support-popup" id="support-popup">
         <!-- หน้ารายชื่อผู้ติดต่อ -->
@@ -1923,7 +1918,7 @@
                 <div class="col-md-3">
                     <label for="plan-customer" class="form-label fw-bold text-secondary small">ลูกค้า</label>
                     <div class="position-relative">
-                        <input type="text" id="plan-customer" class="form-control auto-filled-field" placeholder="ดึงอัตโนมัติจากรหัสสินค้า..." readonly required autocomplete="off">
+                        <input type="text" id="plan-customer" class="form-control bg-light border-0 text-dark" placeholder="ดึงอัตโนมัติจากรหัสสินค้า..." readonly required autocomplete="off">
                         <div id="plan-customer-suggestions" class="list-group position-absolute w-100 suggestions-container shadow-lg" style="z-index: 1050; max-height: 200px; overflow-y: auto;"></div>
                     </div>
                 </div>
@@ -1936,7 +1931,7 @@
                 </div>
                 <div class="col-md-3">
                     <label for="plan-product-name" class="form-label fw-bold text-secondary small">ชื่อสินค้า / รายละเอียด</label>
-                    <input type="text" id="plan-product-name" class="form-control auto-filled-field" readonly>
+                    <input type="text" id="plan-product-name" class="form-control bg-light border-0 text-muted" readonly>
                 </div>
                 
                 <div class="col-md-2">
@@ -3641,7 +3636,7 @@ function handleLogin(e) {
                     }
                 };
                     // --- GOOGLE APPS SCRIPT CONFIGURATION ---
-                const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyLfGMHfKxdU3NtNKEdtFhbRdmkNoqxMQ1qlEKRAE_Lt9WCFeoVowCRExpHkBlmYxQouQ/exec';
+                const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzDF2CMs2EhLfe1Hh2NFlcLdPU2FrSfA8VQOQI1fgLHXnbZl2k-KKw5q3gyHv0zLffATw/exec';
 
                 // --- DATABASE SIMULATION & PERSISTENCE ---
                                 let db = { users: [], products: [], history: [], announcements: [], stockCounts: [], deliveryPlans: [], rackHistory: [], forecast: [], lotHolds: [] };
@@ -5087,9 +5082,6 @@ clearInterval(window.mascotLoopTimer);
 
                     // 🟢 ระบบบังคับสลับหน้าแรกอัตโนมัติ (ดักจับคนไม่มีสิทธิ์ดูสต็อก)
                     setTimeout(() => {
-                        // 🟢 แก้บั๊ก: ไม่เคยมีการประกาศตัวแปรนี้มาก่อน ทำให้ทั้งฟังก์ชันพังตั้งแต่บรรทัดนี้
-                        // กำหนดให้ทุกคนดูหน้าสต็อกได้เป็นค่าเริ่มต้น (ไม่มีการจำกัดสิทธิ์เฉพาะสำหรับหน้านี้ในระบบตอนนี้)
-                        const canViewStock = true;
                         if (!canViewStock) {
                             // 1. ถอดคลาสที่ทำให้หน้าสต็อกโชว์ค้างอยู่ออก
                             const stockPane = document.getElementById('pills-stock');
@@ -5120,7 +5112,6 @@ clearInterval(window.mascotLoopTimer);
         if (typeof window.initSupportWidget === 'function') window.initSupportWidget(); // 🟢 เปิดใช้งานปุ่มแชทลอย
     const supportFabBtn = document.getElementById('support-fab-btn');
     if (supportFabBtn) supportFabBtn.style.display = ''; // 🟢 โชว์ปุ่มแชทหลังล็อกอินสำเร็จเท่านั้น
-    if (typeof window.startSupportBackgroundPoll === 'function') window.startSupportBackgroundPoll(); // 🟢 เริ่มเช็คข้อความใหม่เบื้องหลัง เด้งป็อบอัพอัตโนมัติ
     if (typeof window.populateSupportTicketPage === 'function') window.populateSupportTicketPage(); // 🟢 อัปเดต badge จำนวนแจ้งปัญหาใหม่ตั้งแต่เปิดแอป
     if (typeof window.checkMySupportReplies === 'function') window.checkMySupportReplies(); // 🟢 เช็คว่า User มีคำตอบใหม่ที่ยังไม่เห็นไหม
     startDataSync();
@@ -8488,21 +8479,21 @@ window.returnGroupVehicle = function(date, displayTime, customer) {
             const returnTime = new Date().toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}); 
 
             try {
-                // 🟢 เปลี่ยนจากยิงพร้อมกัน (Promise.all) เป็นยิงทีละรายการ (Sequential)
-                // เพราะ Apps Script มี Lock เดียวคุมทุกการเขียนอยู่แล้ว ยิงพร้อมกันไม่ได้ช่วยให้เร็วขึ้น
-                // แต่กลับเพิ่มความเสี่ยงให้บางรายการรอนานจนหลุด/404 แทน
-                for (const plan of plansToUpdate) {
+                const promises = plansToUpdate.map(async (plan) => {
+                    // ยิงสถานะไปเก็บในฐานข้อมูล
                     await callAppsScript('updateDeliveryPlan', {
                         id: plan.id, status: 'Completed', actualReturnTime: "'" + returnTime
                     });
-
+                    
                     // 🛠️ บังคับอัปเดต ID ตรงๆ ป้องกัน Auto-sync ลบทับกลางคัน
                     const realPlan = db.deliveryPlans.find(p => p.id === plan.id);
                     if (realPlan) {
                         realPlan.status = 'Completed';
                         realPlan.actualReturnTime = "'" + returnTime;
                     }
-                }
+                });
+
+                await Promise.all(promises); // ⚡ รันพร้อมกันทีเดียว!
                 
                 if (typeof renderDeliveryPlanTable === 'function') renderDeliveryPlanTable(safeDate);
                 if (typeof populateVehicleDashboard === 'function') populateVehicleDashboard();
@@ -8525,73 +8516,6 @@ let currentChatPartnerLabel = null;
 function getRoomId(userA, userB) {
     return [userA, userB].sort().join('__');
 }
-
-let seenSupportMsgIds = new Set();
-let supportSeenInitialized = false;
-let supportBackgroundPollTimer = null;
-
-// 🟢 ตรวจสอบข้อความใหม่แบบเบื้องหลังตลอดเวลา (ไม่ว่าป็อบอัพจะเปิดอยู่หรือไม่) แล้วเด้งหน้าต่างขึ้นเองถ้ามีข้อความเข้า
-window.startSupportBackgroundPoll = function() {
-    if (supportBackgroundPollTimer) return;
-    window.checkForNewSupportMessages();
-    supportBackgroundPollTimer = setInterval(window.checkForNewSupportMessages, 8000); // 🟢 ลดจาก 5 วิ เป็น 8 วิ ลดโหลด
-};
-
-let supportPollFailCount = 0;
-
-window.checkForNewSupportMessages = async function() {
-    if (!currentUser) return;
-    try {
-        const res = await fetch(SCRIPT_URL + '?action=getChatMessages&t=' + Date.now());
-        if (!res.ok) throw new Error('status ' + res.status);
-        const data = await res.json();
-        supportPollFailCount = 0; // สำเร็จแล้ว รีเซ็ตตัวนับ error
-
-        db.supportTickets = data.messages || [];
-        db.userPresence = data.presence || [];
-
-        const myIncoming = (db.supportTickets || []).filter(t =>
-            t.sender !== currentUser.username && t.roomId && t.roomId.includes(currentUser.username)
-        );
-
-        let newestUnseen = null;
-        myIncoming.forEach(m => {
-            if (!seenSupportMsgIds.has(m.id)) {
-                seenSupportMsgIds.add(m.id);
-                newestUnseen = m;
-            }
-        });
-
-        if (!supportSeenInitialized) { supportSeenInitialized = true; return; }
-
-        const popup = document.getElementById('support-popup');
-        if (newestUnseen && !popup.classList.contains('show')) {
-            const isSupportRoom = newestUnseen.roomId.startsWith('support__');
-            let label = '🎧 แจ้งปัญหาการใช้งาน';
-            if (!isSupportRoom) {
-                const senderUser = (db.users || []).find(u => u.username === newestUnseen.sender);
-                label = (senderUser && senderUser.fullname) ? senderUser.fullname : newestUnseen.sender;
-            }
-            popup.classList.add('show');
-            window.openChatRoom(newestUnseen.roomId, label, isSupportRoom);
-        } else if (popup.classList.contains('show')) {
-            // 🟢 อัปเดตหน้าที่กำลังเปิดอยู่ ไม่ว่าจะเป็นรายชื่อ หรือห้องแชท (ใช้ poll ตัวเดียวคุมทั้งหมด)
-            if (document.getElementById('support-contacts-view').style.display !== 'none') {
-                window.renderContactList();
-            } else if (currentChatRoomId) {
-                window.renderChatMessages();
-            }
-        }
-    } catch (err) {
-        supportPollFailCount++;
-        console.warn('เช็คข้อความใหม่ไม่สำเร็จ (ครั้งที่ ' + supportPollFailCount + '):', err.message);
-        // 🟢 ถ้าพลาดติดกันหลายครั้ง ให้ชะลอความถี่ลงชั่วคราว กันยิงรัวจนซ้ำเติมปัญหา
-        if (supportPollFailCount >= 3 && supportBackgroundPollTimer) {
-            clearInterval(supportBackgroundPollTimer);
-            supportBackgroundPollTimer = setInterval(window.checkForNewSupportMessages, 15000); // ชะลอเป็นทุก 15 วิ
-        }
-    }
-};
 
 window.initSupportWidget = function() {
     const fabBtn = document.getElementById('support-fab-btn');
@@ -8761,6 +8685,7 @@ window.renderContactList = function() {
     }
 };
 
+// 🟢 เปิดห้องแชทกับคนที่เลือก
 window.openChatRoom = function(roomId, partnerLabel, isSupport) {
     currentChatRoomId = roomId;
     currentChatPartnerLabel = partnerLabel;
@@ -8768,8 +8693,9 @@ window.openChatRoom = function(roomId, partnerLabel, isSupport) {
     document.getElementById('support-chat-view').style.display = 'block';
     document.getElementById('support-chat-partner-name').innerText = partnerLabel;
 
-    window.renderChatMessages(); // 🟢 ใช้ข้อมูลที่ Poll ตัวเดียว (พื้นหลัง) ดึงมาอยู่แล้ว ไม่ต้องยิงซ้ำ
-    // 🟢 ไม่ต้องเปิด timer แยกอีกตัวแล้ว ใช้ตัวพื้นหลังตัวเดียวพอ (ลดโหลด Google Apps Script)
+    window.fetchAndRenderChatRoom();
+    window.stopSupportChatPolling();
+    supportChatPollTimer = setInterval(window.fetchAndRenderChatRoom, 3500);
 
     callAppsScript('markRoomRead', { roomId: roomId, myUsername: currentUser.username }).catch(() => {});
 };
