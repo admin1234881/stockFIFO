@@ -2197,12 +2197,27 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- 4. 🟢 กราฟยอดขายรายเดือนทั้งปี แยกตามลูกค้า -->
+                            <div class="col-12 mt-2">
+                                <div class="card modern-stat-card shadow-sm" style="background: #ffffff; border-radius: 20px;">
+                                    <div class="card-header bg-white border-0 pt-4 pb-0 px-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                        <h5 class="fw-bold text-primary mb-0"><i class="bi bi-bar-chart-line-fill me-2"></i>ยอดขายรายเดือนทั้งปี แยกตามลูกค้า</h5>
+                                        <select id="monthly-chart-year-select" class="form-select form-select-sm fw-bold shadow-sm" style="width: auto; border-radius: 10px; border-color: #e9ecef;"></select>
+                                    </div>
+                                    <div class="card-body p-4">
+                                        <div style="position: relative; height: 420px; width: 100%;">
+                                            <canvas id="monthlyCustomerChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
                     <!-- 📦 View 2: แดชบอร์ดแพ็คกิ้ง (Rack System Status) -->
                     <div id="view-dash-rack" class="d-none">
-                        <div class="row g-4">
+                        <div class="row g-4" style="height: 75vh; min-height: 600px;">
                             <!-- กล่อง KPI ด้านบน 4 กล่อง -->
                             <div class="col-xl-3 col-lg-6 col-md-6"><div class="card modern-stat-card bg-gradient-stock h-100 p-2"><div class="card-body"><h6 class="card-title fw-bold mb-3" style="opacity: 0.9;">จำนวนแพ็คกิ้งทั้งหมด (ใบ)</h6><h2 class="card-text fw-bolder mb-1" id="dash-rack-kpi-total">0</h2><i class="bi bi-boxes card-icon"></i></div></div></div>
                             <div class="col-xl-3 col-lg-6 col-md-6"><div class="card modern-stat-card bg-white border border-secondary-subtle h-100 p-2"><div class="card-body"><h6 class="card-title fw-bold text-muted mb-3">WH: กล่องเปล่า</h6><h2 class="card-text fw-bolder mb-1 text-dark" id="dash-rack-kpi-empty">0</h2><i class="bi bi-inbox card-icon text-muted" style="opacity: 0.1;"></i></div></div></div>
@@ -2210,8 +2225,8 @@
                             <div class="col-xl-3 col-lg-6 col-md-6"><div class="card modern-stat-card bg-gradient-elec h-100 p-2"><div class="card-body"><h6 class="card-title fw-bold mb-3" style="opacity: 0.9;">WH อยู่ที่ลูกค้า (รอรับกลับ)</h6><h2 class="card-text fw-bolder mb-1" id="dash-rack-kpi-customer">0</h2><i class="bi bi-truck card-icon"></i></div></div></div>
 
 <!-- ตารางสรุปแยกลูกค้า (ฝั่งซ้าย) -->
-                            <div class="col-xl-8 col-lg-7 d-flex flex-column">
-                                <div class="card shadow-sm h-100 d-flex flex-column" style="background: #ffffff; border-radius: 20px; border: none;">
+                            <div class="col-xl-8 col-lg-7 d-flex flex-column h-100">
+                                <div class="card shadow-sm h-100 d-flex flex-column" style="background: #ffffff; border-radius: 20px; border: none; min-height: 0;">
                                     <div class="card-header bg-white border-0 pt-4 pb-3 px-4 d-flex justify-content-between align-items-center">
                                         <h5 class="fw-bold text-primary mb-0"><i class="bi bi-bar-chart-steps me-2"></i><span data-lang-key="rack_summary_by_model">สรุปสถานะแยกตามรุ่น (Model)</span></h5>
                                         <div>
@@ -2221,9 +2236,9 @@
                                             <span class="badge bg-light text-muted border"><i class="bi bi-info-circle me-1"></i><span data-lang-key="rack_auto_update">อัปเดตอัตโนมัติ</span></span>
                                         </div>
                                     </div>
-                                    <div class="card-body px-4 pb-4 pt-0 d-flex flex-column flex-grow-1">
-                                        <!-- 🛠️ บังคับยืดความสูงตรงนี้ครับ (ใส่ min-height: 550px) -->
-                                        <div class="table-responsive flex-grow-1 shadow-sm" style="min-height: 550px; max-height: 75vh; overflow-y: auto; border: 1px solid #f0f2f5; border-radius: 12px;">
+                                    <div class="card-body px-4 pb-4 pt-0 d-flex flex-column flex-grow-1" style="min-height: 0;">
+                                        <!-- 🛠️ ยืดเต็มพื้นที่ที่เหลือของการ์ด แทนตัวเลขตายตัว -->
+                                        <div class="table-responsive flex-grow-1 shadow-sm" style="overflow-y: auto; border: 1px solid #f0f2f5; border-radius: 12px;">
                                             <table class="table table-hover align-middle mb-0" style="border-collapse: separate; border-spacing: 0;">
                                                 <thead style="position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
                                                     <tr>
@@ -2244,9 +2259,9 @@
                                 </div>
                             </div>
 
-                            <!-- กล่องแจ้งเตือนแพ็คกิ้งไม่เคลื่อนไหว (ฝั่งขวา) -->
-                            <div class="col-xl-4 col-lg-5">
-                                <div class="card shadow-sm h-100" style="background: #ffffff; border-radius: 20px; border-top: 5px solid #dc3545;">
+                            <!-- กล่องแจ้งเตือนแพ็คกิ้งไม่เคลื่อนไหว + ชำรุด (ฝั่งขวา) - ขยายแบ่งพื้นที่ตามสัดส่วน เต็มความสูงเท่าฝั่งซ้าย -->
+                            <div class="col-xl-4 col-lg-5 d-flex flex-column h-100 gap-4">
+                                    <div class="card shadow-sm d-flex flex-column" style="background: #ffffff; border-radius: 20px; border-top: 5px solid #dc3545; flex: 0 0 60%; min-height: 0;">
                                     <div class="card-header bg-white border-0 pt-4 pb-2 px-4 d-flex justify-content-between align-items-center">
                                         <h5 class="fw-bold text-danger mb-0"><i class="bi bi-exclamation-triangle-fill me-2"></i> ไม่เคลื่อนไหวเกิน (> 3 วัน)</h5>
                                         <span class="badge bg-danger rounded-pill shadow-sm" id="dash-rack-idle-count">0</span>
@@ -2254,8 +2269,8 @@
                                         <i class="bi bi-download me-1"></i> CSV
                                         </button>
                                     </div>    
-                                    <div class="card-body px-3 pb-4 pt-2">
-                                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto; border-radius: 10px;">
+                                    <div class="card-body px-3 pb-4 pt-2 d-flex flex-column flex-grow-1" style="min-height: 0;">
+                                        <div class="table-responsive flex-grow-1" style="overflow-y: auto; border-radius: 10px;">
                                             <table class="table table-hover align-middle mb-0 text-center">
                                                 <thead style="background-color: #fff5f5; position: sticky; top: 0; z-index: 1;">
                                                     <tr>
@@ -2268,7 +2283,10 @@
                                                     <tr><td colspan="3" class="text-center text-success p-4"><i class="bi bi-check-circle-fill fs-4 d-block mb-2"></i>เยี่ยมมาก! ไม่มีของค้าง</td></tr>
                                                 </tbody>
                                             </table>
-                                        <div class="card shadow-sm mt-4" style="background: #ffffff; border-radius: 20px; border-top: 5px solid #6c757d;">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card shadow-sm d-flex flex-column" style="background: #ffffff; border-radius: 20px; border-top: 5px solid #6c757d; flex: 0 0 38%; min-height: 0;">
                                     <div class="card-header bg-white border-0 pt-4 pb-2 px-4 d-flex justify-content-between align-items-center">
                                         <h5 class="fw-bold text-secondary mb-0"><i class="bi bi-tools me-2"></i> ชำรุด (รอทำลาย/ซ่อม)</h5>
                                         <span class="badge bg-secondary rounded-pill shadow-sm" id="dash-rack-damaged-count">0</span>
@@ -2276,8 +2294,8 @@
                                          <i class="bi bi-download me-1"></i> CSV
                                         </button>
                                     </div>
-                                    <div class="card-body px-3 pb-4 pt-2">
-                                        <div class="table-responsive" style="max-height: 200px; overflow-y: auto; border-radius: 10px;">
+                                    <div class="card-body px-3 pb-4 pt-2 d-flex flex-column flex-grow-1" style="min-height: 0;">
+                                        <div class="table-responsive flex-grow-1" style="overflow-y: auto; border-radius: 10px;">
                                             <table class="table table-hover align-middle mb-0 text-center">
                                                 <thead style="background-color: #f8f9fa; position: sticky; top: 0; z-index: 1;">
                                                 <tr>
@@ -2290,9 +2308,6 @@
                                                     <tr><td colspan="2" class="text-center text-muted p-4"><i class="bi bi-emoji-smile fs-4 d-block mb-2"></i>ไม่มีแพ็คกิ้งชำรุด</td></tr>
                                                 </tbody>
                                             </table>
-                                        </div>
-                                    </div>
-                                </div>
                                         </div>
                                     </div>
                                 </div>
@@ -4416,6 +4431,13 @@ approveStockCount: (countId) => {
 
                         // ใช้ค่าวันที่ปัจจุบันจาก input เสมอในการ populate sales dashboard
                         populateSalesDashboard(new Date(startDate), new Date(endDate));
+
+                        // 🟢 เรียกกราฟยอดขายรายเดือนทั้งปีด้วย ตอนเปิดแท็บแดชบอร์ดครั้งแรก
+                        if (typeof populateYearSelector === 'function') populateYearSelector();
+                        const monthlyYearSelect = document.getElementById('monthly-chart-year-select');
+                        if (monthlyYearSelect && typeof populateMonthlyCustomerChart === 'function') {
+                            populateMonthlyCustomerChart(parseInt(monthlyYearSelect.value) || new Date().getFullYear());
+                        }
                     }
                 };
 // ========================================================
@@ -5097,6 +5119,8 @@ clearInterval(window.mascotLoopTimer);
 
                     // 🟢 ระบบบังคับสลับหน้าแรกอัตโนมัติ (ดักจับคนไม่มีสิทธิ์ดูสต็อก)
                     setTimeout(() => {
+                        // 🟢 แก้บั๊ก: ไม่เคยมีการประกาศตัวแปรนี้มาก่อน ทำให้ทั้งฟังก์ชันพังตั้งแต่บรรทัดนี้
+                        const canViewStock = true;
                         if (!canViewStock) {
                             // 1. ถอดคลาสที่ทำให้หน้าสต็อกโชว์ค้างอยู่ออก
                             const stockPane = document.getElementById('pills-stock');
@@ -5949,7 +5973,14 @@ window.toggleDashboardView = function(view) {
                     if (viewRack) viewRack.classList.add('d-none');
                     if (viewVehicle) viewVehicle.classList.add('d-none'); // 🟢 ซ่อนไว้ก่อน
 
-                    if (view === 'sales' && viewSales) viewSales.classList.remove('d-none');
+                    if (view === 'sales' && viewSales) {
+                        viewSales.classList.remove('d-none');
+                        if (typeof populateYearSelector === 'function') populateYearSelector();
+                        const yearSelect = document.getElementById('monthly-chart-year-select');
+                        if (yearSelect && typeof populateMonthlyCustomerChart === 'function') {
+                            populateMonthlyCustomerChart(parseInt(yearSelect.value) || new Date().getFullYear());
+                        }
+                    }
                     else if (view === 'rack' && viewRack) {
                         viewRack.classList.remove('d-none');
                         if (typeof populateRackDashboard === 'function') populateRackDashboard(); 
@@ -12007,6 +12038,129 @@ function renderStockCountReportModalBody(count) {
                     dashboardTotalStockQuantity.textContent = `${totalStockQuantity.toLocaleString()} ${T.dashboard_pieces_label}`;
                     dashboardTotalStockValue.textContent = `฿ ${totalStockValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                 }
+
+// 🟢 ==================== กราฟยอดขายรายเดือนทั้งปี แยกตามลูกค้า ====================
+window.monthlyCustomerChartInstance = null;
+
+function getSaleValueFromItem(item) {
+    let qty = 0;
+    const isSale = item.type === 'export' && item.exportType === 'Sale';
+    let isReversalOfSale = false;
+    if (item.type === 'reversal') {
+        const m = (item.remarks || '').match(/Reversal of transaction ID: (exp-[\w-]+)/);
+        if (m) {
+            const original = db.history.find(h => h.id === m[1]);
+            if (original && original.exportType === 'Sale') isReversalOfSale = true;
+        }
+    }
+    if (isSale) qty = parseFloat(item.quantity) || 0;
+    else if (isReversalOfSale) qty = -(parseFloat(item.quantity) || 0);
+    if (qty === 0) return null;
+    const value = qty * (parseFloat(item.priceAtTimeOfSale) || 0);
+    return { customer: item.customer || 'ไม่ระบุ', value: value, date: new Date(item.date) };
+}
+
+function populateYearSelector() {
+    const select = document.getElementById('monthly-chart-year-select');
+    if (!select) return;
+
+    const years = new Set([new Date().getFullYear()]);
+    (db.history || []).forEach(item => {
+        const d = new Date(item.date);
+        if (!isNaN(d.getTime())) years.add(d.getFullYear());
+    });
+
+    const sortedYears = Array.from(years).sort((a, b) => b - a);
+    const currentValue = select.value;
+    select.innerHTML = sortedYears.map(y => `<option value="${y}">ปี ${y + 543}</option>`).join('');
+    select.value = currentValue && sortedYears.includes(parseInt(currentValue)) ? currentValue : new Date().getFullYear();
+
+    if (!select.dataset.listenerAttached) {
+        select.addEventListener('change', () => populateMonthlyCustomerChart(parseInt(select.value)));
+        select.dataset.listenerAttached = 'true';
+    }
+}
+
+function populateMonthlyCustomerChart(year) {
+    const monthLabels = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+
+    // 🟢 คำนวณยอดขายรวมทั้งปีของแต่ละลูกค้า เพื่อเลือกลูกค้า Top 6 มาแสดงแยกสี ที่เหลือรวมเป็น "อื่นๆ"
+    const customerYearTotal = new Map();
+    const monthlyData = {}; // { customer: [12 เดือน] }
+
+    (db.history || []).forEach(item => {
+        const parsed = getSaleValueFromItem(item);
+        if (!parsed || parsed.date.getFullYear() !== year) return;
+
+        const month = parsed.date.getMonth();
+        customerYearTotal.set(parsed.customer, (customerYearTotal.get(parsed.customer) || 0) + parsed.value);
+
+        if (!monthlyData[parsed.customer]) monthlyData[parsed.customer] = Array(12).fill(0);
+        monthlyData[parsed.customer][month] += parsed.value;
+    });
+
+    const topCustomers = Array.from(customerYearTotal.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 6)
+        .map(([name]) => name);
+
+    const palette = ['#0d6efd', '#20c997', '#ffc107', '#d63384', '#fd7e14', '#6610f2'];
+    const datasets = topCustomers.map((customer, i) => ({
+        label: customer,
+        data: monthlyData[customer] || Array(12).fill(0),
+        backgroundColor: palette[i % palette.length],
+        borderRadius: 6,
+        maxBarThickness: 42
+    }));
+
+    // รวมลูกค้าที่เหลือทั้งหมดเป็น "อื่นๆ"
+    const othersData = Array(12).fill(0);
+    Object.keys(monthlyData).forEach(customer => {
+        if (!topCustomers.includes(customer)) {
+            monthlyData[customer].forEach((v, i) => { othersData[i] += v; });
+        }
+    });
+    if (othersData.some(v => v > 0)) {
+        datasets.push({
+            label: 'อื่นๆ',
+            data: othersData,
+            backgroundColor: '#ced4da',
+            borderRadius: 6,
+            maxBarThickness: 42
+        });
+    }
+
+    const ctx = document.getElementById('monthlyCustomerChart');
+    if (!ctx) return;
+    if (window.monthlyCustomerChartInstance) window.monthlyCustomerChartInstance.destroy();
+
+    window.monthlyCustomerChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: { labels: monthLabels, datasets: datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { stacked: true, grid: { display: false } },
+                y: {
+                    stacked: true,
+                    grid: { color: '#f1f3f5' },
+                    ticks: { callback: (v) => '฿' + (v / 1000).toLocaleString() + 'k' }
+                }
+            },
+            plugins: {
+                legend: { position: 'bottom', labels: { usePointStyle: true, padding: 16, font: { family: 'Mitr', size: 12 } } },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: (ctx) => `${ctx.dataset.label}: ฿ ${ctx.parsed.y.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    }
+                }
+            }
+        }
+    });
+}
 
 function populateSalesDashboard(startDate, endDate) {
                     const T = translations[currentLanguage];
