@@ -8157,6 +8157,31 @@ window.deletePlanItem = function(itemId, dateStr) {
         }
     });
 };
+// 🟢 Toast มุมซ้ายล่าง ใช้แจ้งสถานะระหว่างบันทึกข้อมูล (ไม่บล็อกหน้าจอ ทำอย่างอื่นต่อได้)
+const CornerToast = Swal.mixin({
+    toast: true,
+    position: 'bottom-start',
+    showConfirmButton: false,
+    timerProgressBar: true
+});
+
+// 🟢 ฟังก์ชันช่วยลองใหม่อัตโนมัติ ถ้าพลาด (กัน Google เด้ง error ชั่วคราวแบบสุ่ม)
+async function callAppsScriptWithRetry(action, payload, maxRetries = 2) {
+    let lastError;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            return await callAppsScript(action, payload);
+        } catch (error) {
+            lastError = error;
+            if (attempt < maxRetries) {
+                console.warn(`⚠️ "${action}" พลาดครั้งที่ ${attempt + 1} กำลังลองใหม่อัตโนมัติ...`, error.message);
+                CornerToast.fire({ icon: 'warning', title: 'เจอปัญหาชั่วคราว กำลังลองใหม่อีกครั้ง...', timer: 3000 });
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+        }
+    }
+    throw lastError;
+}
 // 🟢 2. ฟังก์ชันปล่อยรถ (แก้บั๊ก Error โค้ด และเพิ่มระบบดักจับ "ทะเบียนรถกำลังวิ่ง")
 window.releaseGroupVehicle = async function(date, displayTime, customer) {
     const safeDate = typeof formatDate === 'function' ? formatDate(date) : date;
@@ -8297,7 +8322,7 @@ window.releaseGroupVehicle = async function(date, displayTime, customer) {
         const licensePlate = result.value.licensePlate;
         const invoiceNumber = result.value.invoiceNumber || 'NO-INV';
         
-        Swal.fire({ title: 'กำลังประมวลผล...', text: 'กำลังส่งข้อมูลรถและทยอยตัดสต็อกแบบ FIFO...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        CornerToast.fire({ icon: 'info', title: `กำลังบันทึกรถทะเบียน...`, timer: 2500 });
         
         const releaseTime = new Date().toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'});
         const autoExportEntries = [];
@@ -8350,16 +8375,25 @@ window.releaseGroupVehicle = async function(date, displayTime, customer) {
         }
 
         try {
-            // 🟢 ขั้นตอนที่ 1 (ทำก่อนเสมอ): บันทึกประวัติ/ตัดสต็อกก่อน
-            // ถ้าพังตรงนี้ สถานะรถจะยังเป็น "รอจัดส่ง" เหมือนเดิม ไม่เกิดข้อมูลไม่ตรงกัน ปลอดภัยกว่า
+            // 🟢 ขั้นตอนที่ 1 (ทำก่อนเสมอ): บันทึกประวัติ/ตัดสต็อกก่อน (เช็คก่อนกันบันทึกซ้ำ + ลองใหม่อัตโนมัติถ้าพลาด)
             if (autoExportEntries.length > 0) {
-                await callAppsScript('appendBatchHistory', autoExportEntries);
+                const deliveryPlanTag = 'DELIVERY_PLAN:' + plansToUpdate[0].id;
+                let alreadySaved = false;
+                try {
+                    const checkRes = await fetch(SCRIPT_URL + '?action=getData&t=' + Date.now());
+                    const checkData = await checkRes.json();
+                    alreadySaved = (checkData.history || []).some(h => h.remarks && h.remarks.includes(deliveryPlanTag));
+                } catch (e) { /* เช็คไม่ได้ก็ปล่อยผ่าน ไปลองบันทึกตามปกติ */ }
+
+                if (!alreadySaved) {
+                    await callAppsScriptWithRetry('appendBatchHistory', autoExportEntries);
+                }
                 autoExportEntries.forEach(entry => db.history.unshift(entry));
             }
 
-            // 🟢 ขั้นตอนที่ 2: ค่อยอัปเดตสถานะรถ ทีละรายการ (ไม่ใช้ Promise.all แล้ว)
+            // 🟢 ขั้นตอนที่ 2: อัปเดตสถานะรถ ทีละรายการ (ลองใหม่อัตโนมัติได้ปลอดภัย เพราะแค่เปลี่ยนสถานะซ้ำไม่มีผลเสีย)
             for (const { plan, saveDate } of planUpdates) {
-                await callAppsScript('updateDeliveryPlan', {
+                await callAppsScriptWithRetry('updateDeliveryPlan', {
                     id: plan.id,
                     status: 'Delivering',
                     licensePlate: licensePlate,
@@ -8380,7 +8414,7 @@ window.releaseGroupVehicle = async function(date, displayTime, customer) {
             if (typeof populateAll === 'function') populateAll();
             if (typeof renderDeliveryPlanTable === 'function') renderDeliveryPlanTable(safeDate);
             
-            Swal.fire({ icon: 'success', title: 'ปล่อยรถเรียบร้อย!', text: `ทะเบียน: ${licensePlate} พร้อมตัดสต็อกออโต้แล้ว`, timer: 2000, showConfirmButton: false });
+            CornerToast.fire({ icon: 'success', title: `✅ ปล่อยรถทะเบียน ${licensePlate} สำเร็จแล้ว!`, timer: 3000 });
 
             // 🟢 แจ้งเตือนเข้ากลุ่มไลน์คนขับ (ยิงแบบ fire-and-forget ไม่บล็อกหน้าจอ ถ้าพลาดก็ไม่กระทบงานหลัก)
             const uniqueInvoicesForLine = [...new Set(plansToUpdate.map(p => (p.invoiceNumber || '').trim()).filter(v => v !== ''))];
