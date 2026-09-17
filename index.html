@@ -4117,11 +4117,26 @@ async function loadDataFromSheet(isInitialLoad = false) {
                             };
 
                             try {
-                                await callAppsScript('appendHistory', reversalEntry);
+                                // 🟢 เช็คก่อนกันบันทึกซ้ำ (เผื่อรอบก่อนสำเร็จแล้วแต่ผลตอบกลับมาไม่ถึง)
+                                const reversalTag = `Reversal of transaction ID: ${historyItem.id}`;
+                                let alreadyReversed = false;
+                                try {
+                                    const checkRes = await fetch(SCRIPT_URL + '?action=getData&t=' + Date.now());
+                                    const checkData = await checkRes.json();
+                                    alreadyReversed = (checkData.history || []).some(h => h.remarks && h.remarks.includes(reversalTag));
+                                } catch (e) { /* เช็คไม่ได้ก็ปล่อยผ่าน */ }
+
+                                if (!alreadyReversed) {
+                                    await callAppsScriptWithRetry('appendHistory', reversalEntry);
+                                }
                                 db.history.unshift(reversalEntry);
                                 calculateStockFromHistory();
                                 populateAll();
-                                showSuccess(translations[currentLanguage].reverse_history_success);
+                                if (typeof CornerToast !== 'undefined') {
+                                    CornerToast.fire({ icon: 'success', title: '✅ ยกเลิกรายการสำเร็จแล้ว!', timer: 3000 });
+                                } else {
+                                    showSuccess(translations[currentLanguage].reverse_history_success);
+                                }
                             } catch (error) {
                                 showError(translations[currentLanguage].save_error_title, translations[currentLanguage].save_error_text.replace('{error}', error.message));
                             }
@@ -8473,30 +8488,27 @@ window.returnGroupVehicle = function(date, displayTime, customer) {
         confirmButtonColor: '#198754'
     }).then(async (result) => {
         if (result.isConfirmed) {
-            Swal.fire({ title: 'กำลังประมวลผล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            CornerToast.fire({ icon: 'info', title: 'กำลังบันทึกรถเข้าบริษัท...', timer: 2500 });
             const returnTime = new Date().toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}); 
 
             try {
-                const promises = plansToUpdate.map(async (plan) => {
-                    // ยิงสถานะไปเก็บในฐานข้อมูล
-                    await callAppsScript('updateDeliveryPlan', {
+                // 🟢 ทีละรายการ (ปลอดภัย) + ลองใหม่อัตโนมัติได้ เพราะแค่เปลี่ยนสถานะซ้ำไม่มีผลเสีย
+                for (const plan of plansToUpdate) {
+                    await callAppsScriptWithRetry('updateDeliveryPlan', {
                         id: plan.id, status: 'Completed', actualReturnTime: "'" + returnTime
                     });
-                    
-                    // 🛠️ บังคับอัปเดต ID ตรงๆ ป้องกัน Auto-sync ลบทับกลางคัน
+
                     const realPlan = db.deliveryPlans.find(p => p.id === plan.id);
                     if (realPlan) {
                         realPlan.status = 'Completed';
                         realPlan.actualReturnTime = "'" + returnTime;
                     }
-                });
-
-                await Promise.all(promises); // ⚡ รันพร้อมกันทีเดียว!
+                }
                 
                 if (typeof renderDeliveryPlanTable === 'function') renderDeliveryPlanTable(safeDate);
                 if (typeof populateVehicleDashboard === 'function') populateVehicleDashboard();
                 
-                Swal.fire({ icon: 'success', title: 'ปิดงานสำเร็จ!', text: 'บันทึกรถเข้าบริษัทเรียบร้อย', timer: 2000, showConfirmButton: false });
+                CornerToast.fire({ icon: 'success', title: '✅ ปิดงาน/รับรถกลับสำเร็จแล้ว!', timer: 3000 });
             } catch (error) {
                 Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกได้: ' + error.message, 'error');
             }
@@ -9425,19 +9437,20 @@ window.editDeliveryGroupTime = async function(date, displayTime, customer) {
 
     if (newTime === safeTime) return; // เวลาไม่เปลี่ยน ไม่ต้องบันทึกซ้ำ
 
-    Swal.fire({ title: 'กำลังบันทึกเวลาใหม่...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    CornerToast.fire({ icon: 'info', title: 'กำลังบันทึกเวลาใหม่...', timer: 2500 });
 
     try {
+        // 🟢 ปลอดภัยที่จะลองใหม่อัตโนมัติ เพราะแค่ตั้งเวลาซ้ำไม่มีผลเสีย
         for (let plan of plansToUpdate) {
             plan.time = "'" + newTime;
             if (plan.date) plan.date = formatDate(plan.date);
-            await callAppsScript('updateDeliveryPlan', plan);
+            await callAppsScriptWithRetry('updateDeliveryPlan', plan);
         }
 
         if (typeof renderDeliveryPlanTable === 'function') renderDeliveryPlanTable(safeDate);
         if (typeof populateVehicleDashboard === 'function') populateVehicleDashboard();
 
-        Swal.fire({ icon: 'success', title: `แก้ไขเวลาเป็น ${newTime} น. เรียบร้อย!`, timer: 1500, showConfirmButton: false });
+        CornerToast.fire({ icon: 'success', title: `✅ แก้ไขเวลาเป็น ${newTime} น. เรียบร้อย!`, timer: 3000 });
     } catch (error) {
         Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกข้อมูลได้: ' + error.message, 'error');
     }
