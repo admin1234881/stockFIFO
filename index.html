@@ -7340,45 +7340,6 @@ group.items.forEach(item => {
     tableBody.innerHTML = html;
 }
 
-// 🟢 2. ฟังก์ชันปล่อยรถ (แบบกลุ่ม)
-window.releaseGroupVehicle = async function(date, displayTime, customer) {
-    const plansToUpdate = db.deliveryPlans.filter(p => formatDate(p.date) === date && window.formatTimeDisplay(p.time) === displayTime && p.customer === customer && p.status === 'Pending');
-    if (plansToUpdate.length === 0) return;
-
-    const { value: licensePlate } = await Swal.fire({
-        title: '🚚 ปล่อยรถจัดส่ง',
-        html: `ลูกค้า: <b>${customer}</b><br>รอบเวลา: <b>${displayTime} น.</b><br>รวม: <b class="text-primary">${plansToUpdate.length} พาร์ท</b>`,
-        input: 'text',
-        inputPlaceholder: 'ตัวอย่าง: กท 1234',
-        showCancelButton: true,
-        confirmButtonText: 'ยืนยันปล่อยรถ',
-        cancelButtonText: 'ยกเลิก',
-        confirmButtonColor: '#0d6efd',
-        inputValidator: (value) => { if (!value || value.trim() === '') return 'กรุณากรอกทะเบียนรถด้วยครับ!'; }
-    });
-
-    if (licensePlate) {
-        Swal.fire({ title: 'กำลังอัปเดตระบบ...', text: 'กำลังส่งข้อมูลรถทั้งคันไปที่ Sheet...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-        const releaseTime = new Date().toLocaleTimeString('th-TH');
-        
-        try {
-            for (let plan of plansToUpdate) {
-                plan.status = 'Delivering';
-                plan.licensePlate = licensePlate;
-                plan.actualReleaseTime = "'" + releaseTime;
-                plan.time = "'" + window.formatTimeDisplay(plan.time); 
-                plan.date = formatDate(plan.date);        
-                await callAppsScript('updateDeliveryPlan', plan);
-            }
-            if (typeof renderDeliveryPlanTable === 'function') renderDeliveryPlanTable(date);
-            if (typeof populateVehicleDashboard === 'function') populateVehicleDashboard();
-            Swal.fire({ icon: 'success', title: 'ปล่อยรถเรียบร้อย!', text: `ทะเบียน: ${licensePlate}`, timer: 1500, showConfirmButton: false });
-        } catch (error) {
-            Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกข้อมูลได้ทั้งหมด: ' + error.message, 'error');
-        }
-    }
-};
-
 // 🟢 3. ฟังก์ชันรับรถกลับ (อัปเดตเฉพาะสถานะและเวลาเข้าบริษัท ห้ามกวนวันที่)
 window.returnGroupVehicle = function(date, displayTime, customer) {
     const safeDate = typeof formatDate === 'function' ? formatDate(date) : date;
@@ -8342,7 +8303,9 @@ window.releaseGroupVehicle = async function(date, displayTime, customer) {
         const autoExportEntries = [];
         let actualTempStock = JSON.parse(JSON.stringify(calculatedStock));
 
-        const updatePromises = plansToUpdate.map(async (plan) => {
+        // 🟢 เตรียมข้อมูล export entries + ข้อมูลอัปเดตของแต่ละ plan ไว้ก่อน (ยังไม่ยิงคำขอใดๆ)
+        const planUpdates = [];
+        for (const plan of plansToUpdate) {
             if (plan.jobType !== 'Pickup' && plan.jobType !== 'Other' && plan.quantity > 0 && plan.productId && plan.productId !== '-') {
                 let qtyToDeduct = parseInt(plan.quantity);
                 const product = db.products.find(p => String(p.id).trim() === String(plan.productId).trim());
@@ -8366,12 +8329,11 @@ window.releaseGroupVehicle = async function(date, displayTime, customer) {
                             priceAtTimeOfSale: product ? (parseFloat(product.unitPrice) || 0) : 0
                         });
                         qtyToDeduct -= deductAmount;
-                        lot.quantity -= deductAmount; 
+                        lot.quantity -= deductAmount;
                     }
                 }
             }
-            
-            // 🟢 เตรียมข้อมูลอัปเดต โดยล็อคฟอร์แมตวันที่ให้ชัวร์
+
             let saveDate = plan.date;
             if (plan.date) {
                 let dObj = new Date(plan.date);
@@ -8384,34 +8346,36 @@ window.releaseGroupVehicle = async function(date, displayTime, customer) {
                     saveDate = String(plan.date).split('T')[0];
                 }
             }
+            planUpdates.push({ plan, saveDate });
+        }
 
-            // ยิงอัปเดตไปที่ Google Sheets
-            await callAppsScript('updateDeliveryPlan', {
-                id: plan.id,
-                status: 'Delivering',
-                licensePlate: licensePlate,
-                actualReleaseTime: "'" + releaseTime,
-                date: saveDate
-            });
-            
-            // 🛠️ อัปเดตข้อมูลบนเบราว์เซอร์
-            const realPlan = db.deliveryPlans.find(p => p.id === plan.id);
-            if (realPlan) {
-                realPlan.status = 'Delivering';
-                realPlan.licensePlate = licensePlate;
-                realPlan.actualReleaseTime = "'" + releaseTime;
-                realPlan.date = saveDate;
-            }
-        });
-        
         try {
-            await Promise.all(updatePromises);
-            
+            // 🟢 ขั้นตอนที่ 1 (ทำก่อนเสมอ): บันทึกประวัติ/ตัดสต็อกก่อน
+            // ถ้าพังตรงนี้ สถานะรถจะยังเป็น "รอจัดส่ง" เหมือนเดิม ไม่เกิดข้อมูลไม่ตรงกัน ปลอดภัยกว่า
             if (autoExportEntries.length > 0) {
                 await callAppsScript('appendBatchHistory', autoExportEntries);
                 autoExportEntries.forEach(entry => db.history.unshift(entry));
             }
-            
+
+            // 🟢 ขั้นตอนที่ 2: ค่อยอัปเดตสถานะรถ ทีละรายการ (ไม่ใช้ Promise.all แล้ว)
+            for (const { plan, saveDate } of planUpdates) {
+                await callAppsScript('updateDeliveryPlan', {
+                    id: plan.id,
+                    status: 'Delivering',
+                    licensePlate: licensePlate,
+                    actualReleaseTime: "'" + releaseTime,
+                    date: saveDate
+                });
+
+                const realPlan = db.deliveryPlans.find(p => p.id === plan.id);
+                if (realPlan) {
+                    realPlan.status = 'Delivering';
+                    realPlan.licensePlate = licensePlate;
+                    realPlan.actualReleaseTime = "'" + releaseTime;
+                    realPlan.date = saveDate;
+                }
+            }
+
             if (typeof calculateStockFromHistory === 'function') calculateStockFromHistory();
             if (typeof populateAll === 'function') populateAll();
             if (typeof renderDeliveryPlanTable === 'function') renderDeliveryPlanTable(safeDate);
