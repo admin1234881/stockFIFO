@@ -10393,7 +10393,7 @@ document.body.addEventListener('change', (e) => {
                  * without ever sending the password list to the client.
                  */
                 // --- แก้ไขฟังก์ชัน handleLogin เพื่อให้ปิด Modal และล้างค่าเมื่อสำเร็จ ---
-function handleLogin(e) {
+async function handleLogin(e) {
     e.preventDefault();
     const usernameInput = document.getElementById('username');
     const passwordInput = document.getElementById('password');
@@ -10401,6 +10401,18 @@ function handleLogin(e) {
 
     const username = usernameInput.value;
     const password = passwordInput.value;
+
+    // 🟢 บังคับดึงรายชื่อ User สดจากเซิร์ฟเวอร์ก่อนเช็ค Login ทุกครั้ง
+    // แก้บั๊ก Race Condition: กันกรณีกด Login เร็วเกินไป ก่อนที่ระบบจะโหลดสิทธิ์ล่าสุดเสร็จ
+    // (ป้องกันปัญหาแคชเก่าค้าง ทำให้ได้สิทธิ์ผิดคน/สิทธิ์เก่าที่ยังไม่อัปเดต)
+    const loginBtn = e.target.querySelector('button[type="submit"]');
+    if (loginBtn) { loginBtn.disabled = true; loginBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> กำลังตรวจสอบ...'; }
+    try {
+        await loadUsersOnly();
+    } catch (err) {
+        console.warn('โหลดรายชื่อผู้ใช้สดไม่สำเร็จ จะใช้ข้อมูลที่มีอยู่แทน:', err.message);
+    }
+    if (loginBtn) { loginBtn.disabled = false; loginBtn.innerHTML = 'เข้าสู่ระบบ'; }
 
     const foundUser = db.users.find(u => u.username === username && u.password === password);
 
