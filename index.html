@@ -4502,10 +4502,10 @@ async function loadDataFromSheet(isInitialLoad = false) {
                         if (!currentUser || (currentUser.role !== 'admin' && !currentUser.canManageAnnouncements)) return;
                         const announcement = db.announcements.find(a => String(a.id) === String(announcementId));
                         if (announcement) {
-                            const updatedAnnouncement = { ...announcement, isActive: !announcement.isActive };
+                            const updatedAnnouncement = { ...announcement, isActive: !isAnnouncementActive(announcement.isActive) };
                             try {
                                 await callAppsScript('updateAnnouncement', updatedAnnouncement);
-                                announcement.isActive = !announcement.isActive; // Optimistic update
+                                announcement.isActive = !isAnnouncementActive(announcement.isActive); // Optimistic update
                                 populateAll();
                                 showSuccess(translations[currentLanguage].announcement_status_update_success);
                             } catch (error) {
@@ -11059,6 +11059,14 @@ function populateUserManagementTable() {
                         productManagementTable.appendChild(r);
                     });
                 }
+// 🟢 แปลงค่า isActive ให้ถูกต้องเสมอ ไม่ว่า Google Sheet จะส่งมาเป็น Boolean จริง, ข้อความ "TRUE"/"FALSE", หรือค่าว่าง
+// (แก้บั๊ก: ข้อความ "FALSE" ใน JavaScript ถือว่าเป็นค่าจริงเสมอ เพราะเป็นสตริงที่ไม่ว่างเปล่า)
+function isAnnouncementActive(value) {
+    if (value === true) return true;
+    if (value === false || value === null || value === undefined || value === '') return false;
+    const normalized = String(value).trim().toUpperCase();
+    return normalized === 'TRUE' || normalized === '1';
+}
 
                 function populateAnnouncementsTable() {
                     const T = translations[currentLanguage];
@@ -11085,7 +11093,7 @@ function populateUserManagementTable() {
                         const formattedDate = new Date(ann.postedDate).toLocaleString(currentLanguage === 'th' ? 'th-TH' : 'en-GB', {
                             year: 'numeric', month: 'short', day: 'numeric', timeZone: 'Asia/Bangkok'
                         });
-                        const statusBadge = ann.isActive
+                        const statusBadge = isAnnouncementActive(ann.isActive)
                             ? `<span class="badge bg-success-subtle text-success-emphasis rounded-pill">${T.announcement_status_active}</span>`
                             : `<span class="badge bg-secondary-subtle text-secondary-emphasis rounded-pill">${T.announcement_status_inactive}</span>`;
 
@@ -11096,7 +11104,7 @@ function populateUserManagementTable() {
                     <td>${formattedDate}</td>
                     <td>
                         <button class="btn btn-warning btn-sm" onclick="window.app.editAnnouncement('${ann.id}')"><i class="bi bi-pencil-fill"></i></button>
-                        <button class="btn btn-info btn-sm" onclick="window.app.toggleAnnouncementStatus('${ann.id}')"><i class="bi bi-toggle-${ann.isActive ? 'on' : 'off'}"></i></button>
+                        <button class="btn btn-info btn-sm" onclick="window.app.toggleAnnouncementStatus('${ann.id}')"><i class="bi bi-toggle-${isAnnouncementActive(ann.isActive) ? 'on' : 'off'}"></i></button>
                         <button class="btn btn-danger btn-sm" onclick="window.app.deleteAnnouncement('${ann.id}')"><i class="bi bi-trash3-fill"></i></button>
                     </td>`;
                         announcementManagementTable.appendChild(row);
@@ -11111,7 +11119,7 @@ function displayActiveAnnouncements() {
                     if (!wrapper || !content) return;
 
                     // ดึงเฉพาะประกาศที่เปิดใช้งานอยู่ และเรียงจากใหม่ไปเก่า
-                    const activeAnnouncements = db.announcements.filter(ann => ann.isActive)
+                    const activeAnnouncements = db.announcements.filter(ann => isAnnouncementActive(ann.isActive))
                         .sort((a, b) => new Date(b.postedDate) - new Date(a.postedDate));
 
                     if (activeAnnouncements.length === 0) {
@@ -11730,7 +11738,7 @@ const permissions = [
                 <div class="col-12"> <label for="announcement-message" class="form-label">${T.announcement_message}</label> <textarea id="announcement-message" class="form-control" rows="4" required>${announcement.message || ''}</textarea> </div>
                 <div class="col-12">
                     <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" role="switch" id="announcement-active" ${announcement.isActive === false ? '' : 'checked'}>
+                        <input class="form-check-input" type="checkbox" role="switch" id="announcement-active" ${isAnnouncementActive(announcement.isActive) ? 'checked' : ''}>
                         <label class="form-check-label" for="announcement-active">${T.announcement_show}</label>
                     </div>
                 </div>
