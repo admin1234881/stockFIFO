@@ -10684,7 +10684,7 @@ document.body.addEventListener('change', (e) => {
                         if (e.target.id === 'edit-stock-form') handleEditStockSubmit(e);
                     });
 
-                    document.body.addEventListener('click', function (e) {
+                    document.body.addEventListener('click', async function (e) {
                         if (e.target.id === 'add-import-lot-btn') addImportLotRow();
                         if (e.target.classList.contains('remove-import-lot-btn')) {
                             e.target.closest('.import-lot-row').remove();
@@ -10739,7 +10739,7 @@ document.body.addEventListener('change', (e) => {
                             const startDate = dashboardStartDateInput.value;
                             const endDate = dashboardEndDateInput.value;
                             if (startDate && endDate) {
-                                populateSalesDashboard(new Date(startDate), new Date(endDate));
+                                await populateSalesDashboard(new Date(startDate), new Date(endDate));
                             } else {
                                 showError('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกวันที่เริ่มต้นและวันที่สิ้นสุด');
                             }
@@ -12485,6 +12485,28 @@ function renderStockCountReportModalBody(count) {
 // 🟢 ==================== กราฟยอดขายรายเดือนทั้งปี แยกตามลูกค้า ====================
 window.monthlyCustomerChartInstance = null;
 
+// 🟢 ==================== ดึงข้อมูล Archive มารวมกับรายงานอัตโนมัติ ====================
+// เก็บแคชไว้ในตัวแปรชั่วคราว (ไม่บันทึกลง localStorage กันข้อมูลบวมในระยะยาว)
+let reportingArchivedHistory = null;
+
+async function ensureArchivedHistoryLoaded() {
+    if (reportingArchivedHistory !== null) return; // โหลดไปแล้วในเซสชันนี้ ไม่ต้องโหลดซ้ำ
+    try {
+        const res = await fetch(SCRIPT_URL + '?action=getArchivedHistory&t=' + Date.now());
+        const data = await res.json();
+        reportingArchivedHistory = data.data || [];
+        console.log(`📦 โหลดประวัติจาก Archive มารวมกับรายงานแล้ว: ${reportingArchivedHistory.length} รายการ`);
+    } catch (err) {
+        console.warn('⚠️ โหลดข้อมูล Archive ไม่สำเร็จ รายงานจะคำนวณจากข้อมูลปัจจุบันเท่านั้น:', err.message);
+        reportingArchivedHistory = []; // กันโหลดซ้ำไปเรื่อยๆ ถ้าพลาด
+    }
+}
+
+// 🟢 ใช้ตัวนี้แทน db.history ทุกจุดที่เป็น "รายงาน/สรุปยอดขายย้อนหลัง" เท่านั้น (ไม่ใช้กับการคำนวณสต็อกปัจจุบัน)
+function getReportingHistory() {
+    return (db.history || []).concat(reportingArchivedHistory || []);
+}
+
 function getSaleValueFromItem(item) {
     let qty = 0;
     const isSale = item.type === 'export' && item.exportType === 'Sale';
@@ -12492,7 +12514,7 @@ function getSaleValueFromItem(item) {
     if (item.type === 'reversal') {
         const m = (item.remarks || '').match(/Reversal of transaction ID: (exp-[\w-]+)/);
         if (m) {
-            const original = db.history.find(h => h.id === m[1]);
+            const original = getReportingHistory().find(h => h.id === m[1]);
             if (original && original.exportType === 'Sale') isReversalOfSale = true;
         }
     }
@@ -12503,12 +12525,14 @@ function getSaleValueFromItem(item) {
     return { customer: item.customer || 'ไม่ระบุ', value: value, date: new Date(item.date) };
 }
 
-function populateYearSelector() {
+async function populateYearSelector() {
     const select = document.getElementById('monthly-chart-year-select');
     if (!select) return;
 
+    await ensureArchivedHistoryLoaded(); // 🟢 ดึง Archive มารวมก่อน กันปีเก่าๆ หายไปจากตัวเลือก
+
     const years = new Set([new Date().getFullYear()]);
-    (db.history || []).forEach(item => {
+    getReportingHistory().forEach(item => {
         const d = new Date(item.date);
         if (!isNaN(d.getTime())) years.add(d.getFullYear());
     });
@@ -12528,14 +12552,16 @@ function populateYearSelector() {
     }
 }
 
-function populateMonthlyCustomerChart(year) {
+async function populateMonthlyCustomerChart(year) {
+    await ensureArchivedHistoryLoaded(); // 🟢 ดึง Archive มารวมก่อนคำนวณ กันยอดขายปีเก่าหายไป
+
     const monthLabels = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 
     // 🟢 คำนวณยอดขายรวมทั้งปีของแต่ละลูกค้า เพื่อเลือกลูกค้า Top 6 มาแสดงแยกสี ที่เหลือรวมเป็น "อื่นๆ"
     const customerYearTotal = new Map();
     const monthlyData = {}; // { customer: [12 เดือน] }
 
-    (db.history || []).forEach(item => {
+    getReportingHistory().forEach(item => {
         const parsed = getSaleValueFromItem(item);
         if (!parsed || parsed.date.getFullYear() !== year) return;
 
@@ -12609,7 +12635,8 @@ function populateMonthlyCustomerChart(year) {
     });
 }
 
-function populateSalesDashboard(startDate, endDate) {
+async function populateSalesDashboard(startDate, endDate) {
+                    await ensureArchivedHistoryLoaded(); // 🟢 ดึง Archive มารวมก่อนคำนวณ กันยอดขายช่วงเก่าหายไป
                     const T = translations[currentLanguage];
                     let totalSalesQuantity = 0;
                     let totalSalesValue = 0;
@@ -12626,7 +12653,7 @@ function populateSalesDashboard(startDate, endDate) {
                     endFilterDate.setDate(endFilterDate.getDate() + 1);
                     endFilterDate.setHours(8, 0, 0, 0);
 
-                    const filteredHistoryForSales = db.history.filter(item => {
+                    const filteredHistoryForSales = getReportingHistory().filter(item => {
                         const itemDate = new Date(item.date);
                         return itemDate >= startFilterDate && itemDate < endFilterDate;
                     });
@@ -12640,7 +12667,7 @@ function populateSalesDashboard(startDate, endDate) {
                             const originalIdMatch = (item.remarks || '').match(/Reversal of transaction ID: (exp-[\w-]+)/);
                             if (originalIdMatch) {
                                 const originalId = originalIdMatch[1];
-                                const originalTransaction = db.history.find(h => h.id === originalId);
+                                const originalTransaction = getReportingHistory().find(h => h.id === originalId);
                                 if (originalTransaction && originalTransaction.exportType === 'Sale') {
                                     isReversalOfSale = true;
                                 }
