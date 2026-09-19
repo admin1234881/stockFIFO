@@ -1401,6 +1401,128 @@
 .contact-status { font-size: 0.72rem; color: #adb5bd; }
 .contact-status.online { color: #28a745; }
 .support-back-btn { background: none; border: none; color: #fff; font-size: 1.1rem; margin-right: 6px; cursor: pointer; }
+/* 🔒 ป็อบอัพล็อกหน้าจอ (Quick Unlock) ตอนไม่มีการเคลื่อนไหวนาน */
+.lock-screen-overlay {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(160deg, rgba(13,110,253,0.92), rgba(77,148,255,0.92));
+    backdrop-filter: blur(6px);
+    z-index: 99999999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: lockFadeIn 0.35s ease-out;
+}
+@keyframes lockFadeIn {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
+}
+.lock-screen-card {
+    background: #fff;
+    border-radius: 22px;
+    padding: 40px 36px;
+    width: 100%;
+    max-width: 340px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    animation: lockCardIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes lockCardIn {
+    0% { opacity: 0; transform: translateY(24px) scale(0.94); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.lock-screen-avatar {
+    width: 76px;
+    height: 76px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #0d6efd, #4d94ff);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    font-weight: 800;
+    margin: 0 auto 16px;
+    box-shadow: 0 8px 20px rgba(13,110,253,0.35);
+}
+.lock-screen-icon-badge {
+    position: absolute;
+    margin-left: 46px;
+    margin-top: 46px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #fff;
+    border: 3px solid #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6c757d;
+    font-size: 0.75rem;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+.lock-screen-username {
+    font-weight: 800;
+    font-size: 1.15rem;
+    color: #212529;
+    margin-bottom: 4px;
+}
+.lock-screen-subtitle {
+    font-size: 0.85rem;
+    color: #adb5bd;
+    margin-bottom: 24px;
+}
+.lock-screen-input {
+    width: 100%;
+    padding: 12px 16px;
+    border-radius: 12px;
+    border: 1.5px solid #e9ecef;
+    font-size: 1rem;
+    text-align: center;
+    letter-spacing: 3px;
+    margin-bottom: 10px;
+    transition: border-color 0.2s;
+}
+.lock-screen-input:focus {
+    outline: none;
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 4px rgba(13,110,253,0.1);
+}
+.lock-screen-error {
+    color: #dc3545;
+    font-size: 0.8rem;
+    font-weight: 600;
+    min-height: 18px;
+    margin-bottom: 10px;
+}
+.lock-screen-unlock-btn {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #0d6efd, #4d94ff);
+    color: #fff;
+    font-weight: 700;
+    font-size: 1rem;
+    box-shadow: 0 6px 16px rgba(13,110,253,0.3);
+    cursor: pointer;
+    transition: transform 0.15s;
+}
+.lock-screen-unlock-btn:hover { transform: translateY(-2px); }
+.lock-screen-unlock-btn:active { transform: translateY(0); }
+.lock-screen-switch-user {
+    display: block;
+    width: 100%;
+    text-align: center;
+    margin-top: 16px;
+    font-size: 0.85rem;
+    color: #868e96;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-decoration: underline;
+}
+.lock-screen-switch-user:hover { color: #0d6efd; }
 </style>
 <body>
 <!-- ========================================= -->
@@ -1588,7 +1710,21 @@
         </div>
     </div>
     </div>
-        <!-- 💬 ปุ่มแชทลอยแจ้งปัญหาการใช้งาน -->
+    <!-- 🔒 ป็อบอัพล็อกหน้าจอ (Quick Unlock) -->
+    <div class="lock-screen-overlay" id="lock-screen-overlay" style="display:none;">
+        <div class="lock-screen-card">
+            <div style="position:relative; display:inline-block;">
+                <div class="lock-screen-avatar" id="lock-screen-avatar">?</div>
+                <div class="lock-screen-icon-badge"><i class="bi bi-lock-fill"></i></div>
+            </div>
+            <div class="lock-screen-username" id="lock-screen-username">-</div>
+            <div class="lock-screen-subtitle">ไม่มีการใช้งานสักพัก กรุณายืนยันตัวตนอีกครั้ง</div>
+            <input type="password" class="lock-screen-input" id="lock-screen-password" placeholder="••••••••" autocomplete="off">
+            <div class="lock-screen-error" id="lock-screen-error"></div>
+            <button type="button" class="lock-screen-unlock-btn" id="lock-screen-unlock-btn"><i class="bi bi-unlock-fill me-1"></i> ปลดล็อก</button>
+            <button type="button" class="lock-screen-switch-user" id="lock-screen-switch-user">ไม่ใช่ฉัน? สลับผู้ใช้งาน</button>
+        </div>
+    </div>
     <button type="button" class="support-fab" id="support-fab-btn" title="แจ้งปัญหาการใช้งาน" style="display:none;">
         <i class="bi bi-headset"></i>
         <span class="support-fab-badge" id="support-fab-badge" style="display:none;">0</span>
@@ -3734,7 +3870,7 @@ function handleLogin(e) {
 // --- INACTIVITY & SYNC FUNCTIONS ---
                 function resetInactivityTimer() {
                     clearTimeout(inactivityTimer);
-                    inactivityTimer = setTimeout(logoutDueToInactivity, 30 * 60 * 1000); // 30 นาที
+                    inactivityTimer = setTimeout(logoutDueToInactivity, 15 * 60 * 1000); // 30 นาที
                 }
 
                 function logoutDueToInactivity() {
@@ -3750,18 +3886,65 @@ function handleLogin(e) {
                         return; 
                     }
 
-                    // 🔴 แต่ถ้าเปิดหน้าอื่นๆ ทิ้งไว้ (เช่น รับเข้า, ส่งออก) ให้เตะออกตามปกติเพื่อความปลอดภัย
+                    // 🔴 แต่ถ้าเปิดหน้าอื่นๆ ทิ้งไว้ (เช่น รับเข้า, ส่งออก) ให้ล็อกหน้าจอไว้เพื่อความปลอดภัย (แทนการเตะออกไปหน้า Login ทันที)
                     stopDataSync();
-                    Swal.fire({
-                        title: translations[currentLanguage].session_expired_title,
-                        text: translations[currentLanguage].session_expired_text,
-                        icon: 'warning',
-                        confirmButtonText: translations[currentLanguage].ok_button,
-                        allowOutsideClick: false,
-                    }).then(() => {
+                    showLockScreen();
+                }
+
+                // 🔒 เปิดป็อบอัพล็อกหน้าจอ ให้ใส่รหัสผ่านซ้ำของ User เดิม
+                function showLockScreen() {
+                    const overlay = document.getElementById('lock-screen-overlay');
+                    const avatar = document.getElementById('lock-screen-avatar');
+                    const usernameEl = document.getElementById('lock-screen-username');
+                    const passwordInput = document.getElementById('lock-screen-password');
+                    const errorEl = document.getElementById('lock-screen-error');
+
+                    if (!overlay || !currentUser) { logoutWithAnimation(); return; }
+
+                    // 🟢 ใช้รูปโปรไฟล์จริงถ้ามี (จากระบบเดียวกับแชท) ถ้าไม่มีจะ fallback เป็นตัวอักษรแรกให้เองอัตโนมัติ
+                    if (typeof window.getAvatarHtml === 'function') {
+                        avatar.innerHTML = window.getAvatarHtml(currentUser, 76);
+                    } else {
+                        avatar.innerText = currentUser.username.charAt(0).toUpperCase();
+                    }
+                    usernameEl.innerText = currentUser.fullname || currentUser.username;
+                    passwordInput.value = '';
+                    errorEl.innerText = '';
+                    overlay.style.display = 'flex';
+                    setTimeout(() => passwordInput.focus(), 300);
+                }
+
+                function attemptUnlock() {
+                    const passwordInput = document.getElementById('lock-screen-password');
+                    const errorEl = document.getElementById('lock-screen-error');
+                    const overlay = document.getElementById('lock-screen-overlay');
+
+                    if (passwordInput.value === currentUser.password) {
+                        overlay.style.display = 'none';
+                        resetInactivityTimer();
+                        startDataSync();
+                        const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
+                        Toast.fire({ icon: 'success', title: 'ปลดล็อกสำเร็จ ยินดีต้อนรับกลับครับ' });
+                    } else {
+                        errorEl.innerText = 'รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่';
+                        passwordInput.value = '';
+                        passwordInput.focus();
+                    }
+                }
+
+                // 🟢 ไม่ต้องรอ DOMContentLoaded ซ้ำอีกชั้น เพราะโค้ดนี้รันอยู่ข้างใน DOMContentLoaded หลักอยู่แล้ว (DOM พร้อมใช้งานแล้ว ณ จุดนี้)
+                (function bindLockScreenEvents() {
+                    const unlockBtn = document.getElementById('lock-screen-unlock-btn');
+                    const switchUserBtn = document.getElementById('lock-screen-switch-user');
+                    const passwordInput = document.getElementById('lock-screen-password');
+
+                    if (unlockBtn) unlockBtn.addEventListener('click', attemptUnlock);
+                    if (passwordInput) passwordInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') attemptUnlock(); });
+                    if (switchUserBtn) switchUserBtn.addEventListener('click', () => {
+                        document.getElementById('lock-screen-overlay').style.display = 'none';
                         logoutWithAnimation();
                     });
-                }
+                })();
 
                 function setupActivityListeners() {
                     const events = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'];
@@ -5094,6 +5277,13 @@ async function handleImport(e) {
 }
 			// ใส่เพิ่มในฟังก์ชัน showLoginPage()
 clearInterval(window.mascotLoopTimer);
+
+                    // 🟢 ซ่อนปุ่มแชทลอยกลับ ตอน Logout (กันปุ่มค้างโผล่ที่หน้า Login)
+                    const supportFabBtn = document.getElementById('support-fab-btn');
+                    if (supportFabBtn) supportFabBtn.style.display = 'none';
+                    const supportPopup = document.getElementById('support-popup');
+                    if (supportPopup) supportPopup.classList.remove('show');
+                    if (typeof window.stopSupportChatPolling === 'function') window.stopSupportChatPolling();
                 }
 
                 function showDashboard() {
