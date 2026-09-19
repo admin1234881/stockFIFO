@@ -1523,6 +1523,19 @@
     text-decoration: underline;
 }
 .lock-screen-switch-user:hover { color: #0d6efd; }
+/* 🟢 ไทม์ไลน์ความคืบหน้ารถขนส่ง */
+.timeline-row { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid #f1f3f5; }
+.timeline-row:last-child { border-bottom: none; }
+.timeline-plate { width: 90px; font-weight: 800; font-size: 0.95rem; flex-shrink: 0; }
+.timeline-customer { width: 130px; font-size: 0.85rem; color: #495057; flex-shrink: 0; }
+.timeline-track { flex-grow: 1; height: 22px; background: #f1f3f5; border-radius: 999px; position: relative; overflow: hidden; }
+.timeline-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #0d6efd, #4d94ff); transition: width 0.4s ease; display: flex; align-items: center; justify-content: flex-end; }
+.timeline-fill.overdue { background: linear-gradient(90deg, #dc3545, #ff6b6b); animation: timelineOverduePulse 1.4s infinite; }
+@keyframes timelineOverduePulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+.timeline-truck-icon { font-size: 0.85rem; color: #fff; padding-right: 8px; }
+.timeline-eta { width: 130px; text-align: right; font-size: 0.8rem; font-weight: 700; flex-shrink: 0; }
+.timeline-empty-note { text-align: center; color: #adb5bd; padding: 24px 0; font-size: 0.85rem; }
+.floating-btn-hidden { display: none !important; }
 </style>
 <body>
 <!-- ========================================= -->
@@ -1833,70 +1846,70 @@
 
                 <button class="icon-nav-btn active" id="pills-stock-tab" data-bs-toggle="pill" data-bs-target="#pills-stock" type="button" role="tab">
                     <span class="icon-nav-icon"><i class="bi bi-house-heart-fill"></i></span>
-                    <span class="icon-nav-label">สต็อกคงเหลือ</span>
+                    <span class="icon-nav-label" data-lang-key="nav_stock">สต็อกคงเหลือ</span>
                 </button>
                 <button class="icon-nav-btn" id="pills-dashboard-tab" data-bs-toggle="pill" data-bs-target="#pills-dashboard" type="button" role="tab">
                     <span class="icon-nav-icon"><i class="bi bi-speedometer2"></i></span>
-                    <span class="icon-nav-label">แดชบอร์ด</span>
+                    <span class="icon-nav-label" data-lang-key="nav_dashboard">แดชบอร์ด</span>
                 </button>
 
                 <div class="icon-nav-divider"></div>
 
                 <button class="icon-nav-btn" id="nav-import-item" data-bs-toggle="pill" data-bs-target="#pills-import">
                     <span class="icon-nav-icon"><i class="bi bi-arrow-down-square-fill text-success"></i></span>
-                    <span class="icon-nav-label">รับเข้าสินค้า</span>
+                    <span class="icon-nav-label" data-lang-key="nav_import">รับเข้าสินค้า</span>
                 </button>
                 <button class="icon-nav-btn" id="nav-export-item" data-bs-toggle="pill" data-bs-target="#pills-export">
                     <span class="icon-nav-icon"><i class="bi bi-arrow-up-square-fill text-info"></i></span>
-                    <span class="icon-nav-label">ส่งออกสินค้า</span>
+                    <span class="icon-nav-label" data-lang-key="nav_export">ส่งออกสินค้า</span>
                 </button>
                 <button class="icon-nav-btn" id="nav-rack-item" data-bs-toggle="pill" data-bs-target="#pills-rack">
                     <span class="icon-nav-icon"><i class="bi bi-inboxes-fill" style="color:#6f42c1;"></i></span>
-                    <span class="icon-nav-label">ระบบจัดการ Packing</span>
+                    <span class="icon-nav-label" data-lang-key="nav_rack">ระบบจัดการ Packing</span>
                 </button>
                 <button class="icon-nav-btn" id="nav-stock-count-item" data-bs-toggle="pill" data-bs-target="#pills-stock-count">
                     <span class="icon-nav-icon"><i class="bi bi-clipboard2-check-fill text-warning"></i></span>
-                    <span class="icon-nav-label">นับสต็อก</span>
+                    <span class="icon-nav-label" data-lang-key="nav_stock_count">นับสต็อก</span>
                 </button>
                 <button class="icon-nav-btn" id="nav-convert-item" onclick="openConvertModal()">
                     <span class="icon-nav-icon"><i class="bi bi-arrow-left-right text-primary"></i></span>
-                    <span class="icon-nav-label">เปลี่ยนรหัสสินค้า (Convert)</span>
+                    <span class="icon-nav-label" data-lang-key="nav_convert_part">เปลี่ยนรหัสสินค้า (Convert)</span>
                 </button>
                 <button class="icon-nav-btn" id="nav-history-item" data-bs-toggle="pill" data-bs-target="#pills-history">
                     <span class="icon-nav-icon"><i class="bi bi-clock-fill" style="color:#20c997;"></i></span>
-                    <span class="icon-nav-label">ประวัติ</span>
+                    <span class="icon-nav-label" data-lang-key="nav_history">ประวัติ</span>
                 </button>
                 <button class="icon-nav-btn" id="nav-delivery-plan-item" data-bs-toggle="pill" data-bs-target="#pills-delivery-plan">
                     <span class="icon-nav-icon"><i class="bi bi-calendar-check-fill text-danger"></i></span>
-                    <span class="icon-nav-label">แผนการจัดส่ง Delivery plan</span>
+                    <span class="icon-nav-label" data-lang-key="nav_delivery_plan">แผนการจัดส่ง Delivery plan</span>
                 </button>
                 <button class="icon-nav-btn" id="nav-lot-hold-item" data-bs-toggle="pill" data-bs-target="#pills-lot-hold">
                     <span class="icon-nav-icon"><i class="bi bi-shield-exclamation text-danger"></i></span>
                     <span id="lot-hold-badge-count" class="icon-nav-badge" style="display:none;">0</span>
-                    <span class="icon-nav-label">รายการรอตรวจสอบ (Q)</span>
+                    <span class="icon-nav-label" data-lang-key="nav_lot_hold">รายการรอตรวจสอบ (Q)</span>
                 </button>
                 <button class="icon-nav-btn" id="nav-archive-item" data-bs-toggle="pill" data-bs-target="#pills-archive">
                     <span class="icon-nav-icon"><i class="bi bi-archive-fill text-secondary"></i></span>
-                    <span class="icon-nav-label">จัดการ Archive ประวัติเก่า</span>
+                    <span class="icon-nav-label" data-lang-key="nav_archive">จัดการ Archive ประวัติเก่า</span>
                 </button>
                 <button class="icon-nav-btn" id="nav-forecast-item" data-bs-toggle="pill" data-bs-target="#pills-forecast">
                     <span class="icon-nav-icon"><i class="bi bi-graph-up-arrow text-success"></i></span>
-                    <span class="icon-nav-label">อัปโหลด Forecast (ล่วงหน้า)</span>
+                    <span class="icon-nav-label" data-lang-key="nav_forecast">อัปโหลด Forecast (ล่วงหน้า)</span>
                 </button>
 
                 <div class="icon-nav-divider" id="nav-admin-group"></div>
 
                 <button class="icon-nav-btn" id="nav-products-item" data-bs-toggle="pill" data-bs-target="#pills-products">
                     <span class="icon-nav-icon"><i class="bi bi-boxes" style="color:#fd7e14;"></i></span>
-                    <span class="icon-nav-label">จัดการสินค้า</span>
+                    <span class="icon-nav-label" data-lang-key="nav_products">จัดการสินค้า</span>
                 </button>
                 <button class="icon-nav-btn" id="nav-users-item" data-bs-toggle="pill" data-bs-target="#pills-users">
                     <span class="icon-nav-icon"><i class="bi bi-person-vcard-fill" style="color:#6610f2;"></i></span>
-                    <span class="icon-nav-label">จัดการผู้ใช้</span>
+                    <span class="icon-nav-label" data-lang-key="nav_users">จัดการผู้ใช้</span>
                 </button>
                 <button class="icon-nav-btn" id="nav-announcements-item" data-bs-toggle="pill" data-bs-target="#pills-announcements">
                     <span class="icon-nav-icon"><i class="bi bi-bell-fill" style="color:#d63384;"></i></span>
-                    <span class="icon-nav-label">จัดการประกาศ</span>
+                    <span class="icon-nav-label" data-lang-key="nav_announcements">จัดการประกาศ</span>
                 </button>
             </div>
             <div id="announcements-display-area" class="mb-4"></div>	
@@ -2580,6 +2593,19 @@
             </div>
         </div>
 
+        <!-- 🟢 ไทม์ไลน์ความคืบหน้ารถที่กำลังวิ่งงาน -->
+        <div class="col-12 mt-2">
+            <div class="card shadow-sm border-0" style="border-radius: 20px;">
+                <div class="card-header bg-white border-0 pt-4 pb-2 px-4">
+                    <h5 class="fw-bold text-primary mb-0"><i class="bi bi-signpost-split-fill me-2"></i><span data-lang-key="dash_timeline_title">ไทม์ไลน์ความคืบหน้า (เทียบเวลาเฉลี่ยที่เคยใช้จริง)</span></h5>
+                    <div class="small text-muted mt-1" data-lang-key="dash_timeline_desc">คำนวณจากเวลาไป-กลับเฉลี่ยของลูกค้าแต่ละเจ้าในอดีต — แถบสีแดงกระพริบ = ใช้เวลาเกินค่าเฉลี่ยแล้ว</div>
+                </div>
+                <div class="card-body p-4">
+                    <div id="vehicle-timeline-container"></div>
+                </div>
+            </div>
+        </div>
+
     </div>
 </div>
                 </div> <!-- ปิดหน้าแดชบอร์ดรวมทั้งหมด (pills-dashboard) -->
@@ -3093,6 +3119,15 @@
                     nav_convert_part: "เปลี่ยนรหัสสินค้า (Convert)",
                     // NEW: Dashboard
                     nav_dashboard: "แดชบอร์ด",
+                    nav_rack: "ระบบจัดการ Packing",
+                    nav_forecast: "อัปโหลด Forecast (ล่วงหน้า)",
+                    nav_lot_hold: "รายการรอตรวจสอบ (Q)",
+                    nav_archive: "จัดการ Archive ประวัติเก่า",
+                    dash_timeline_title: "ไทม์ไลน์ความคืบหน้า (เทียบเวลาเฉลี่ยที่เคยใช้จริง)",
+                    dash_timeline_desc: "คำนวณจากเวลาไป-กลับเฉลี่ยของลูกค้าแต่ละเจ้าในอดีต — แถบสีแดงกระพริบ = ใช้เวลาเกินค่าเฉลี่ยแล้ว",
+                    dash_timeline_empty: "ตอนนี้ไม่มีรถกำลังวิ่งงานครับ",
+                    dash_timeline_overdue: "เกินเวลา {min} นาที",
+                    dash_timeline_remaining: "อีก ~{min} นาที",
                     dashboard_total_stock_value_title: "มูลค่าสต็อกสินค้าทั้งหมด",
                     dashboard_total_sales_title: "ยอดขายทั้งหมด (ช่วงวันที่)",
                     dashboard_sales_by_customer_title: "สรุปยอดขายแยกตามลูกค้า (ช่วงวันที่)",
@@ -3427,6 +3462,15 @@
                     nav_group_settings: "Settings",
                     // NEW: Dashboard
                     nav_dashboard: "Dashboard",
+                    nav_rack: "Packing Management",
+                    nav_forecast: "Upload Forecast",
+                    nav_lot_hold: "Pending Review (Q)",
+                    nav_archive: "Archive Old History",
+                    dash_timeline_title: "Progress Timeline (vs. Actual Average Time)",
+                    dash_timeline_desc: "Calculated from each customer's historical average round-trip time — blinking red bar = over average time",
+                    dash_timeline_empty: "No vehicles currently in transit",
+                    dash_timeline_overdue: "{min} min overdue",
+                    dash_timeline_remaining: "~{min} min left",
                     dashboard_total_stock_value_title: "Total Stock Value",
                     dashboard_total_sales_title: "Total Sales (Date Range)",
                     dashboard_sales_by_customer_title: "Sales Summary by Customer (Date Range)",
@@ -6251,6 +6295,114 @@ window.toggleDashboardView = function(view) {
                         if (typeof populateVehicleDashboard === 'function') populateVehicleDashboard(); 
                     }
                 };
+// 🟢 ==================== ไทม์ไลน์ความคืบหน้ารถขนส่ง (ใช้ข้อมูลที่มีอยู่แล้ว ไม่แตะ .gs) ====================
+function getAvgTripMinutesByCustomer() {
+    // 🟢 ไล่ดูประวัติงานที่ "จบแล้วจริง" (มีทั้งเวลาปล่อยรถและเวลารับกลับ) ย้อนหลัง เพื่อหาค่าเฉลี่ยต่อลูกค้า
+    const sums = {}; // { customer: { totalMinutes, count } }
+
+    (db.deliveryPlans || []).forEach(p => {
+        if (p.status !== 'Completed' || !p.actualReleaseTime || !p.actualReturnTime || !p.date) return;
+
+        const parseTimeToMinutes = (raw) => {
+            const str = window.formatTimeDisplay ? window.formatTimeDisplay(raw) : String(raw).replace(/^'/, '');
+            const parts = String(str).split(':');
+            if (parts.length !== 2) return null;
+            return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+        };
+
+        const releaseMin = parseTimeToMinutes(p.actualReleaseTime);
+        const returnMin = parseTimeToMinutes(p.actualReturnTime);
+        if (releaseMin === null || returnMin === null) return;
+
+        let duration = returnMin - releaseMin;
+        if (duration < 0) duration += 24 * 60; // ข้ามเที่ยงคืน
+        if (duration <= 0 || duration > 12 * 60) return; // กันข้อมูลเพี้ยน (เกิน 12 ชม. ไม่เอามานับ)
+
+        const customer = p.customer || 'ไม่ระบุ';
+        if (!sums[customer]) sums[customer] = { totalMinutes: 0, count: 0 };
+        sums[customer].totalMinutes += duration;
+        sums[customer].count++;
+    });
+
+    const averages = {};
+    Object.keys(sums).forEach(customer => {
+        averages[customer] = Math.round(sums[customer].totalMinutes / sums[customer].count);
+    });
+    return averages;
+}
+
+function populateVehicleTimeline() {
+    const container = document.getElementById('vehicle-timeline-container');
+    if (!container || typeof db === 'undefined' || !db.deliveryPlans) return;
+
+    const now = new Date();
+    const opDate = new Date(now);
+    if (now.getHours() < 7) opDate.setDate(opDate.getDate() - 1);
+    const todayStr = `${opDate.getFullYear()}-${String(opDate.getMonth() + 1).padStart(2, '0')}-${String(opDate.getDate()).padStart(2, '0')}`;
+
+    // รถที่ "กำลังวิ่งงาน" ของวันนี้เท่านั้น (ไม่ซ้ำทะเบียน)
+    const deliveringMap = new Map();
+    db.deliveryPlans.forEach(p => {
+        if (!p || p.status !== 'Delivering' || !p.licensePlate) return;
+        const planDate = typeof formatDate === 'function' ? formatDate(p.date) : String(p.date).split('T')[0];
+        if (planDate !== todayStr) return;
+        const plate = String(p.licensePlate).trim();
+        if (!deliveringMap.has(plate)) deliveringMap.set(plate, p);
+    });
+
+    if (deliveringMap.size === 0) {
+        const emptyText = (translations[currentLanguage] || translations['th']).dash_timeline_empty;
+        container.innerHTML = `<div class="timeline-empty-note"><i class="bi bi-moon-stars fs-3 d-block mb-2 opacity-50"></i>${emptyText}</div>`;
+        return;
+    }
+
+    const avgByCustomer = getAvgTripMinutesByCustomer();
+    const DEFAULT_AVG_MIN = 90; // ถ้าไม่เคยมีประวัติลูกค้าเจ้านี้มาก่อน ใช้ค่ากลาง 90 นาที
+
+    const parseTimeToMinutesNow = (raw) => {
+        const str = window.formatTimeDisplay ? window.formatTimeDisplay(raw) : String(raw).replace(/^'/, '');
+        const parts = String(str).split(':');
+        if (parts.length !== 2) return null;
+        return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+    };
+
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+    const rows = Array.from(deliveringMap.values()).map(p => {
+        const releaseMin = parseTimeToMinutesNow(p.actualReleaseTime);
+        let elapsed = releaseMin !== null ? nowMinutes - releaseMin : 0;
+        if (elapsed < 0) elapsed += 24 * 60;
+
+        const avgMin = avgByCustomer[p.customer] || DEFAULT_AVG_MIN;
+        const percent = Math.min(100, Math.round((elapsed / avgMin) * 100));
+        const isOverdue = elapsed > avgMin;
+        const remainMin = avgMin - elapsed;
+
+        const T = translations[currentLanguage] || translations['th'];
+        let etaText;
+        if (isOverdue) {
+            etaText = `<span class="text-danger">${T.dash_timeline_overdue.replace('{min}', elapsed - avgMin)}</span>`;
+        } else {
+            etaText = `<span class="text-success">${T.dash_timeline_remaining.replace('{min}', remainMin)}</span>`;
+        }
+
+        return { plate: p.licensePlate, customer: p.customer || '-', percent, isOverdue, etaText, elapsed };
+    }).sort((a, b) => b.percent - a.percent);
+
+    container.innerHTML = rows.map(r => `
+        <div class="timeline-row">
+            <div class="timeline-plate"><i class="bi bi-truck me-1 text-primary"></i>${r.plate}</div>
+            <div class="timeline-customer text-truncate" title="${r.customer}">${r.customer}</div>
+            <div class="timeline-track">
+                <div class="timeline-fill ${r.isOverdue ? 'overdue' : ''}" style="width:${r.percent}%;">
+                    ${r.percent > 15 ? '<i class="bi bi-truck timeline-truck-icon"></i>' : ''}
+                </div>
+            </div>
+            <div class="timeline-eta">${r.etaText}</div>
+        </div>
+    `).join('');
+}
+
 window.populateVehicleDashboard = function() {
     try {
         const T = translations[currentLanguage] || translations['th']; 
@@ -6318,6 +6470,8 @@ window.populateVehicleDashboard = function() {
             else if (p.status === 'Completed') kpiGroups.completed.add(plStr + '_' + tStr);
             else kpiGroups.pending.add(tStr + '_' + cStr);
         });
+
+        if (typeof populateVehicleTimeline === 'function') populateVehicleTimeline(); // 🟢 อัปเดตไทม์ไลน์พร้อมกันทุกครั้ง
 
         if (document.getElementById('dash-veh-kpi-total')) document.getElementById('dash-veh-kpi-total').innerText = kpiGroups.pending.size + kpiGroups.delivering.size + kpiGroups.completed.size + kpiGroups.cancelled.size;
         if (document.getElementById('dash-veh-kpi-pending')) document.getElementById('dash-veh-kpi-pending').innerText = kpiGroups.pending.size;
@@ -7331,6 +7485,22 @@ window.generateVehicleReport = function(fileType) {
                         }
                     });
                         document.body.addEventListener('shown.bs.tab', function (e) {
+                            // 🟢 ซ่อนปุ่มลอย (เครื่องคิดเลข + แชท) ทันทีที่เข้าแท็บแดชบอร์ด / โชว์กลับทันทีที่ออกไปแท็บอื่น
+                            const calcBtn = document.getElementById('calc-toggle-btn');
+                            const calcWidget = document.getElementById('calculator-widget');
+                            const chatBtn = document.getElementById('support-fab-btn');
+                            const chatPopup = document.getElementById('support-popup');
+
+                            if (e.target.dataset.bsTarget === '#pills-dashboard') {
+                                if (calcBtn) calcBtn.classList.add('floating-btn-hidden');
+                                if (calcWidget) calcWidget.classList.add('d-none');
+                                if (chatBtn) chatBtn.classList.add('floating-btn-hidden');
+                                if (chatPopup) chatPopup.classList.remove('show');
+                            } else {
+                                if (calcBtn) calcBtn.classList.remove('floating-btn-hidden');
+                                if (chatBtn && sessionStorage.getItem('currentUser')) chatBtn.classList.remove('floating-btn-hidden');
+                            }
+
                             if (e.target.dataset.bsTarget === '#pills-lot-hold') {
                                 if (typeof window.populateLotHoldPage === 'function') window.populateLotHoldPage();
                             }
