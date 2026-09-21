@@ -4090,7 +4090,7 @@ async function loadUsersOnly() {
         if (!response.ok) return;
         const data = await response.json();
         if (data.users && data.users.length > 0) {
-            db.users = data.users; // เขียนทับด้วยข้อมูลสดจากเซิร์ฟเวอร์ ป้องกันรหัสผ่านเก่าค้างจากแคช
+            db.users = data.users.map(normalizeBooleanFields); // 🟢 แปลง "TRUE"/"FALSE" เป็น Boolean จริงทุกคน กันสิทธิ์เพี้ยน
             isUsersLoaded = true;
             console.log('⚡ โหลดรายชื่อผู้ใช้สำหรับล็อกอินสำเร็จ');
         }
@@ -4179,6 +4179,9 @@ async function loadDataFromSheet(isInitialLoad = false) {
         newData.rackHistory = newData.rackHistory || [];
         newData.forecast = newData.forecast || []; 
         newData.vehicles = newData.vehicles || []; // 🟢 รองรับข้อมูลทะเบียนรถ
+
+        if (newData.users) newData.users = newData.users.map(normalizeBooleanFields); // 🟢 แปลง "TRUE"/"FALSE" เป็น Boolean จริงทุกคน กันสิทธิ์เพี้ยน
+        if (newData.announcements) newData.announcements = newData.announcements.map(normalizeBooleanFields); // เผื่อไว้ด้วยสำหรับประกาศ
 
         if (JSON.stringify(db) !== JSON.stringify(newData)) {
             db = newData;
@@ -11061,6 +11064,21 @@ function populateUserManagementTable() {
                 }
 // 🟢 แปลงค่า isActive ให้ถูกต้องเสมอ ไม่ว่า Google Sheet จะส่งมาเป็น Boolean จริง, ข้อความ "TRUE"/"FALSE", หรือค่าว่าง
 // (แก้บั๊ก: ข้อความ "FALSE" ใน JavaScript ถือว่าเป็นค่าจริงเสมอ เพราะเป็นสตริงที่ไม่ว่างเปล่า)
+// 🟢 แปลงค่า "TRUE"/"FALSE" (ข้อความ) ให้เป็น Boolean จริง ให้ทุกฟิลด์ของ object โดยอัตโนมัติ
+// แก้บั๊กใหญ่: Sheets API (batchGet) ส่งค่า Checkbox กลับมาเป็นข้อความเสมอ ทำให้ "FALSE" ถูกเข้าใจผิดว่าเป็นค่าจริงใน JS
+function normalizeBooleanFields(obj) {
+    if (!obj || typeof obj !== 'object') return obj;
+    Object.keys(obj).forEach(key => {
+        const val = obj[key];
+        if (typeof val === 'string') {
+            const upper = val.trim().toUpperCase();
+            if (upper === 'TRUE') obj[key] = true;
+            else if (upper === 'FALSE') obj[key] = false;
+        }
+    });
+    return obj;
+}
+
 function isAnnouncementActive(value) {
     if (value === true) return true;
     if (value === false || value === null || value === undefined || value === '') return false;
