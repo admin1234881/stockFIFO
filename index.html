@@ -6307,10 +6307,15 @@ window.toggleDashboardView = function(view) {
                         if (typeof populateVehicleDashboard === 'function') populateVehicleDashboard(); 
                     }
                 };
-// 🟢 ==================== ไทม์ไลน์ความคืบหน้ารถขนส่ง (ใช้ข้อมูลที่มีอยู่แล้ว ไม่แตะ .gs) ====================
 function getAvgTripMinutesByCustomer() {
-    // 🟢 ไล่ดูประวัติงานที่ "จบแล้วจริง" (มีทั้งเวลาปล่อยรถและเวลารับกลับ) ย้อนหลัง เพื่อหาค่าเฉลี่ยต่อลูกค้า
-    const sums = {}; // { customer: { totalMinutes, count } }
+    // 🟢 เปลี่ยนเป็นเฉลี่ยจาก "30 วันล่าสุด" เท่านั้น แทนการเฉลี่ยสะสมตลอดกาล
+    // สะท้อนสถานการณ์ปัจจุบันได้ไวขึ้น (เช่น รถติดเพิ่ม/ลดตามช่วงเวลา) แลกกับความเสถียรที่ลดลงบ้าง
+    const RECENT_WINDOW_DAYS = 30;
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - RECENT_WINDOW_DAYS);
+
+    const sums = {};       // { customer: { totalMinutes, count } }  — เฉพาะ 30 วันล่าสุด
+    const allTimeSums = {}; // { customer: { totalMinutes, count } }  — สะสมตลอดกาล (ใช้เป็น fallback ถ้าข้อมูลล่าสุดยังน้อยเกินไป)
 
     (db.deliveryPlans || []).forEach(p => {
         if (p.status !== 'Completed' || !p.actualReleaseTime || !p.actualReturnTime || !p.date) return;
@@ -6331,15 +6336,36 @@ function getAvgTripMinutesByCustomer() {
         if (duration <= 0 || duration > 12 * 60) return; // กันข้อมูลเพี้ยน (เกิน 12 ชม. ไม่เอามานับ)
 
         const customer = p.customer || 'ไม่ระบุ';
-        if (!sums[customer]) sums[customer] = { totalMinutes: 0, count: 0 };
-        sums[customer].totalMinutes += duration;
-        sums[customer].count++;
+        const planDate = new Date(p.date);
+
+        // เก็บแบบสะสมตลอดกาลไว้เป็น fallback เสมอ
+        if (!allTimeSums[customer]) allTimeSums[customer] = { totalMinutes: 0, count: 0 };
+        allTimeSums[customer].totalMinutes += duration;
+        allTimeSums[customer].count++;
+
+        // เก็บเฉพาะรอบที่อยู่ใน 30 วันล่าสุด
+        if (!isNaN(planDate.getTime()) && planDate >= cutoffDate) {
+            if (!sums[customer]) sums[customer] = { totalMinutes: 0, count: 0 };
+            sums[customer].totalMinutes += duration;
+            sums[customer].count++;
+        }
     });
 
     const averages = {};
-    Object.keys(sums).forEach(customer => {
-        averages[customer] = Math.round(sums[customer].totalMinutes / sums[customer].count);
+    const allCustomers = new Set([...Object.keys(sums), ...Object.keys(allTimeSums)]);
+
+    allCustomers.forEach(customer => {
+        const recent = sums[customer];
+        // 🟢 ถ้ามีข้อมูลใน 30 วันล่าสุดอย่างน้อย 2 รอบขึ้นไป ใช้ค่าเฉลี่ยล่าสุดเลย (แม่นยำกับสถานการณ์ปัจจุบัน)
+        // ถ้ามีน้อยกว่านั้น (ข้อมูลใหม่ยังไม่พอ) ใช้ค่าเฉลี่ยสะสมตลอดกาลแทนชั่วคราว กันค่าแกว่งเกินไปจากรอบเดียว
+        if (recent && recent.count >= 2) {
+            averages[customer] = Math.round(recent.totalMinutes / recent.count);
+        } else {
+            const allTime = allTimeSums[customer];
+            averages[customer] = allTime ? Math.round(allTime.totalMinutes / allTime.count) : null;
+        }
     });
+
     return averages;
 }
 
