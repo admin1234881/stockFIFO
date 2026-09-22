@@ -3902,7 +3902,7 @@ function handleLogin(e) {
                     }
                 };
                     // --- GOOGLE APPS SCRIPT CONFIGURATION ---
-                const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzDF2CMs2EhLfe1Hh2NFlcLdPU2FrSfA8VQOQI1fgLHXnbZl2k-KKw5q3gyHv0zLffATw/exec';
+                const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby3twTehz5ZVaLetjK1G9tZzoEtnFYreMOOdTqr1mWGyZ0Ex5SP8L8hb0Oak_g6q1RhYg/exec';
 
                 // --- DATABASE SIMULATION & PERSISTENCE ---
                                 let db = { users: [], products: [], history: [], announcements: [], stockCounts: [], deliveryPlans: [], rackHistory: [], forecast: [], lotHolds: [] };
@@ -4180,7 +4180,15 @@ async function loadDataFromSheet(isInitialLoad = false) {
         newData.forecast = newData.forecast || []; 
         newData.vehicles = newData.vehicles || []; // 🟢 รองรับข้อมูลทะเบียนรถ
 
-        if (newData.users) newData.users = newData.users.map(normalizeBooleanFields); // 🟢 แปลง "TRUE"/"FALSE" เป็น Boolean จริงทุกคน กันสิทธิ์เพี้ยน
+        if (newData.users) newData.users = newData.users.map(normalizeBooleanFields);
+        // 🟢 แปลงชื่อฟิลด์ Cleared (ชื่อคอลัมน์จริงในชีต) กลับเป็น erpStatus (ชื่อที่โค้ดหน้าเว็บใช้อยู่เดิม)
+        if (newData.history) {
+            newData.history.forEach(item => {
+                if (item.Cleared !== undefined && item.Cleared !== '' && !item.erpStatus) {
+                    item.erpStatus = item.Cleared;
+                }
+            });
+        }
         if (newData.announcements) newData.announcements = newData.announcements.map(normalizeBooleanFields); // เผื่อไว้ด้วยสำหรับประกาศ
 
         if (JSON.stringify(db) !== JSON.stringify(newData)) {
@@ -5040,7 +5048,8 @@ async function handleImport(e) {
             remarks: remarks,
             packagingType: packagingType,
             failedErpQty: failedErpQty, // โหลดเข้าประวัติ
-            erpStatus: erpStatus        // โหลดเข้าประวัติ
+            erpStatus: erpStatus,       // ใช้งานในหน้าเว็บ (การกรอง/แสดงผล)
+            Cleared: erpStatus          // 🟢 ชื่อนี้ต้องตรงกับคอลัมน์จริงในชีต ถึงจะถูกบันทึกลงไป
         });
     }
 
@@ -13691,8 +13700,13 @@ async function populateSalesDashboard(startDate, endDate) {
                     }
                 };
                 window.toggleErpStatus = async function(historyId) {
-    if (!currentUser || currentUser.role !== 'admin') return;
-    
+    // 🛠️ เปลี่ยนจากเช็ค role === 'admin' เป็นเช็คสิทธิ์แบบเดียวกับระบบอื่นในแอป (ยืดหยุ่นกว่า ให้ User ที่มีสิทธิ์เฉพาะเข้าถึงได้)
+    const canManageErp = currentUser && (currentUser.username === 'admin' || currentUser.role === 'admin' || currentUser.canManageProducts);
+    if (!canManageErp) {
+        Swal.fire('ไม่มีสิทธิ์', 'คุณไม่มีสิทธิ์แก้ไขยอด ERP ครับ', 'warning');
+        return;
+    }
+
     const historyItem = db.history.find(h => String(h.id) === String(historyId));
     if (!historyItem) return;
 
@@ -13723,18 +13737,36 @@ async function populateSalesDashboard(startDate, endDate) {
     });
 
     if (erpDocNum) {
-        historyItem.erpStatus = 'Cleared';
-        
-        // เอาเลขที่เอกสารไปต่อท้ายหมายเหตุ เพื่อให้ดูง่ายและค้นหาในประวัติได้
+        // เก็บค่าเดิมไว้ก่อน เผื่อบันทึกไม่สำเร็จจะได้คืนค่ากลับ
+        const oldErpStatus = historyItem.erpStatus;
+        const oldRemarksBackup = historyItem.remarks || '';
+
         const oldRemarks = historyItem.remarks ? historyItem.remarks + ' | ' : '';
-        historyItem.remarks = oldRemarks + `[เคลียร์ ERP แล้ว: ${erpDocNum}]`;
-        
-        populateAll(); // สั่งรีเฟรชตาราง
-        
-        // ถ้าคุณโจมีเขียน Apps Script ให้อัปเดต History ให้เปิดใช้งานบรรทัดนี้ด้วยครับ:
-        // await callAppsScript('updateHistoryItem', historyItem); 
-        
-        Swal.fire('สำเร็จ!', `เคลียร์ยอดและอ้างอิงเอกสาร ${erpDocNum} เรียบร้อย`, 'success');
+        const newRemarks = oldRemarks + `[เคลียร์ ERP แล้ว: ${erpDocNum}]`;
+
+        // อัปเดตหน้าจอทันที (Optimistic UI)
+        historyItem.erpStatus = 'Cleared';
+        historyItem.remarks = newRemarks;
+        populateAll();
+
+        // 🟢 เปิดใช้งานจริง: ยิงไปบันทึกที่ Google Sheets ด้วย action เดียวกับที่ใช้งานได้แล้วในระบบ
+        try {
+            Swal.fire({ title: 'กำลังบันทึกลงระบบ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+            await callAppsScript('updateErpStatus', {
+                id: historyId,
+                erpStatus: 'Cleared',
+                remarks: newRemarks
+            });
+
+            Swal.fire('สำเร็จ!', `เคลียร์ยอดและอ้างอิงเอกสาร ${erpDocNum} เรียบร้อย`, 'success');
+        } catch (error) {
+            // ถ้าบันทึกไม่สำเร็จ คืนค่ากลับเป็นเหมือนเดิม กันข้อมูลหน้าจอเพี้ยนจากของจริง
+            historyItem.erpStatus = oldErpStatus;
+            historyItem.remarks = oldRemarksBackup;
+            populateAll();
+            Swal.fire('บันทึกไม่สำเร็จ', 'เชื่อมต่อฐานข้อมูลไม่ได้: ' + error.message, 'error');
+        }
     }
 };
             }); // ปิด DOMContentLoaded ที่ถูกต้องตรงนี้
