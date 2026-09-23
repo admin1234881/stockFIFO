@@ -1920,6 +1920,10 @@
                     <span class="icon-nav-icon"><i class="bi bi-graph-up-arrow text-success"></i></span>
                     <span class="icon-nav-label" data-lang-key="nav_forecast">อัปโหลด Forecast (ล่วงหน้า)</span>
                 </button>
+                <button class="icon-nav-btn" id="nav-lg-matching-item" data-bs-toggle="pill" data-bs-target="#pills-lg-matching">
+                    <span class="icon-nav-icon"><i class="bi bi-upc-scan text-danger"></i></span>
+                    <span class="icon-nav-label">LG Matching</span>
+                </button>
 
                 <div class="icon-nav-divider" id="nav-admin-group"></div>
 
@@ -2633,6 +2637,66 @@
     </div>
 </div>
                 </div> <!-- ปิดหน้าแดชบอร์ดรวมทั้งหมด (pills-dashboard) -->
+                                <!-- LG Matching Tab -->
+                <div class="tab-pane fade" id="pills-lg-matching" role="tabpanel">
+                    <div class="card shadow-sm border-0 mb-4" style="border-radius: 20px;">
+                        <div class="card-header bg-white border-0 pt-4 pb-2 px-4">
+                            <h5 class="fw-bold text-danger mb-0"><i class="bi bi-upc-scan me-2"></i>อัปโหลดแพลน LG</h5>
+                        </div>
+                        <div class="card-body px-4 pb-4 pt-2">
+                            <div class="alert alert-info small mb-3">
+                                <i class="bi bi-info-circle-fill me-1"></i> ดาวน์โหลดเทมเพลตก่อน กรอกข้อมูล WO, Part No, Model, Part Name, จำนวนออเดอร์, เวลาเริ่มผลิต แล้วอัปโหลดกลับเข้าระบบ
+                            </div>
+                            <button type="button" class="btn btn-outline-secondary fw-bold me-2" onclick="window.downloadLGPlanTemplate()">
+                                <i class="bi bi-download me-1"></i> ดาวน์โหลดเทมเพลต
+                            </button>
+                            <label class="btn btn-danger fw-bold mb-0">
+                                <i class="bi bi-upload me-1"></i> อัปโหลดแพลน
+                                <input type="file" accept=".xlsx,.xls" style="display:none;" onchange="window.handleLGPlanFileUpload(event)">
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="card shadow-sm border-0 mb-4" style="border-radius: 20px;">
+                        <div class="card-header bg-white border-0 pt-4 pb-2 px-4">
+                            <h5 class="fw-bold text-primary mb-0"><i class="bi bi-qr-code-scan me-2"></i>สแกนแท็ก</h5>
+                        </div>
+                        <div class="card-body px-4 pb-4 pt-2">
+                            <input type="text" id="lg-scan-input" class="form-control form-control-lg fw-bold" placeholder="🔦 คลิกช่องนี้แล้วสแกนแท็กได้เลย..." autocomplete="off">
+                            <div id="lg-scan-feedback" class="mt-3"></div>
+                        </div>
+                    </div>
+
+                    <div class="card shadow-sm border-0" style="border-radius: 20px;">
+                        <div class="card-header bg-white border-0 pt-4 pb-2 px-4 d-flex justify-content-between align-items-center">
+                            <h5 class="fw-bold text-dark mb-0"><i class="bi bi-list-check me-2"></i>สถานะการแมทช์ทั้งหมด</h5>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.renderLGMatchTable()"><i class="bi bi-arrow-clockwise"></i> รีเฟรช</button>
+                        </div>
+                        <div class="card-body px-4 pb-4 pt-2">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>WO</th>
+                                            <th>Part No</th>
+                                            <th>ไลน์ผลิต</th>
+                                            <th>Model</th>
+                                            <th>Part Name</th>
+                                            <th class="text-center">วันที่-เวลาผลิต</th>
+                                            <th class="text-center">สแกนแล้ว / ออเดอร์</th>
+                                            <th style="width: 160px;">ความคืบหน้า</th>
+                                            <th>สถานะ</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="lg-match-tbody">
+                                        <tr><td colspan="8" class="text-center text-muted p-4">ยังไม่มีแพลน กรุณาอัปโหลดก่อน</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Forecast Tab -->
                 <div class="tab-pane fade" id="pills-forecast" role="tabpanel">
                     <div class="row justify-content-center">
@@ -3926,7 +3990,7 @@ function handleLogin(e) {
                     }
                 };
                     // --- GOOGLE APPS SCRIPT CONFIGURATION ---
-                const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby3twTehz5ZVaLetjK1G9tZzoEtnFYreMOOdTqr1mWGyZ0Ex5SP8L8hb0Oak_g6q1RhYg/exec';
+                const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxPccRC-ztVeXJwhGteHlk3Y-l69pMibwwRzgDZMS_OOWR8zRis2BxyATFjyNy4ImR-kQ/exec';
 
                 // --- DATABASE SIMULATION & PERSISTENCE ---
                                 let db = { users: [], products: [], history: [], announcements: [], stockCounts: [], deliveryPlans: [], rackHistory: [], forecast: [], lotHolds: [] };
@@ -7614,6 +7678,11 @@ window.generateVehicleReport = function(fileType) {
 
                             if (e.target.dataset.bsTarget === '#pills-lot-hold') {
                                 if (typeof window.populateLotHoldPage === 'function') window.populateLotHoldPage();
+                            }
+                            if (e.target.dataset.bsTarget === '#pills-lg-matching') {
+                                if (typeof window.renderLGMatchTable === 'function') window.renderLGMatchTable();
+                                const scanInput = document.getElementById('lg-scan-input');
+                                if (scanInput) setTimeout(() => scanInput.focus(), 100);
                             }
                             if (e.target.dataset.bsTarget === '#pills-support') {
                                 if (typeof window.populateSupportTicketPage === 'function') window.populateSupportTicketPage();
@@ -12768,6 +12837,249 @@ async function populateMonthlyCustomerChart(year) {
         }
     });
 }
+
+// 🟢 ==================== ระบบแมทชิ่งแท็ก LG ====================
+
+// แยกฟิลด์จากบาร์โค้ด ตัด STX/ETX ออก แล้วแยกด้วยตัวคั่น GS (มักโชว์เป็น ¿)
+function parseLGBarcode(raw) {
+    // 🟢 ลบตัวอักษร Â ที่หลุดมาจากปัญหาการเข้ารหัสอักขระซ้อนกัน (Mojibake) ออกก่อนเสมอ
+    const cleaned = String(raw).replace(/[\x02\x03]/g, '').replace(/Â/g, '');
+    const fields = cleaned.split(/¿|\x1D/);
+    if (fields.length < 11) return null;
+
+    const docNumber = fields[0] || '';
+    const line = fields[1] || '';
+    const partNo = (fields[2] || '').trim();
+    const totalRackQty = parseInt(fields[3], 10) || 0;
+    const company = fields[4] || '';
+
+    // 🟢 ตั้งแต่ index 6 เป็นต้นไป เป็นกลุ่มข้อมูลซ้ำทีละ 5 ฟิลด์: [จำนวน, ว่าง, ว่าง, โมลด์, WO]
+    // 1 แท็กอาจมีได้หลาย WO ถ้าของในแร็คเดียวกันถูกแบ่งไปหลายออเดอร์ (ผลรวมจำนวนจะเท่ากับจำนวนเต็มแร็ค)
+    const groups = [];
+    for (let i = 6; i + 4 < fields.length; i += 5) {
+        const qty = parseInt(fields[i], 10) || 0;
+        const moldCode = fields[i + 3] || '';
+        const WO = (fields[i + 4] || '').trim();
+        if (WO) groups.push({ WO, qty, moldCode });
+    }
+
+    if (groups.length === 0) return null;
+    return { docNumber, line, partNo, totalRackQty, company, groups };
+}
+
+// คำนวณสถานะการแมทช์ทั้งหมด (เทียบแพลนกับผลรวมที่สแกนได้)
+function computeLGMatchStatus() {
+    const scannedTotals = {};
+    (db.lgScanLog || []).forEach(s => {
+        const key = String(s.WO).trim() + '|' + String(s.partNo).trim();
+        scannedTotals[key] = (scannedTotals[key] || 0) + (parseFloat(s.rackQty) || 0);
+    });
+
+    return (db.lgPlan || []).map(plan => {
+        const key = String(plan.WO).trim() + '|' + String(plan.partNo).trim();
+        const scanned = scannedTotals[key] || 0;
+        const orderQty = parseFloat(plan.orderQty) || 0;
+        const isComplete = orderQty > 0 && scanned >= orderQty;
+        return { ...plan, scanned, orderQty, isComplete, remaining: Math.max(0, orderQty - scanned) };
+    });
+}
+
+// วาดตารางสถานะการแมทช์
+window.renderLGMatchTable = function() {
+    const tbody = document.getElementById('lg-match-tbody');
+    if (!tbody) return;
+
+    const rows = computeLGMatchStatus();
+    if (rows.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted p-4">ยังไม่มีแพลน กรุณาอัปโหลดก่อน</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = rows.map(r => {
+        const percent = r.orderQty > 0 ? Math.min(100, Math.round((r.scanned / r.orderQty) * 100)) : 0;
+        const statusBadge = r.isComplete
+            ? `<span class="badge bg-success">✅ ครบแล้ว</span>`
+            : `<span class="badge bg-warning text-dark">เหลืออีก ${r.remaining}</span>`;
+        return `<tr>
+            <td class="fw-bold">${r.WO}</td>
+            <td>${r.partNo}</td>
+            <td><span class="badge bg-light text-dark border">${r.line || '-'}</span></td>
+            <td>${r.model || '-'}</td>
+            <td>${r.partName || '-'}</td>
+            <td class="text-center">${r.startDateTime || '-'}</td>
+            <td class="text-center fw-bold">${r.scanned} / ${r.orderQty}</td>
+            <td>
+                <div class="progress" style="height:18px;">
+                    <div class="progress-bar ${r.isComplete ? 'bg-success' : 'bg-primary'}" style="width:${percent}%">${percent}%</div>
+                </div>
+            </td>
+            <td>${statusBadge}</td>
+        </tr>`;
+    }).join('');
+};
+
+// ดาวน์โหลดเทมเพลต Excel สำหรับอัปโหลดแพลน
+window.downloadLGPlanTemplate = function() {
+    const ws_data = [
+        ['WO', 'Part No', 'ไลน์ผลิต', 'Model', 'Part Name', 'จำนวนออเดอร์', 'วันที่-เวลาที่ต้องผลิต'],
+        ['6KMGG00H', 'AEB75164728', 'A7', 'ANF', 'ตัวอย่างชื่อพาร์ท', 350, '24-Sep-26 09:26']
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(ws_data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "LG_Plan_Template");
+    XLSX.writeFile(wb, "LG_Plan_Template.xlsx");
+};
+
+// อัปโหลดไฟล์แพลนที่กรอกแล้ว
+window.handleLGPlanFileUpload = function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array', cellDates: true }); // 🟢 cellDates: true = อ่านวันที่เป็น Date object แทนเลขลำดับ
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+
+            // 🟢 แปลง Date object กลับเป็นข้อความอ่านง่าย แบบ "24-Sep-26 09:26"
+            const formatLGDateTime = (val) => {
+                if (val instanceof Date && !isNaN(val.getTime())) {
+                    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                    const dd = String(val.getDate()).padStart(2, '0');
+                    const mmm = months[val.getMonth()];
+                    const yy = String(val.getFullYear()).slice(-2);
+                    const hh = String(val.getHours()).padStart(2, '0');
+                    const mi = String(val.getMinutes()).padStart(2, '0');
+                    return `${dd}-${mmm}-${yy} ${hh}:${mi}`;
+                }
+                return val ? String(val).trim() : '';
+            };
+
+            const rows = jsonData.slice(1).filter(r => r.length > 0 && r[0]).map(r => ({
+                WO: String(r[0] || '').trim(),
+                partNo: String(r[1] || '').trim(),
+                line: String(r[2] || '').trim(),
+                model: String(r[3] || '').trim(),
+                partName: String(r[4] || '').trim(),
+                orderQty: parseFloat(r[5]) || 0,
+                startDateTime: formatLGDateTime(r[6])
+            }));
+
+            if (rows.length === 0) {
+                Swal.fire('ไม่พบข้อมูล', 'กรุณาตรวจสอบไฟล์ Excel ว่ามีข้อมูลตามเทมเพลตหรือไม่', 'warning');
+                event.target.value = '';
+                return;
+            }
+
+            const confirmResult = await Swal.fire({
+                title: `พบ ${rows.length} รายการ`,
+                text: 'ยืนยันอัปโหลดแพลนใหม่? (แพลนเก่าทั้งหมดจะถูกแทนที่)',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'อัปโหลด',
+                cancelButtonText: 'ยกเลิก'
+            });
+            if (!confirmResult.isConfirmed) { event.target.value = ''; return; }
+
+            Swal.fire({ title: 'กำลังอัปโหลด...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            await callAppsScript('uploadLGPlan', rows);
+            db.lgPlan = rows;
+            window.renderLGMatchTable();
+            Swal.fire('สำเร็จ!', `อัปโหลดแพลน ${rows.length} รายการเรียบร้อยแล้ว`, 'success');
+        } catch (error) {
+            Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถอ่านไฟล์ได้: ' + error.message, 'error');
+        }
+        event.target.value = '';
+    };
+    reader.readAsArrayBuffer(file);
+};
+
+// ประมวลผลการสแกนแท็ก 1 ครั้ง
+window.submitLGScanInput = async function() {
+    const input = document.getElementById('lg-scan-input');
+    const raw = input.value;
+    input.value = '';
+    if (!raw || !raw.trim()) return;
+
+    const feedbackEl = document.getElementById('lg-scan-feedback');
+    const parsed = parseLGBarcode(raw);
+
+    if (!parsed || !parsed.partNo || !parsed.groups || parsed.groups.length === 0) {
+        feedbackEl.innerHTML = `<div class="alert alert-danger mb-0"><i class="bi bi-x-circle-fill me-1"></i>ไม่สามารถอ่านบาร์โค้ดนี้ได้ ลองสแกนใหม่อีกครั้ง</div>`;
+        input.focus();
+        return;
+    }
+
+    if (!db.lgScanLog) db.lgScanLog = [];
+    const resultLines = [];
+
+    // 🟢 วน Loop ทีละ WO ในแท็กเดียวกัน (เผื่อแท็กนี้แบ่งของไปหลายออเดอร์)
+    for (const group of parsed.groups) {
+        const matchInPlan = (db.lgPlan || []).find(p => String(p.WO).trim() === group.WO && String(p.partNo).trim() === parsed.partNo);
+
+        db.lgScanLog.push({ WO: group.WO, partNo: parsed.partNo, rackQty: group.qty, rawBarcode: raw, scannedBy: currentUser.username, scannedAt: new Date().toISOString() });
+
+        try {
+            await callAppsScript('submitLGScan', {
+                WO: group.WO, partNo: parsed.partNo, rackQty: group.qty, rawBarcode: raw, scannedBy: currentUser.username
+            });
+
+            if (!matchInPlan) {
+                resultLines.push(`⚠️ ไม่พบ WO <b>${group.WO}</b> / ${parsed.partNo} ในแพลน (บันทึกไว้แล้ว)`);
+            } else {
+                const updated = computeLGMatchStatus().find(r => String(r.WO).trim() === group.WO && String(r.partNo).trim() === parsed.partNo);
+                if (updated && updated.isComplete) {
+                    resultLines.push(`✅ ครบแล้ว! WO <b>${group.WO}</b> (+${group.qty} ชิ้น) → ${updated.scanned}/${updated.orderQty}`);
+                } else if (updated) {
+                    resultLines.push(`➕ WO <b>${group.WO}</b> +${group.qty} ชิ้น → ${updated.scanned}/${updated.orderQty} (เหลืออีก ${updated.remaining})`);
+                }
+            }
+        } catch (error) {
+            resultLines.push(`❌ WO ${group.WO}: บันทึกไม่สำเร็จ (${error.message})`);
+        }
+    }
+
+    window.renderLGMatchTable();
+
+    const alertClass = resultLines.some(m => m.startsWith('❌')) ? 'alert-danger'
+        : resultLines.some(m => m.startsWith('⚠️')) ? 'alert-warning' : 'alert-success';
+    feedbackEl.innerHTML = `<div class="alert ${alertClass} mb-0">${resultLines.join('<br>')}</div>`;
+
+    input.focus();
+};
+
+// 🟢 ผูก Event ให้ช่องสแกน แบบไม่พึ่ง DOMContentLoaded เลย (กันปัญหา Event ไม่เคยรัน)
+// ใช้วิธี "รอเช็คทุก 200ms จนกว่าจะเจอช่องสแกนในหน้าเว็บ" การันตีว่าผูกติดแน่นอน 100%
+(function bindLGScanInputWhenReady() {
+    const lgScanInput = document.getElementById('lg-scan-input');
+
+    if (!lgScanInput) {
+        setTimeout(bindLGScanInputWhenReady, 200); // ยังไม่เจอ (อาจจะยังโหลดไม่เสร็จ) ลองใหม่อีกที
+        return;
+    }
+
+    if (lgScanInput.dataset.lgBound === 'true') return; // กันผูกซ้ำถ้าเรียกมาหลายรอบ
+    lgScanInput.dataset.lgBound = 'true';
+
+    console.log('✅ ผูก Event ช่องสแกน LG สำเร็จแล้ว'); // เอาไว้เช็คใน Console ว่าทำงานจริง
+
+    // แบบที่ 1: ถ้ากด Enter จริง ให้ประมวลผลทันที (เร็วที่สุด)
+    lgScanInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); clearTimeout(window.lgScanDebounceTimer); window.submitLGScanInput(); }
+    });
+
+    // แบบที่ 2 (สำรอง): ถ้าพิมพ์/สแกนเข้ามาแล้วหยุดนิ่ง 400ms โดยไม่กด Enter เลย ให้ประมวลผลให้อัตโนมัติ
+    lgScanInput.addEventListener('input', () => {
+        clearTimeout(window.lgScanDebounceTimer);
+        if (lgScanInput.value.trim().length > 10) {
+            window.lgScanDebounceTimer = setTimeout(() => {
+                window.submitLGScanInput();
+            }, 400);
+        }
+    });
+})();
 
 async function populateSalesDashboard(startDate, endDate) {
                     await ensureArchivedHistoryLoaded(); // 🟢 ดึง Archive มารวมก่อนคำนวณ กันยอดขายช่วงเก่าหายไป
