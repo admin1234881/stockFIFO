@@ -2662,7 +2662,16 @@
                             <h5 class="fw-bold text-primary mb-0"><i class="bi bi-qr-code-scan me-2"></i>สแกนแท็ก</h5>
                         </div>
                         <div class="card-body px-4 pb-4 pt-2">
-                            <input type="text" id="lg-scan-input" class="form-control form-control-lg fw-bold" placeholder="🔦 คลิกช่องนี้แล้วสแกนแท็กได้เลย..." autocomplete="off">
+                            <div class="d-flex gap-2">
+                                <input type="text" id="lg-scan-input" class="form-control form-control-lg fw-bold" placeholder="🔦 คลิกช่องนี้แล้วสแกนแท็กได้เลย (เครื่องสแกน USB)..." autocomplete="off">
+                                <button type="button" class="btn btn-primary fw-bold flex-shrink-0" onclick="window.toggleLGCameraScanner()" id="lg-camera-toggle-btn">
+                                    <i class="bi bi-camera-fill me-1"></i> สแกนด้วยกล้อง
+                                </button>
+                            </div>
+                            <div id="lg-camera-container" class="mt-3 d-none">
+                                <div id="lg-qr-reader" style="max-width: 420px; margin: 0 auto; border-radius: 12px; overflow: hidden;"></div>
+                                <div class="text-center text-muted small mt-2">เล็งกล้องไปที่บาร์โค้ด/QR บนแท็ก ระบบจะสแกนให้อัตโนมัติ</div>
+                            </div>
                             <div id="lg-scan-feedback" class="mt-3"></div>
                         </div>
                     </div>
@@ -3130,6 +3139,7 @@
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 	    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
         <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
@@ -12996,19 +13006,14 @@ window.handleLGPlanFileUpload = function(event) {
     reader.readAsArrayBuffer(file);
 };
 
-// ประมวลผลการสแกนแท็ก 1 ครั้ง
-window.submitLGScanInput = async function() {
-    const input = document.getElementById('lg-scan-input');
-    const raw = input.value;
-    input.value = '';
+// 🟢 ฟังก์ชันกลางประมวลผลการสแกน 1 ครั้ง — ใช้ร่วมกันได้ทั้งช่องพิมพ์ (USB Scanner) และกล้องมือถือ
+async function processLGScanRaw(raw, feedbackEl) {
     if (!raw || !raw.trim()) return;
 
-    const feedbackEl = document.getElementById('lg-scan-feedback');
     const parsed = parseLGBarcode(raw);
 
     if (!parsed || !parsed.partNo || !parsed.groups || parsed.groups.length === 0) {
-        feedbackEl.innerHTML = `<div class="alert alert-danger mb-0"><i class="bi bi-x-circle-fill me-1"></i>ไม่สามารถอ่านบาร์โค้ดนี้ได้ ลองสแกนใหม่อีกครั้ง</div>`;
-        input.focus();
+        if (feedbackEl) feedbackEl.innerHTML = `<div class="alert alert-danger mb-0"><i class="bi bi-x-circle-fill me-1"></i>ไม่สามารถอ่านบาร์โค้ดนี้ได้ ลองสแกนใหม่อีกครั้ง</div>`;
         return;
     }
 
@@ -13045,10 +13050,83 @@ window.submitLGScanInput = async function() {
 
     const alertClass = resultLines.some(m => m.startsWith('❌')) ? 'alert-danger'
         : resultLines.some(m => m.startsWith('⚠️')) ? 'alert-warning' : 'alert-success';
-    feedbackEl.innerHTML = `<div class="alert ${alertClass} mb-0">${resultLines.join('<br>')}</div>`;
+    if (feedbackEl) feedbackEl.innerHTML = `<div class="alert ${alertClass} mb-0">${resultLines.join('<br>')}</div>`;
+}
 
+// ประมวลผลการสแกนแท็ก 1 ครั้ง (จากช่องพิมพ์/เครื่องสแกน USB)
+window.submitLGScanInput = async function() {
+    const input = document.getElementById('lg-scan-input');
+    const raw = input.value;
+    input.value = '';
+    const feedbackEl = document.getElementById('lg-scan-feedback');
+    await processLGScanRaw(raw, feedbackEl);
     input.focus();
 };
+// 🟢 ==================== สแกนแท็กผ่านกล้องมือถือ ====================
+let lgHtml5QrScanner = null;
+let lgCameraScanCooldown = false; // กันสแกนซ้ำรัวๆ จากเฟรมเดียวกัน
+
+window.toggleLGCameraScanner = async function() {
+    const container = document.getElementById('lg-camera-container');
+    const toggleBtn = document.getElementById('lg-camera-toggle-btn');
+    const isOpen = !container.classList.contains('d-none');
+
+    if (isOpen) {
+        if (lgHtml5QrScanner) {
+            try { await lgHtml5QrScanner.stop(); await lgHtml5QrScanner.clear(); } catch (e) {}
+            lgHtml5QrScanner = null;
+        }
+        container.classList.add('d-none');
+        toggleBtn.innerHTML = '<i class="bi bi-camera-fill me-1"></i> สแกนด้วยกล้อง';
+        return;
+    }
+
+    container.classList.remove('d-none');
+    toggleBtn.innerHTML = '<i class="bi bi-x-circle-fill me-1"></i> ปิดกล้อง';
+
+    if (typeof Html5Qrcode === 'undefined') {
+        Swal.fire('โหลดไลบรารีไม่สำเร็จ', 'กรุณาเช็คอินเทอร์เน็ตแล้วรีเฟรชหน้าเว็บใหม่', 'error');
+        return;
+    }
+
+    lgHtml5QrScanner = new Html5Qrcode('lg-qr-reader');
+
+    try {
+        await lgHtml5QrScanner.start(
+            { facingMode: 'environment' },
+            { fps: 10, qrbox: { width: 260, height: 160 } },
+            async (decodedText) => {
+                if (lgCameraScanCooldown) return;
+                lgCameraScanCooldown = true;
+
+                const feedbackEl = document.getElementById('lg-scan-feedback');
+                await processLGScanRaw(decodedText, feedbackEl);
+
+                if (navigator.vibrate) navigator.vibrate(150);
+                setTimeout(() => { lgCameraScanCooldown = false; }, 1500);
+            },
+            () => { /* ไม่พบบาร์โค้ดในเฟรมนี้ ไม่ต้องทำอะไร */ }
+        );
+    } catch (err) {
+        Swal.fire('เปิดกล้องไม่สำเร็จ', 'กรุณาอนุญาตการใช้กล้องในเบราว์เซอร์ หรือลองใช้เครื่องสแกน USB แทน: ' + err.message, 'error');
+        container.classList.add('d-none');
+        toggleBtn.innerHTML = '<i class="bi bi-camera-fill me-1"></i> สแกนด้วยกล้อง';
+    }
+};
+
+// 🟢 ปิดกล้องอัตโนมัติถ้าออกจากแท็บ LG Matching (กันกล้องค้างเปิดกินแบตเตอรี่)
+document.addEventListener('DOMContentLoaded', () => {
+    document.body.addEventListener('shown.bs.tab', (e) => {
+        if (e.target.dataset.bsTarget !== '#pills-lg-matching' && lgHtml5QrScanner) {
+            lgHtml5QrScanner.stop().then(() => lgHtml5QrScanner.clear()).catch(() => {});
+            lgHtml5QrScanner = null;
+            const container = document.getElementById('lg-camera-container');
+            const toggleBtn = document.getElementById('lg-camera-toggle-btn');
+            if (container) container.classList.add('d-none');
+            if (toggleBtn) toggleBtn.innerHTML = '<i class="bi bi-camera-fill me-1"></i> สแกนด้วยกล้อง';
+        }
+    });
+});
 
 // 🟢 ผูก Event ให้ช่องสแกน แบบไม่พึ่ง DOMContentLoaded เลย (กันปัญหา Event ไม่เคยรัน)
 // ใช้วิธี "รอเช็คทุก 200ms จนกว่าจะเจอช่องสแกนในหน้าเว็บ" การันตีว่าผูกติดแน่นอน 100%
