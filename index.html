@@ -1535,6 +1535,30 @@
 .timeline-truck-icon { font-size: 0.85rem; color: #fff; padding-right: 8px; }
 .timeline-eta { width: 130px; text-align: right; font-size: 0.8rem; font-weight: 700; flex-shrink: 0; }
 .timeline-empty-note { text-align: center; color: #adb5bd; padding: 24px 0; font-size: 0.85rem; }
+
+.timeline-row-wrap { position: relative; }
+.timeline-parts-popup {
+    position: fixed;
+    width: 300px;
+    background: #fff;
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    padding: 12px 16px;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease;
+    z-index: 999999;
+    pointer-events: none;
+}
+.timeline-row-wrap:hover .timeline-parts-popup { opacity: 1; visibility: visible; }
+.timeline-parts-header { font-size: 0.72rem; color: #adb5bd; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.3px; }
+.timeline-part-item { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid #f1f3f5; }
+.timeline-part-item:last-child { border-bottom: none; }
+.timeline-part-name { font-size: 0.82rem; font-weight: 600; color: #212529; }
+.timeline-part-code { font-size: 0.72rem; color: #adb5bd; }
+.timeline-part-qty { font-size: 0.82rem; color: #495057; white-space: nowrap; flex-shrink: 0; }
+.timeline-parts-footer { border-top: 1px solid #f1f3f5; margin-top: 8px; padding-top: 8px; display: flex; justify-content: space-between; font-size: 0.72rem; color: #adb5bd; }
 .floating-btn-hidden { display: none !important; }
 </style>
 <body>
@@ -6424,21 +6448,70 @@ function populateVehicleTimeline() {
             etaText = `<span class="text-success">${T.dash_timeline_remaining.replace('{min}', remainMin)}</span>`;
         }
 
-        return { plate: p.licensePlate, customer: p.customer || '-', percent, isOverdue, etaText, elapsed };
+        // 🟢 หาพาร์ททั้งหมดในคิวเดียวกัน (ทะเบียนเดียวกัน + วันที่เดียวกัน + เวลาเดียวกัน + ลูกค้าเดียวกัน)
+        const displayTime = window.formatTimeDisplay ? window.formatTimeDisplay(p.time) : p.time;
+        const samePlateParts = db.deliveryPlans.filter(other =>
+            other.status === 'Delivering' &&
+            String(other.licensePlate).trim() === String(p.licensePlate).trim() &&
+            other.customer === p.customer &&
+            (window.formatTimeDisplay ? window.formatTimeDisplay(other.time) : other.time) === displayTime
+        );
+
+        return { plate: p.licensePlate, customer: p.customer || '-', percent, isOverdue, etaText, elapsed, parts: samePlateParts, invoiceNumber: p.invoiceNumber || '-' };
     }).sort((a, b) => b.percent - a.percent);
 
     container.innerHTML = rows.map(r => `
-        <div class="timeline-row">
-            <div class="timeline-plate"><i class="bi bi-truck me-1 text-primary"></i>${r.plate}</div>
-            <div class="timeline-customer text-truncate" title="${r.customer}">${r.customer}</div>
-            <div class="timeline-track">
-                <div class="timeline-fill ${r.isOverdue ? 'overdue' : ''}" style="width:${r.percent}%;">
-                    ${r.percent > 15 ? '<i class="bi bi-truck timeline-truck-icon"></i>' : ''}
+        <div class="timeline-row-wrap">
+            <div class="timeline-row">
+                <div class="timeline-plate"><i class="bi bi-truck me-1 text-primary"></i>${r.plate}</div>
+                <div class="timeline-customer text-truncate" title="${r.customer}">${r.customer}</div>
+                <div class="timeline-track">
+                    <div class="timeline-fill ${r.isOverdue ? 'overdue' : ''}" style="width:${r.percent}%;">
+                        ${r.percent > 15 ? '<i class="bi bi-truck timeline-truck-icon"></i>' : ''}
+                    </div>
+                </div>
+                <div class="timeline-eta">${r.etaText}</div>
+            </div>
+            <div class="timeline-parts-popup">
+                <div class="timeline-parts-header">รายการในคิวนี้ · ${r.parts.length} พาร์ท</div>
+                ${r.parts.map(part => `
+                    <div class="timeline-part-item">
+                        <div>
+                            <div class="timeline-part-name">${part.productName || part.productId || '-'}</div>
+                            <div class="timeline-part-code">${part.productId || ''}</div>
+                        </div>
+                        <div class="timeline-part-qty">${part.quantity || 0} ชิ้น</div>
+                    </div>
+                `).join('')}
+                <div class="timeline-parts-footer">
+                    <span>Invoice</span>
+                    <span>${r.invoiceNumber}</span>
                 </div>
             </div>
-            <div class="timeline-eta">${r.etaText}</div>
         </div>
     `).join('');
+
+    // 🟢 คำนวณตำแหน่งป็อบอัพจริงตามหน้าจอ (position: fixed) กันโดนกรอบสกรอลอื่นบัง + สลับขึ้น/ลงอัตโนมัติ
+    container.querySelectorAll('.timeline-row-wrap').forEach(wrap => {
+        const popup = wrap.querySelector('.timeline-parts-popup');
+        if (!popup) return;
+
+        wrap.addEventListener('mouseenter', () => {
+            const rowRect = wrap.getBoundingClientRect();
+            const popupHeight = popup.offsetHeight || 220;
+            const spaceBelow = window.innerHeight - rowRect.bottom;
+            const showAbove = spaceBelow < popupHeight + 20;
+
+            popup.style.left = Math.min(rowRect.left + 100, window.innerWidth - 320) + 'px';
+            if (showAbove) {
+                popup.style.top = 'auto';
+                popup.style.bottom = (window.innerHeight - rowRect.top + 6) + 'px';
+            } else {
+                popup.style.bottom = 'auto';
+                popup.style.top = (rowRect.bottom + 6) + 'px';
+            }
+        });
+    });
 }
 
 window.populateVehicleDashboard = function() {
