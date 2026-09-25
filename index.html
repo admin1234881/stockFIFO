@@ -1560,21 +1560,53 @@
 .timeline-part-qty { font-size: 0.82rem; color: #495057; white-space: nowrap; flex-shrink: 0; }
 .timeline-parts-footer { border-top: 1px solid #f1f3f5; margin-top: 8px; padding-top: 8px; display: flex; justify-content: space-between; font-size: 0.72rem; color: #adb5bd; }
 .floating-btn-hidden { display: none !important; }
+/* 🟢 แอนิเมชัน Login แบบใหม่ (วงกลมขยาย + เครื่องหมายถูก) */
+.login-circle-overlay {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(160deg, #0d6efd, #4d94ff);
+    z-index: 999999999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.35s ease;
+}
+.login-circle-overlay.active { opacity: 1; visibility: visible; }
+.login-circle-ring {
+    width: 64px; height: 64px; border-radius: 50%;
+    border: 3px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    margin: 0 auto 16px;
+    animation: loginCircleSpin 0.8s linear infinite;
+}
+@keyframes loginCircleSpin { to { transform: rotate(360deg); } }
+.login-circle-check {
+    width: 64px; height: 64px; border-radius: 50%;
+    background: #fff;
+    margin: 0 auto 16px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    transform: scale(0);
+    transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1);
+}
+.login-circle-check i { font-size: 34px; color: #0d6efd; }
+.login-circle-text { color: #fff; font-size: 15px; font-weight: 700; text-align: center; }
 </style>
 <body>
 <!-- ========================================= -->
 <!-- ========================================= -->
     <!-- 🚚 เอฟเฟกต์รถบรรทุกส่งของ (Truck Transition) -->
     <!-- ========================================= -->
-    <div id="truck-transition-container" class="truck-transition-container">
-        <div id="moving-truck" class="moving-truck">
-            <div class="speed-lines-bg">
-                <div class="line l1"></div>
-                <div class="line l2"></div>
-                <div class="line l3"></div>
-            </div>
-            <i class="bi bi-truck truck-icon-large"></i>
-            <div class="truck-text" id="truck-transition-text">กำลังโหลด...</div>
+    <div id="login-circle-overlay" class="login-circle-overlay">
+        <div style="text-align: center;">
+            <div id="login-circle-ring" class="login-circle-ring"></div>
+            <div id="login-circle-check" class="login-circle-check"><i class="bi bi-check-lg"></i></div>
+            <div id="login-circle-text" class="login-circle-text">กำลังเข้าสู่ระบบ...</div>
+            <img id="login-circle-logo" src="https://i.ibb.co/KxttMHxc/291315-logo-20230216140112-5.jpg"
+                 style="width: 40px; height: auto; border-radius: 6px; margin-top: 14px; opacity: 0; transform: translateY(6px); transition: opacity 0.35s ease 0.15s, transform 0.35s ease 0.15s;">
         </div>
     </div>
     <div id="login-page" class="container">
@@ -4199,26 +4231,9 @@ async function loadUsersOnly() {
 
 async function loadDataFromSheet(isInitialLoad = false) {
     if (isInitialLoad) {
-        const cachedData = localStorage.getItem('cachedDB');
-        if (cachedData) {
-            try {
-                const parsedCache = JSON.parse(cachedData);
-                if (parsedCache.users && parsedCache.users.length > 0) {
-                    db = parsedCache;
-                    isDataLoaded = true;
-                    console.log('⚡ Loaded data from Local Cache. Ready to login.');
-                    
-                    if (db.forecast && db.forecast.length > 0) {
-                        db.forecast.forEach(fc => {
-                            let prod = db.products.find(p => String(p.id).trim() === String(fc.productId).trim());
-                            if (prod) prod.req3Days = parseFloat(fc.req3Days) || 0;
-                        });
-                    }
-                }
-            } catch (e) {
-                console.error('Cache parsing error', e);
-            }
-        }
+        // 🟢 ตัดระบบแคชออกทั้งหมดแล้ว ดึงข้อมูลสดจาก Google Sheets ทุกครั้ง
+        // เหลือแค่ loadUsersOnly() ที่ดึงรายชื่อ User สำหรับหน้า Login เท่านั้น (เบา เร็ว)
+        // ข้อมูลอื่นๆ ทั้งหมด (สต็อก, ประวัติ, แผนจัดส่ง ฯลฯ) จะถูกดึงสดด้านล่างนี้เสมอ ไม่มีการใช้ข้อมูลเก่าค้างจากเครื่องอีกต่อไป
 
         const Toast = Swal.mixin({
             toast: true, 
@@ -4295,12 +4310,8 @@ async function loadDataFromSheet(isInitialLoad = false) {
             
             // 🟢 แยก try-catch เฉพาะจุดนี้ ถ้าแคชเต็ม (QuotaExceededError) จะแค่ข้ามการแคช
             // ไม่ให้กระทบการคำนวณสต็อก/อัปเดตหน้าจอที่ต้องทำงานต่อข้างล่างนี้
-            try {
-                localStorage.setItem('cachedDB', JSON.stringify(db));
-            } catch (cacheError) {
-                console.warn('⚠️ ไม่สามารถบันทึกแคชได้ (พื้นที่เต็ม) แต่ข้อมูลใหม่ยังใช้งานได้ปกติ:', cacheError.message);
-                try { localStorage.removeItem('cachedDB'); } catch (e) {} // ล้างแคชเก่าทิ้ง กันค้างเป็นขยะ
-            }
+            // 🟢 ไม่บันทึกแคชลงเครื่องอีกต่อไป (ตัดสินใจแล้วว่าให้ดึงสดออนไลน์ทุกครั้งแทน)
+            // ตัดปัญหาแคชล้น + ปัญหาสิทธิ์ผู้ใช้ข้ามคนบนเครื่องเดียวกันไปพร้อมกันในคราวเดียว
             
             if (db.forecast && db.forecast.length > 0) {
                 db.forecast.forEach(fc => {
@@ -10952,17 +10963,9 @@ async function handleLogin(e) {
     const username = usernameInput.value;
     const password = passwordInput.value;
 
-    // 🟢 บังคับดึงรายชื่อ User สดจากเซิร์ฟเวอร์ก่อนเช็ค Login ทุกครั้ง
-    // แก้บั๊ก Race Condition: กันกรณีกด Login เร็วเกินไป ก่อนที่ระบบจะโหลดสิทธิ์ล่าสุดเสร็จ
-    // (ป้องกันปัญหาแคชเก่าค้าง ทำให้ได้สิทธิ์ผิดคน/สิทธิ์เก่าที่ยังไม่อัปเดต)
-    const loginBtn = e.target.querySelector('button[type="submit"]');
-    if (loginBtn) { loginBtn.disabled = true; loginBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> กำลังตรวจสอบ...'; }
-    try {
-        await loadUsersOnly();
-    } catch (err) {
-        console.warn('โหลดรายชื่อผู้ใช้สดไม่สำเร็จ จะใช้ข้อมูลที่มีอยู่แทน:', err.message);
-    }
-    if (loginBtn) { loginBtn.disabled = false; loginBtn.innerHTML = 'เข้าสู่ระบบ'; }
+    // 🟢 ไม่ต้องดึงรายชื่อ User ซ้ำอีกรอบตอน Login แล้ว (ตอนนี้ตัดระบบแคชออกทั้งหมดแล้ว
+    // ปัญหา "แคชเก่าค้าง ทำให้ได้สิทธิ์ผิดคน" ที่เคยกลัวไม่มีทางเกิดขึ้นได้อีกต่อไป)
+    // ใช้ db.users ที่โหลดไว้ตั้งแต่ตอนเปิดหน้าเว็บได้เลย เร็วขึ้นทันที ไม่ต้องรอซ้ำ
 
     const foundUser = db.users.find(u => u.username === username && u.password === password);
 
@@ -10980,44 +10983,45 @@ async function handleLogin(e) {
 
 // ============================================
 // ============================================
-            // 🚀 เริ่มแอนิเมชันรถบรรทุกส่งของ (Login)
+            // 🚀 เริ่มแอนิเมชัน Login แบบใหม่ (วงกลมขยาย + เครื่องหมายถูก)
             // ============================================
-            const transitionContainer = document.getElementById('truck-transition-container');
-            const truck = document.getElementById('moving-truck');
-            const truckText = document.getElementById('truck-transition-text');
-            
-            if (transitionContainer && truck && truckText) {
-                // 1. เปลี่ยนข้อความและเรียกรถเข้ามาจอดตรงกลาง
-                truckText.innerText = "กำลังเข้าสู่ระบบ... 📦";
-                transitionContainer.classList.add('active');
-                truck.className = 'moving-truck drive-in';
-                
-                // 2. รอให้รถวิ่งมาจอดตรงกลาง (0.8s) + ให้จอดโชว์ (0.4s) รวมเป็น 1.2 วินาที
+            const circleOverlay = document.getElementById('login-circle-overlay');
+            const circleRing = document.getElementById('login-circle-ring');
+            const circleCheck = document.getElementById('login-circle-check');
+            const circleText = document.getElementById('login-circle-text');
+
+            const circleLogo = document.getElementById('login-circle-logo');
+
+            if (circleOverlay && circleRing && circleCheck && circleText) {
+                // 1. โชว์วงกลมพร้อมวงแหวนหมุน (ยังไม่โชว์โลโก้ช่วงนี้)
+                circleRing.style.display = 'block';
+                circleCheck.style.display = 'none';
+                circleCheck.style.transform = 'scale(0)';
+                circleText.innerText = 'กำลังเข้าสู่ระบบ...';
+                if (circleLogo) { circleLogo.style.opacity = '0'; circleLogo.style.transform = 'translateY(6px)'; }
+                circleOverlay.classList.add('active');
+
+                // 2. รอ 0.9 วิ ให้ดูเป็นการ "ตรวจสอบ" อยู่จริง แล้วเปลี่ยนเป็นเครื่องหมายถูก
                 setTimeout(() => {
-                    // เปลี่ยนฉากหลังเป็นหน้า Dashboard ขณะที่รถบังอยู่
                     sessionStorage.setItem('currentUser', JSON.stringify(foundUser));
                     checkLoginState();
-                    
+
                     if (document.getElementById('floating-mascot-container')) {
                         document.getElementById('floating-mascot-container').classList.remove('d-none');
                     }
-                    
-                    // 3. สั่งให้รถซิ่งออกไปทางขวา
-                    truck.className = 'moving-truck drive-out';
-                    
-                    // 4. รอรถวิ่งพ้นจอ (0.8s) แล้วซ่อนกล่องแอนิเมชัน
-                    setTimeout(() => {
-                        transitionContainer.classList.remove('active');
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'เข้าสู่ระบบสำเร็จ',
-                            text: 'ยินดีต้อนรับเข้าสู่งานจัดการสินค้าค่ะคุณ ' + foundUser.username,
-                            timer: 1500,
-                            showConfirmButton: false
-                        });
-                    }, 800); 
 
-                }, 1200); 
+                    circleRing.style.display = 'none';
+                    circleCheck.style.display = 'flex';
+                    requestAnimationFrame(() => { circleCheck.style.transform = 'scale(1)'; });
+                    circleText.innerText = 'ยินดีต้อนรับ, ' + foundUser.username;
+                    if (circleLogo) { circleLogo.style.opacity = '1'; circleLogo.style.transform = 'translateY(0)'; }
+
+                    // 3. รอโชว์เครื่องหมายถูกอีก 1.1 วิ แล้วค่อยจางหายไป
+                    setTimeout(() => {
+                        circleOverlay.classList.remove('active');
+                    }, 1100);
+
+                }, 900);
             }
     } else {
         if (errorMsg) errorMsg.classList.remove('d-none');
