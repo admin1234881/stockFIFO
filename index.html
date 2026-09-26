@@ -8875,6 +8875,15 @@ window.releaseGroupVehicle = async function(date, displayTime, customer) {
     
     if (plansToUpdate.length === 0) return;
 
+    // 🔒 กันกดซ้ำ/กดค้าง ป้องกันตัดสต็อกซ้ำเวลาคิวใหญ่ประมวลผลช้า
+    window.__releaseGroupVehicleLocks = window.__releaseGroupVehicleLocks || new Set();
+    const __releaseLockKey = safeDate + '|' + safeTime + '|' + safeCustomer;
+    if (window.__releaseGroupVehicleLocks.has(__releaseLockKey)) {
+        Swal.fire({ icon: 'info', title: 'กำลังดำเนินการอยู่', text: 'ระบบกำลังบันทึกรอบนี้อยู่ กรุณารอสักครู่ อย่ากดซ้ำครับ', timer: 2000, showConfirmButton: false });
+        return;
+    }
+    window.__releaseGroupVehicleLocks.add(__releaseLockKey);
+
     // 1. จำลองการตัดสต็อก (Simulation) และตรวจสอบของขาด
     let tempStock = JSON.parse(JSON.stringify(calculatedStock));
     let simulationRows = [];
@@ -8929,6 +8938,7 @@ window.releaseGroupVehicle = async function(date, displayTime, customer) {
         errorHtml += '</ul><div class="small fw-bold text-secondary"><i class="bi bi-info-circle-fill me-1"></i>กรุณาไปทำรายการ <u class="text-primary">"รับเข้าสินค้า"</u> เพื่อเติมสต็อกให้พอก่อนทำการปล่อยรถครับ!</div>';
 
         Swal.fire({ title: 'ไม่สามารถปล่อยรถได้!', html: errorHtml, icon: 'error', confirmButtonText: 'รับทราบ', confirmButtonColor: '#6c757d' });
+        window.__releaseGroupVehicleLocks.delete(__releaseLockKey);
         return;
     }
 
@@ -9055,16 +9065,23 @@ window.releaseGroupVehicle = async function(date, displayTime, customer) {
         try {
             // 🟢 ขั้นตอนที่ 1 (ทำก่อนเสมอ): บันทึกประวัติ/ตัดสต็อกก่อน (เช็คก่อนกันบันทึกซ้ำ + ลองใหม่อัตโนมัติถ้าพลาด)
             if (autoExportEntries.length > 0) {
-                const deliveryPlanTag = 'DELIVERY_PLAN:' + plansToUpdate[0].id;
-                let alreadySaved = false;
+                let existingTags = new Set();
                 try {
                     const checkRes = await fetch(SCRIPT_URL + '?action=getData&t=' + Date.now());
                     const checkData = await checkRes.json();
-                    alreadySaved = (checkData.history || []).some(h => h.remarks && h.remarks.includes(deliveryPlanTag));
+                    (checkData.history || []).forEach(h => {
+                        const m = h.remarks && String(h.remarks).match(/DELIVERY_PLAN:([^|]+)/);
+                        if (m) existingTags.add(m[1]);
+                    });
                 } catch (e) { /* เช็คไม่ได้ก็ปล่อยผ่าน ไปลองบันทึกตามปกติ */ }
 
-                if (!alreadySaved) {
-                    await callAppsScriptWithRetry('appendBatchHistory', autoExportEntries);
+                const entriesToSend = autoExportEntries.filter(entry => {
+                    const m = String(entry.remarks).match(/DELIVERY_PLAN:([^|]+)/);
+                    return !(m && existingTags.has(m[1]));
+                });
+
+                if (entriesToSend.length > 0) {
+                    await callAppsScriptWithRetry('appendBatchHistory', entriesToSend);
                 }
                 autoExportEntries.forEach(entry => db.history.unshift(entry));
             }
@@ -9121,6 +9138,7 @@ window.releaseGroupVehicle = async function(date, displayTime, customer) {
             Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกข้อมูลได้ทั้งหมด: ' + error.message, 'error');
         }
     }
+    window.__releaseGroupVehicleLocks.delete(__releaseLockKey);
 };
 // 🟢 3. ฟังก์ชันรับรถกลับ (แก้บั๊กกดหลายรอบ ยิงข้อมูลพร้อมกันรวดเดียว)
 window.returnGroupVehicle = function(date, displayTime, customer) {
