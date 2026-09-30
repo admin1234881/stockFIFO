@@ -4035,7 +4035,7 @@ function handleLogin(e) {
                     }
                 };
                     // --- GOOGLE APPS SCRIPT CONFIGURATION ---
-                const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxNSYtfzmSJ5kzgmfIuUEUZqjgNgpXp7xyUFIOgYynAkVLr1djGeDJKQWhyBElM01x4/exec';
+                const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyAGuY6sfGxn_EDNpxIHQehiiIlJu-sJ7tSp-GcRCUmPNnnuXQXg1dcNZ3IfNKsTwFz/exec';
 
                 // --- DATABASE SIMULATION & PERSISTENCE ---
                                 let db = { users: [], products: [], history: [], announcements: [], stockCounts: [], deliveryPlans: [], rackHistory: [], forecast: [], lotHolds: [] };
@@ -4255,7 +4255,7 @@ async function loadDataFromSheet(isInitialLoad = false) {
                     <div class="truck-icon-wrapper">
                         <i class="bi bi-truck" style="font-size: 4.5rem; color: #ffc107; filter: drop-shadow(2px 5px 8px rgba(0,0,0,0.5));"></i>
                     </div>
-                    <div class="truck-loading-text">${isDataLoaded ? 'กำลังอัปเดตข้อมูลเบื้องหลัง...' : 'กำลังซิ่งไปดึงข้อมูล...'}</div>
+                    <div class="truck-loading-text">กำลังอัปเดตข้อมูลเบื้องหลัง...</div>
                 </div>
             `
         });
@@ -4370,7 +4370,16 @@ async function loadDataFromSheet(isInitialLoad = false) {
     } catch (error) {
         console.error('Error loading data from Google Sheet:', error);
         if (isInitialLoad && !isDataLoaded) {
-            showError(translations[currentLanguage].load_error_title, translations[currentLanguage].load_error_text.replace('{error}', error.message));
+            console.warn('⚠️ โหลดข้อมูลครั้งแรกไม่สำเร็จ จะลองใหม่อัตโนมัติใน 5 วินาที...');
+            const Toast = Swal.mixin({
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 4000,
+                timerProgressBar: true,
+            });
+            Toast.fire({ icon: 'warning', title: 'ยังโหลดข้อมูลสต็อกไม่สำเร็จ กำลังลองใหม่...' });
+            setTimeout(() => loadDataFromSheet(true), 5000);
         } else if (isInitialLoad && isDataLoaded) {
             console.warn("⚠️ เข้าโหมดใช้งานข้อมูลเดิม (Offline mode)");
         }
