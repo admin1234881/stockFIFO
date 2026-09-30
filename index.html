@@ -4035,7 +4035,7 @@ function handleLogin(e) {
                     }
                 };
                     // --- GOOGLE APPS SCRIPT CONFIGURATION ---
-                const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyAGuY6sfGxn_EDNpxIHQehiiIlJu-sJ7tSp-GcRCUmPNnnuXQXg1dcNZ3IfNKsTwFz/exec';
+                const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwGyMVpDNyn6A2bAEoyrnTZF4rkJYihNTJI9BsrJwoGcpnhgIJrqZssi0yK0g-yyjvp/exec';
 
                 // --- DATABASE SIMULATION & PERSISTENCE ---
                                 let db = { users: [], products: [], history: [], announcements: [], stockCounts: [], deliveryPlans: [], rackHistory: [], forecast: [], lotHolds: [] };
@@ -4213,9 +4213,28 @@ let isDataLoaded = false;
 let isUsersLoaded = false; // 🟢 เช็คว่าโหลดรายชื่อผู้ใช้สำหรับล็อกอินเสร็จหรือยัง
 
 // 🟢 โหลดเฉพาะ Users ก่อน (เบา เร็ว) เพื่อให้กดล็อกอินได้ทันที ไม่ต้องรอข้อมูลสต็อก/ประวัติทั้งหมด
+// 🟢 ฟังก์ชันกลาง: ดึงข้อมูลแบบมีระบบลองใหม่อัตโนมัติ (ใช้ได้เฉพาะการ "อ่าน" ข้อมูลเท่านั้น ปลอดภัย ไม่มีผลข้างเคียง)
+async function fetchWithRetry(url, options = {}, maxRetries = 2, delayMs = 1500) {
+    let lastError;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            const response = await fetch(url, options);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response;
+        } catch (error) {
+            lastError = error;
+            if (attempt < maxRetries) {
+                console.warn(`⚠️ ดึงข้อมูลพลาดครั้งที่ ${attempt + 1} กำลังลองใหม่อัตโนมัติ...`, error.message);
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+            }
+        }
+    }
+    throw lastError;
+}
+
 async function loadUsersOnly() {
     try {
-        const response = await fetch(SCRIPT_URL + '?action=getUsers&t=' + new Date().getTime(), {
+        const response = await fetchWithRetry(SCRIPT_URL + '?action=getUsers&t=' + new Date().getTime(), {
             method: 'GET',
             cache: 'no-store',
             redirect: 'follow'
@@ -4262,7 +4281,7 @@ async function loadDataFromSheet(isInitialLoad = false) {
     }
 
     try {
-        const response = await fetch(SCRIPT_URL + '?action=getData&t=' + new Date().getTime(), {
+        const response = await fetchWithRetry(SCRIPT_URL + '?action=getData&t=' + new Date().getTime(), {
             method: 'GET',
             cache: 'no-store',
             redirect: 'follow'
