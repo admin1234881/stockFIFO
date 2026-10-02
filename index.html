@@ -10805,10 +10805,8 @@ window.uploadDeliveryFile = function() {
                         }
                     } catch (uiError) { console.error('UI Error:', uiError); }
                     
-                    // ทยอยส่งไปเซฟที่ Google Sheet แบบ Asynchronous
-                    for (const item of countItems) {
-                         callAppsScript('addDeliveryPlan', item).catch(err => console.error(err));
-                    }
+                    // 🟢 ส่งรวมเป็นคำสั่งเดียว กันปัญหา Lock timeout ตอนมีหลายแถว
+                    callAppsScript('addBatchDeliveryPlan', countItems).catch(err => console.error(err));
 
                     // จัดรูปแบบวันที่ให้สวยงามเพื่อโชว์ในป๊อปอัป
                     let displayDate = firstDate;
