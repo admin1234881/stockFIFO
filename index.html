@@ -2676,6 +2676,11 @@
                             <div class="alert alert-info small mb-3">
                                 <i class="bi bi-info-circle-fill me-1"></i> ดาวน์โหลดเทมเพลตก่อน กรอกข้อมูล WO, Part No, Model, Part Name, จำนวนออเดอร์, เวลาเริ่มผลิต, Model.Suffix, Carrier Qty, Locator Group แล้วอัปโหลดกลับเข้าระบบ จากนั้นกด "ปริ้นแท็ก" ได้เลย
                             </div>
+                                                        <div class="d-flex align-items-center gap-2 mb-3">
+                                <label class="fw-bold mb-0"><i class="bi bi-calendar-event me-1"></i>วันที่แพลน:</label>
+                                <input type="date" id="lg-plan-date" class="form-control fw-bold" style="max-width:190px;" onchange="window.renderLGMatchTable()">
+                                <span class="small text-muted">อัปโหลดจะต่อท้ายแพลนของวันที่เลือก / ปริ้นแท็กเฉพาะวันที่เลือก</span>
+                            </div>
                             <button type="button" class="btn btn-outline-secondary fw-bold me-2" onclick="window.downloadLGPlanTemplate()">
                                 <i class="bi bi-download me-1"></i> ดาวน์โหลดเทมเพลต
                             </button>
@@ -2727,6 +2732,7 @@
                                             <th class="text-center">สแกนแล้ว / ออเดอร์</th>
                                             <th style="width: 160px;">ความคืบหน้า</th>
                                             <th>สถานะ</th>
+                                            <th class="text-center" style="width:90px;">ลำดับ</th>
                                         </tr>
                                     </thead>
                                     <tbody id="lg-match-tbody">
@@ -12964,18 +12970,59 @@ function computeLGMatchStatus() {
     });
 }
 
-// วาดตารางสถานะการแมทช์
+// 🟢 ตัวช่วยจัดการวันที่/ลำดับของแพลน LG
+function lgTodayStr() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function getLGSelectedDate() {
+    const el = document.getElementById('lg-plan-date');
+    if (el && !el.value) el.value = lgTodayStr();
+    return el ? el.value : lgTodayStr();
+}
+// แถวเก่าที่ยังไม่มี planDate จะนับเป็นของ "วันนี้" ไปก่อน
+function lgPlanDateOf(p) { return p.planDate ? String(p.planDate).trim().slice(0, 10) : lgTodayStr(); }
+function lgSortPlans(arr) {
+    return arr.map((p, i) => { const s = parseFloat(p.sortOrder); return { p, i, k: isNaN(s) ? i / 1e6 : s }; })
+        .sort((a, b) => a.k - b.k || a.i - b.i).map(x => x.p);
+}
+function getLGPlanForDate(date) {
+    return lgSortPlans((db.lgPlan || []).filter(p => lgPlanDateOf(p) === date));
+}
+
+// เลื่อนแถวแพลนขึ้น/ลง (dir = -1 ขึ้น, +1 ลง)
+window.moveLGPlan = async function(id, dir) {
+    const list = getLGPlanForDate(getLGSelectedDate());
+    const i = list.findIndex(p => String(p.id) === String(id));
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= list.length) return;
+    [list[i], list[j]] = [list[j], list[i]];
+    const changes = [];
+    list.forEach((p, k) => {
+        const so = k + 1;
+        if (parseFloat(p.sortOrder) !== so) { p.sortOrder = so; changes.push({ id: p.id, sortOrder: so }); }
+    });
+    window.renderLGMatchTable();
+    try {
+        if (changes.length) await callAppsScript('reorderLGPlan', changes);
+    } catch (e) {
+        Swal.fire('บันทึกลำดับไม่สำเร็จ', e.message, 'error');
+    }
+};
+
+// วาดตารางสถานะการแมทช์ (เฉพาะวันที่เลือก)
 window.renderLGMatchTable = function() {
     const tbody = document.getElementById('lg-match-tbody');
     if (!tbody) return;
 
-    const rows = computeLGMatchStatus();
+    const date = getLGSelectedDate();
+    const rows = lgSortPlans(computeLGMatchStatus().filter(r => lgPlanDateOf(r) === date));
     if (rows.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted p-4">ยังไม่มีแพลน กรุณาอัปโหลดก่อน</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" class="text-center text-muted p-4">ยังไม่มีแพลนของวันที่เลือก กรุณาอัปโหลดก่อน</td></tr>`;
         return;
     }
 
-    tbody.innerHTML = rows.map(r => {
+    tbody.innerHTML = rows.map((r, idx) => {
         const percent = r.orderQty > 0 ? Math.min(100, Math.round((r.scanned / r.orderQty) * 100)) : 0;
         const statusBadge = r.isComplete
             ? `<span class="badge bg-success">✅ ครบแล้ว</span>`
@@ -12994,6 +13041,10 @@ window.renderLGMatchTable = function() {
                 </div>
             </td>
             <td>${statusBadge}</td>
+            <td class="text-center text-nowrap">
+                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" ${idx === 0 ? 'disabled' : ''} onclick="window.moveLGPlan('${r.id}', -1)">▲</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" ${idx === rows.length - 1 ? 'disabled' : ''} onclick="window.moveLGPlan('${r.id}', 1)">▼</button>
+            </td>
         </tr>`;
     }).join('');
 };
@@ -13066,7 +13117,7 @@ function buildLGTagBarcode({ docNumber, line, partNo, tagQty, company, groups })
 
 // 🟢 ปริ้นแท็กทั้งหมดจากแพลนที่อัปโหลดไว้ หั่นตาม Carrier Qty อัตโนมัติ
 window.printLGTags = async function() {
-    const plans = db.lgPlan || [];
+    const plans = getLGPlanForDate(getLGSelectedDate());
     if (plans.length === 0) {
         Swal.fire('ยังไม่มีแพลน', 'กรุณาอัปโหลดแพลนก่อนปริ้นแท็กครับ', 'warning');
         return;
@@ -13348,21 +13399,41 @@ window.handleLGPlanFileUpload = function(event) {
                 return;
             }
 
+            const planDate = getLGSelectedDate();
+            const dayList = getLGPlanForDate(planDate);
+            const existKeys = new Set(dayList.map(p => String(p.WO).trim() + '|' + String(p.partNo).trim()));
+            const newRows = rows.filter(r => !existKeys.has(r.WO + '|' + r.partNo));
+            const skipped = rows.length - newRows.length;
+
+            if (newRows.length === 0) {
+                Swal.fire('ไม่มีรายการใหม่', 'รายการทั้งหมดในไฟล์นี้มีอยู่ในแพลนวันที่นี้แล้ว (WO + Part No ซ้ำ)', 'info');
+                event.target.value = '';
+                return;
+            }
+
+            const [py, pm, pd] = planDate.split('-');
             const confirmResult = await Swal.fire({
-                title: `พบ ${rows.length} รายการ`,
-                text: 'ยืนยันอัปโหลดแพลนใหม่? (แพลนเก่าทั้งหมดจะถูกแทนที่)',
-                icon: 'warning',
+                title: `เพิ่ม ${newRows.length} รายการ`,
+                html: `เข้าแพลนวันที่ <b>${pd}/${pm}/${py}</b> (ต่อท้ายลำดับเดิม)` + (skipped ? `<br><span class="text-muted small">ข้าม ${skipped} รายการที่มีอยู่แล้ว</span>` : ''),
+                icon: 'question',
                 showCancelButton: true,
                 confirmButtonText: 'อัปโหลด',
                 cancelButtonText: 'ยกเลิก'
             });
             if (!confirmResult.isConfirmed) { event.target.value = ''; return; }
 
+            const maxSo = Math.max(0, ...dayList.map(p => parseFloat(p.sortOrder) || 0));
+            newRows.forEach((r, i) => {
+                r.id = 'lgplan-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+                r.planDate = planDate;
+                r.sortOrder = maxSo + i + 1;
+            });
+
             Swal.fire({ title: 'กำลังอัปโหลด...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-            await callAppsScript('uploadLGPlan', rows);
-            db.lgPlan = rows;
+            await callAppsScript('uploadLGPlan', newRows);
+            db.lgPlan = (db.lgPlan || []).concat(newRows);
             window.renderLGMatchTable();
-            Swal.fire('สำเร็จ!', `อัปโหลดแพลน ${rows.length} รายการเรียบร้อยแล้ว`, 'success');
+            Swal.fire('สำเร็จ!', `เพิ่มแพลน ${newRows.length} รายการเรียบร้อยแล้ว`, 'success');
         } catch (error) {
             Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถอ่านไฟล์ได้: ' + error.message, 'error');
         }
