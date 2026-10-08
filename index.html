@@ -3169,7 +3169,7 @@
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-	    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+	    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script><script src="https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
@@ -13011,14 +13011,33 @@ window.downloadLGPlanTemplate = function() {
 };
 // 🟢 สร้าง QR Code แบบลองขยายขนาดไปเรื่อยๆจนกว่าจะจุข้อมูลพอ (ข้อมูลบาร์โค้ด LG ยาวเกินขนาดเริ่มต้นของไลบรารี)
 function safeCreateQRCode(el, text) {
-    let lastErr = null;
-    for (let t = 1; t <= 20; t++) {
-        try {
-            el.innerHTML = '';
-            return new QRCode(el, { text: text, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.L, typeNumber: t });
-        } catch (e) { lastErr = e; }
+    try {
+        if (typeof qrcode !== 'function') throw new Error('ไม่พบไลบรารีสร้าง QR กรุณารีเฟรชหน้าเว็บ');
+        qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
+        const qr = qrcode(0, 'L');
+        qr.addData(text, 'Byte');
+        qr.make();
+        const n = qr.getModuleCount();
+        const cell = Math.max(4, Math.floor(480 / (n + 8)));
+        const size = (n + 8) * cell;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, size, size);
+        ctx.fillStyle = '#000000';
+        for (let r = 0; r < n; r++) {
+            for (let c = 0; c < n; c++) {
+                if (qr.isDark(r, c)) ctx.fillRect((c + 4) * cell, (r + 4) * cell, cell, cell);
+            }
+        }
+        el.innerHTML = '';
+        el.appendChild(canvas);
+        return canvas;
+    } catch (e) {
+        throw new Error('สร้าง QR ไม่สำเร็จ: ' + (e && e.message ? e.message : String(e)));
     }
-    throw new Error('สร้าง QR ไม่สำเร็จ: ' + (lastErr ? (lastErr.message || String(lastErr)) : 'ไม่ทราบสาเหตุ'));
 }
 
 // 🟢 สร้างข้อความบาร์โค้ด/QR ของแท็ก LG ให้ตรงฟอร์แมตเดียวกับที่ parseLGBarcode() อ่านได้ (กลับด้านกัน)
@@ -13029,14 +13048,20 @@ function buildLGTagBarcode({ docNumber, line, partNo, tagQty, company, groups })
     fields[2] = partNo;
     fields[3] = tagQty;
     fields[4] = company;
-    // 🟢 บรรจุได้สูงสุด 5 กลุ่ม WO ต่อแท็ก [จำนวน, ว่าง, ว่าง, โมลด์, WO]
-    groups.slice(0, 5).forEach((g, i) => {
+    // 🟢 บรรจุได้สูงสุด 5 กลุ่ม WO ต่อแท็ก ถ้ามีเกิน 5 WO ให้รวมจำนวนส่วนที่เกินเข้ากลุ่มที่ 5 (ตรงกับที่ระบบ LG ทำ)
+    let packed = groups.map(g => ({ ...g }));
+    if (packed.length > 5) {
+        const extra = packed.slice(5).reduce((s, g) => s + (parseFloat(g.qty) || 0), 0);
+        packed = packed.slice(0, 5);
+        packed[4].qty = (parseFloat(packed[4].qty) || 0) + extra;
+    }
+    packed.forEach((g, i) => {
         const base = 6 + i * 5;
         fields[base] = g.qty;
         fields[base + 3] = g.modelSuffix || '';
         fields[base + 4] = g.WO || '';
     });
-    return '\x02' + fields.join('\x1D') + '\x03';
+    return '\x02' + fields.join('\u00BF') + '\x03';
 }
 
 // 🟢 ปริ้นแท็กทั้งหมดจากแพลนที่อัปโหลดไว้ หั่นตาม Carrier Qty อัตโนมัติ
@@ -13063,15 +13088,18 @@ window.printLGTags = async function() {
     if (!prefixChoice) { if (printWin) printWin.close(); return; }
 
     // 🟢 จัดกลุ่มแพลนตาม Part No ก่อน จะได้รวมหลาย WO เข้าแท็กเดียวกันได้ถ้า Part No ตรงกัน
-    const byPart = {};
+    // 🟢 รวมได้เฉพาะแถวที่ Part No เดียวกันและอยู่ติดกันตามลำดับในไฟล์ ถ้ามี Part อื่นคั่น ให้เริ่มชุดใหม่
+    const runs = [];
     plans.forEach(plan => {
         const key = String(plan.partNo).trim();
-        if (!byPart[key]) byPart[key] = [];
-        byPart[key].push(plan);
+        const last = runs[runs.length - 1];
+        if (last && last.key === key) last.items.push(plan);
+        else runs.push({ key, items: [plan] });
     });
 
     const tags = [];
-    Object.values(byPart).forEach(partPlans => {
+    runs.forEach(run => {
+        const partPlans = run.items;
         const carrierQty = partPlans.map(p => parseFloat(p.carrierQty) || 0).find(v => v > 0) || 0;
 
         if (carrierQty > 0) {
@@ -13079,12 +13107,14 @@ window.printLGTags = async function() {
             let current = { groups: [], total: 0, refPlan: partPlans[0] };
             partPlans.forEach(plan => {
                 let remaining = parseFloat(plan.orderQty) || 0;
+                // 🟢 ใช้ขนาดแร็คของ WO นี้เอง ถ้าช่องว่างให้ใช้ค่าแรกที่มีของชุดนี้แทน
+                const planCap = (parseFloat(plan.carrierQty) > 0) ? parseFloat(plan.carrierQty) : carrierQty;
                 while (remaining > 0) {
-                    if (current.total >= carrierQty || current.groups.length >= 5) {
+                    if (current.total >= planCap) {
                         tags.push(current);
                         current = { groups: [], total: 0, refPlan: partPlans[0] };
                     }
-                    const take = Math.min(carrierQty - current.total, remaining);
+                    const take = Math.min(planCap - current.total, remaining);
                     current.groups.push({ WO: plan.WO, modelSuffix: plan.modelSuffix || '', qty: take });
                     current.total += take;
                     remaining -= take;
@@ -13177,8 +13207,8 @@ function renderLGTagPrintWindow(tags, printWin) {
     const TAGS_PER_PAGE = 8; // 🟢 2 คอลัมน์ x 4 แถว = 8 ใบต่อหน้า A4
 
     const tagCardHtml = (tag, idx) => {
-        const woList = tag.groups.map(g => g.WO).join(' + ');
-        const modelSuffixList = tag.groups.map(g => g.modelSuffix || '-').join(' + ');
+        const woList = tag.groups.map(g => g.WO).join(', ');
+        const modelSuffixList = [...new Set(tag.groups.map(g => g.modelSuffix || '-'))].join(' + ');
         return `
         <div class="lg-tag">
             <table class="lg-tag-table">
@@ -13188,8 +13218,8 @@ function renderLGTagPrintWindow(tags, printWin) {
                     <td class="qr" rowspan="2" style="width:22%;"><img src="${tag.qrDataUrl}"></td>
                 </tr>
                 <tr>
-                    <td class="lbl">Seq No</td>
-                    <td class="val"></td>
+                    <td class="lbl">Part No</td>
+                    <td class="val part-big">${tag.refPlan.partNo}</td>
                 </tr>
                 <tr>
                     <td class="lbl">Qty</td>
@@ -13203,14 +13233,14 @@ function renderLGTagPrintWindow(tags, printWin) {
             <table class="lg-tag-table2">
                 <tr>
                     <td class="lbl">Made by</td><td class="val">ATECH</td>
-                    <td class="lbl">Part No</td><td class="val">${tag.refPlan.partNo}</td>
+                    <td class="lbl">Seq No</td><td class="val"></td>
                     <td class="lbl">Qty</td><td class="val">${tag.total}</td>
-                    <td class="lbl">Model.Suffix</td><td class="val">${modelSuffixList || '-'}</td>
-                    <td class="lbl">W/O</td><td class="val">${woList}</td>
+                    <td class="lbl">W/O</td><td class="val" colspan="3">${woList}</td>
                 </tr>
                 <tr>
                     <td class="lbl">Carrier ID</td><td class="val">ATECH</td>
-                    <td class="val" colspan="8">INSPECTION</td>
+                    <td class="val" colspan="4">INSPECTION</td>
+                    <td class="lbl">Model.Suffix</td><td class="val" colspan="3">${modelSuffixList || '-'}</td>
                 </tr>
                 <tr>
                     <td class="lbl">To Locator<br>Group</td><td class="val">${tag.refPlan.locatorGroup || '-'}</td>
@@ -13220,7 +13250,7 @@ function renderLGTagPrintWindow(tags, printWin) {
             <div class="lg-tag-footer">
                 <span>Printed: ${tag.printedDate}</span>
                 <span>${tag.docNumber}</span>
-                <span>ใบที่ ${idx + 1}/${total}</span>
+                <span style="font-size:12px; font-weight:300;">ใบที่ ${idx + 1}/${total}</span>
             </div>
         </div>
     `;
@@ -13249,7 +13279,7 @@ function renderLGTagPrintWindow(tags, printWin) {
         .lg-tag-table td, .lg-tag-table2 td { border: 1px solid #999; padding: 1px 3px; line-height: 1.2; }
         .lbl { color: #0d6efd; font-size: 6.5px; }
         .val { font-weight: bold; }
-        .val.big { font-size: 10px; }
+        .val.big { font-size: 10px; }        .val.part-big { font-size: 13px; letter-spacing: 0.2px; }
         .qr img { width: 100%; display: block; }
         .lg-tag-footer { display: flex; justify-content: space-between; font-size: 6.5px; margin-top: auto; padding-top: 1mm; }
         @media print { .lg-tag { page-break-inside: avoid; } }
@@ -13276,8 +13306,19 @@ window.handleLGPlanFileUpload = function(event) {
 
             // 🟢 แปลง Date object กลับเป็นข้อความอ่านง่าย แบบ "24-Sep-26 09:26"
             const formatLGDateTime = (val) => {
+                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                // 🟢 ถ้าเป็นเลขลำดับวันที่ของ Excel (เช่น 46294.95) ให้แปลงเป็นวันที่
+                const serial = (typeof val === 'number') ? val : (/^\d{5}(\.\d+)?$/.test(String(val).trim()) ? parseFloat(val) : NaN);
+                if (!isNaN(serial) && serial > 20000 && serial < 80000) {
+                    const d = new Date(Math.round((serial - 25569) * 86400 * 1000));
+                    const dd = String(d.getUTCDate()).padStart(2, '0');
+                    const mmm = months[d.getUTCMonth()];
+                    const yy = String(d.getUTCFullYear()).slice(-2);
+                    const hh = String(d.getUTCHours()).padStart(2, '0');
+                    const mi = String(d.getUTCMinutes()).padStart(2, '0');
+                    return `${dd}-${mmm}-${yy} ${hh}:${mi}`;
+                }
                 if (val instanceof Date && !isNaN(val.getTime())) {
-                    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
                     const dd = String(val.getDate()).padStart(2, '0');
                     const mmm = months[val.getMonth()];
                     const yy = String(val.getFullYear()).slice(-2);
@@ -13343,6 +13384,29 @@ async function processLGScanRaw(raw, feedbackEl) {
 
     if (!db.lgScanLog) db.lgScanLog = [];
     const resultLines = [];
+
+    // 🔴 เช็คแท็กซ้ำ: เทียบเลขเอกสาร (ANE/ANF...) ช่องแรกของ QR
+    if (parsed.docNumber) {
+            // 🔴 เช็คแท็กซ้ำ: เลขเอกสาร (ANE/ANF...) ซ้ำ = ห้ามสแกน ไม่บันทึก
+    const docNo = String(parsed.docNumber || '').trim();
+    if (docNo) {
+        const getDoc = (s) => { const p = parseLGBarcode(s); return p ? String(p.docNumber).trim() : ''; };
+        const dup = db.lgScanLog.find(l => getDoc(l.rawBarcode) === docNo);
+        if (dup) {
+            const when = dup.scannedAt ? new Date(dup.scannedAt).toLocaleString('th-TH') : '-';
+            if (feedbackEl) feedbackEl.innerHTML = `<div class="alert alert-danger mb-0"><i class="bi bi-slash-circle-fill me-1"></i><b>สแกนซ้ำ!</b> แท็ก ${docNo} ถูกสแกนไปแล้วเมื่อ ${when} โดย ${dup.scannedBy || '-'} — ไม่ได้บันทึก</div>`;
+            if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+            Swal.fire({
+                icon: 'error',
+                title: 'สแกนซ้ำ! ไม่บันทึก',
+                html: `แท็กใบนี้ <b>${docNo}</b><br>ถูกสแกนไปแล้วเมื่อ <b>${when}</b><br>โดย <b>${dup.scannedBy || '-'}</b>`,
+                confirmButtonText: 'รับทราบ',
+                confirmButtonColor: '#d33'
+            });
+            return;
+        }
+    }
+    }
 
     // 🟢 วน Loop ทีละ WO ในแท็กเดียวกัน (เผื่อแท็กนี้แบ่งของไปหลายออเดอร์)
     for (const group of parsed.groups) {
