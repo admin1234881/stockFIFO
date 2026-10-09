@@ -2937,6 +2937,7 @@
                                             <th class="text-center">สแกนแล้ว / ออเดอร์</th>
                                             <th style="width: 160px;">ความคืบหน้า</th>
                                             <th>สถานะ</th>
+                                            <th class="text-center" style="width:130px;">ปริ้นล่าสุด</th>
                                             <th class="text-center" style="width:90px;">ลำดับ</th>
                                         </tr>
                                     </thead>
@@ -13283,6 +13284,7 @@ window.renderLGMatchTable = function() {
                 </div>
             </td>
             <td>${statusBadge}</td>
+            <td class="text-center small">${r.printedAt ? `<span class="badge bg-light text-dark border">${fmtPrintedAt(r.printedAt)}</span>` : '<span class="text-muted">-</span>'}</td>
             <td class="text-center text-nowrap">
                 <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" ${idx === 0 ? 'disabled' : ''} onclick="window.moveLGPlan('${r.id}', -1)">▲</button>
                 <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" ${idx === rows.length - 1 ? 'disabled' : ''} onclick="window.moveLGPlan('${r.id}', 1)">▼</button>
@@ -13559,7 +13561,9 @@ window.printLGTags = async function() {
         const rowsHtml = dayList.map((p, i) => {
             const s = scanMap[String(p.id)];
             const scanned = s ? `${s.scanned} / ${s.orderQty}` : '-';
-            const printed = p.printedAt ? '<span class="badge bg-secondary">ปริ้นแล้ว</span>' : '<span class="badge bg-light text-dark border">ยังไม่ปริ้น</span>';
+            const printed = p.printedAt
+                ? `<span class="badge bg-secondary">ปริ้นแล้ว</span><div class="text-muted" style="font-size:.7rem;">${fmtPrintedAt(p.printedAt)}</div>`
+                : '<span class="badge bg-light text-dark border">ยังไม่ปริ้น</span>';
             return `<tr>
                 <td class="text-center"><input type="checkbox" class="form-check-input lg-pick" data-i="${i}" data-printed="${p.printedAt ? 1 : 0}" checked></td>
                 <td class="text-center">${i + 1}</td>
@@ -13731,9 +13735,10 @@ window.printLGTags = async function() {
             // บันทึกว่าปริ้นแล้ว (ถ้าบันทึกไม่สำเร็จ ไม่กระทบการปริ้น)
             try {
                 const ids = pick.idx.map(i => dayList[i].id);
-                const at = new Date().toISOString();
+                const at = nowPrintedStr();
                 await callAppsScript('markLGPlanPrinted', { ids, printedAt: at });
                 pick.idx.forEach(i => { dayList[i].printedAt = at; });
+                window.renderLGMatchTable();
             } catch (e) { console.warn('markLGPlanPrinted failed', e); }
         }, 300);
     };
@@ -13902,6 +13907,19 @@ window.printLGPlanSheet = function() {
         }
     });
 })();
+// 🟢 ตัวช่วยเวลาปริ้น: บันทึกเป็น "yyyy-MM-dd HH:mm:ss" เวลาไทย / แสดงเป็น "dd/MM/yyyy HH:mm"
+function nowPrintedStr() {
+    const d = new Date(), p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+function fmtPrintedAt(v) {
+    if (!v) return '';
+    const s = String(v).trim();
+    const d = /Z$|T\d/.test(s) ? new Date(s) : new Date(s.replace(' ', 'T')); // รองรับค่าเก่าแบบสากลที่เคยบันทึกไว้
+    if (isNaN(d)) return s;
+    const p = (n) => String(n).padStart(2, '0');
+    return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
 // 🟢 เปิดหน้าต่างใหม่จัดหน้าแท็กสำหรับปริ้น
 function renderLGTagPrintWindow(tags, printWin) {
     if (!printWin) {
