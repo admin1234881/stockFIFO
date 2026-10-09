@@ -2819,6 +2819,12 @@
                                 <i class="bi bi-upload me-1"></i> อัปโหลดแพลน
                                 <input type="file" accept=".xlsx,.xls" style="display:none;" onchange="window.handleLGPlanFileUpload(event)">
                             </label>
+                                <button type="button" class="btn btn-outline-dark fw-bold ms-2" onclick="window.printLGPlanSheet()">
+                                <i class="bi bi-file-earmark-text me-1"></i> ปริ้นแพลน
+                            </button>
+                                <button type="button" class="btn btn-outline-danger fw-bold ms-2" onclick="window.addLGManualPlan()">
+                                <i class="bi bi-plus-circle me-1"></i> เพิ่มแพลนเอง
+                            </button>
                             <button type="button" class="btn btn-dark fw-bold ms-2" onclick="window.printLGTags()">
                                 <i class="bi bi-printer-fill me-1"></i> ปริ้นแท็ก
                             </button>
@@ -13378,7 +13384,347 @@ window.printLGTags = async function() {
         Swal.close();
     }, 300);
 };
+// ===================== LG: เลือกล็อตก่อนปริ้น + เพิ่มแพลนเอง =====================
+(function() {
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+    // ---------- เพิ่มแพลนเอง ----------
+    window.addLGManualPlan = async function() {
+        const planDate = getLGSelectedDate();
+        const [py, pm, pd] = planDate.split('-');
+        const f = (id, label, ph, type) => `
+            <div class="col-6 text-start">
+                <label class="small fw-bold">${label}</label>
+                <input id="${id}" type="${type || 'text'}" class="form-control form-control-sm" placeholder="${ph || ''}">
+            </div>`;
+        const res = await Swal.fire({
+            title: `เพิ่มแพลน วันที่ ${pd}/${pm}/${py}`,
+            width: 640,
+            html: `<div class="row g-2">
+                ${f('mp-wo', 'WO *')}${f('mp-part', 'Part No *')}
+                ${f('mp-line', 'Line')}${f('mp-model', 'Model')}
+                ${f('mp-name', 'Part Name')}${f('mp-qty', 'จำนวนออเดอร์ *', '', 'number')}
+                ${f('mp-start', 'เวลาเริ่มผลิต', '', 'datetime-local')}${f('mp-suffix', 'Model.Suffix')}
+                ${f('mp-carrier', 'Carrier Qty', '', 'number')}${f('mp-loc', 'Locator Group')}
+            </div>`,
+            showCancelButton: true,
+            confirmButtonText: 'เพิ่มแพลน',
+            cancelButtonText: 'ยกเลิก',
+            focusConfirm: false,
+            preConfirm: () => {
+                const v = (id) => document.getElementById(id).value.trim();
+                const WO = v('mp-wo'), partNo = v('mp-part'), qty = parseFloat(v('mp-qty'));
+                if (!WO || !partNo || !(qty > 0)) { Swal.showValidationMessage('กรุณากรอก WO, Part No และจำนวนออเดอร์ให้ครบ'); return false; }
+                const dup = getLGPlanForDate(planDate).some(p => String(p.WO).trim() === WO && String(p.partNo).trim() === partNo);
+                if (dup) { Swal.showValidationMessage('WO + Part No นี้มีในแพลนของวันที่เลือกแล้ว'); return false; }
+                return {
+                    WO, partNo, orderQty: qty,
+                    line: v('mp-line'), model: v('mp-model'), partName: v('mp-name'),
+                    startDateTime: v('mp-start').replace('T', ' '),
+                    modelSuffix: v('mp-suffix'), carrierQty: v('mp-carrier') === '' ? '' : parseFloat(v('mp-carrier')),
+                    locatorGroup: v('mp-loc')
+                };
+            }
+        });
+        if (!res.isConfirmed || !res.value) return;
+
+        const day = getLGPlanForDate(planDate);
+        const maxSo = day.reduce((m, p) => Math.max(m, parseFloat(p.sortOrder) || 0), day.length);
+        const item = Object.assign({}, res.value, {
+            id: 'lgplan_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+            planDate: planDate,
+            sortOrder: maxSo + 1
+        });
+        try {
+            Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            await callAppsScript('uploadLGPlan', [item]);
+            db.lgPlan = db.lgPlan || [];
+            db.lgPlan.push(item);
+            window.renderLGMatchTable();
+            Swal.fire({ icon: 'success', title: 'เพิ่มแพลนแล้ว', timer: 1200, showConfirmButton: false });
+        } catch (e) {
+            Swal.fire('บันทึกไม่สำเร็จ', e.message, 'error');
+        }
+    };
+
+    // ---------- หน้าต่างเลือกล็อตที่จะปริ้น ----------
+    async function pickLGPlans(dayList) {
+        let scanMap = {};
+        try { computeLGMatchStatus().forEach(r => { scanMap[String(r.id)] = r; }); } catch (e) {}
+        const rowsHtml = dayList.map((p, i) => {
+            const s = scanMap[String(p.id)];
+            const scanned = s ? `${s.scanned} / ${s.orderQty}` : '-';
+            const printed = p.printedAt ? '<span class="badge bg-secondary">ปริ้นแล้ว</span>' : '<span class="badge bg-light text-dark border">ยังไม่ปริ้น</span>';
+            return `<tr>
+                <td class="text-center"><input type="checkbox" class="form-check-input lg-pick" data-i="${i}" data-printed="${p.printedAt ? 1 : 0}" checked></td>
+                <td class="text-center">${i + 1}</td>
+                <td class="fw-bold">${esc(p.WO)}</td>
+                <td>${esc(p.partNo)}</td>
+                <td class="text-center">${esc(p.orderQty)}</td>
+                <td class="text-center">${esc(p.carrierQty || '-')}</td>
+                <td class="text-center">${scanned}</td>
+                <td class="text-center">${printed}</td>
+            </tr>`;
+        }).join('');
+
+        const res = await Swal.fire({
+            title: 'เลือกล็อตที่จะปริ้นแท็ก',
+            width: 760,
+            html: `
+            <div class="text-start mb-2">
+                <span class="fw-bold me-2">รหัสนำหน้า:</span>
+                <label class="me-3"><input type="radio" name="lg-prefix" value="ANE" checked> ANE</label>
+                <label><input type="radio" name="lg-prefix" value="ANF"> ANF</label>
+            </div>
+            <div class="text-start mb-2">
+                <button type="button" class="btn btn-sm btn-outline-dark" id="lg-pick-all">เลือกทั้งหมด</button>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="lg-pick-new">เฉพาะที่ยังไม่ปริ้น</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="lg-pick-none">ไม่เลือก</button>
+            </div>
+            <div style="max-height:340px;overflow:auto;" class="border rounded">
+            <table class="table table-sm table-hover align-middle mb-0" style="font-size:.85rem;">
+                <thead class="table-light" style="position:sticky;top:0;"><tr>
+                    <th></th><th>#</th><th class="text-start">WO</th><th class="text-start">Part No</th><th>ออเดอร์</th><th>Carrier</th><th>สแกนแล้ว</th><th>สถานะ</th>
+                </tr></thead>
+                <tbody>${rowsHtml}</tbody>
+            </table></div>`,
+            showCancelButton: true,
+            confirmButtonText: 'ปริ้นแท็ก',
+            cancelButtonText: 'ยกเลิก',
+            didOpen: () => {
+                const boxes = () => Array.from(document.querySelectorAll('.lg-pick'));
+                document.getElementById('lg-pick-all').onclick = () => boxes().forEach(b => b.checked = true);
+                document.getElementById('lg-pick-none').onclick = () => boxes().forEach(b => b.checked = false);
+                document.getElementById('lg-pick-new').onclick = () => boxes().forEach(b => b.checked = b.dataset.printed !== '1');
+            },
+            preConfirm: () => {
+                const idx = Array.from(document.querySelectorAll('.lg-pick')).filter(b => b.checked).map(b => parseInt(b.dataset.i, 10));
+                if (idx.length === 0) { Swal.showValidationMessage('กรุณาเลือกอย่างน้อย 1 รายการ'); return false; }
+                const prefix = (document.querySelector('input[name="lg-prefix"]:checked') || {}).value || 'ANE';
+                return { idx, prefix };
+            }
+        });
+        return res.isConfirmed ? res.value : null;
+    }
+
+    // ---------- ไล่บรรจุแท็ก (เฉพาะแถวที่เลือก แถวติดกัน Part No เดียวกันเท่านั้นที่รวมกัน) ----------
+    function buildLGTags(dayList, selectedSet) {
+        const tags = [];
+        let run = [];
+        const flush = () => {
+            if (run.length === 0) return;
+            let current = null;
+            const push = () => { if (current && current.total > 0) tags.push(current); current = null; };
+            run.forEach(plan => {
+                const cap = parseFloat(plan.carrierQty) || 0;
+                let remaining = parseFloat(plan.orderQty) || 0;
+                if (remaining <= 0) return;
+                if (cap <= 0) {
+                    push();
+                    tags.push({ groups: [{ WO: plan.WO, modelSuffix: plan.modelSuffix || '', qty: remaining }], total: remaining, refPlan: plan });
+                    return;
+                }
+                while (remaining > 0) {
+                    if (current && current.total >= cap) push();
+                    if (!current) current = { groups: [], total: 0, refPlan: plan };
+                    const take = Math.min(cap - current.total, remaining);
+                    current.groups.push({ WO: plan.WO, modelSuffix: plan.modelSuffix || '', qty: take });
+                    current.total += take;
+                    remaining -= take;
+                }
+            });
+            push();
+            run = [];
+        };
+        dayList.forEach((p, i) => {
+            if (!selectedSet.has(i)) { flush(); return; }
+            if (run.length && String(run[0].partNo).trim() !== String(p.partNo).trim()) flush();
+            run.push(p);
+        });
+        flush();
+        return tags;
+    }
+
+    // ---------- ปริ้นแท็ก (แทนฟังก์ชันเดิม) ----------
+    window.printLGTags = async function() {
+        const dayList = getLGPlanForDate(getLGSelectedDate());
+        if (dayList.length === 0) {
+            Swal.fire('ยังไม่มีแพลน', 'วันที่เลือกยังไม่มีแพลน กรุณาอัปโหลดหรือเพิ่มแพลนก่อนครับ', 'warning');
+            return;
+        }
+
+        const printWin = window.open('', '_blank');
+        if (printWin) { printWin.document.write('<html><body style="font-family:sans-serif;text-align:center;padding:60px;font-size:18px;">⏳ กำลังเตรียมแท็ก กรุณารอสักครู่...</body></html>'); }
+
+        const pick = await pickLGPlans(dayList);
+        if (!pick) { if (printWin) printWin.close(); return; }
+        const selectedSet = new Set(pick.idx);
+        const prefixChoice = pick.prefix;
+
+        const tags = buildLGTags(dayList, selectedSet);
+        if (tags.length === 0) {
+            Swal.fire('ไม่มีรายการให้ปริ้น', 'กรุณาตรวจสอบจำนวนออเดอร์ในแพลนครับ', 'warning');
+            if (printWin) printWin.close();
+            return;
+        }
+
+        Swal.fire({ title: 'กำลังสร้างแท็ก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+        const now = new Date();
+        const yy = String(now.getFullYear()).slice(-2);
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const stamp = `${yy}${mm}${dd}${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+        const runningSeed = Math.floor(Math.random() * 900000) + 100000;
+        const printedDate = `${now.getFullYear()}.${mm}.${dd}`;
+
+        const qrHolder = document.createElement('div');
+        qrHolder.style.position = 'fixed';
+        qrHolder.style.left = '-9999px';
+        document.body.appendChild(qrHolder);
+
+        try {
+            tags.forEach((tag, idx) => {
+                const docNumber = `${prefixChoice}F${stamp}${String((runningSeed + idx * 137) % 1000000).padStart(6, '0')}`;
+                const raw = buildLGTagBarcode({
+                    docNumber,
+                    line: tag.refPlan.line,
+                    partNo: tag.refPlan.partNo,
+                    tagQty: tag.total,
+                    company: 'ATECH',
+                    groups: tag.groups
+                });
+                tag.docNumber = docNumber;
+                tag.printedDate = printedDate;
+                const div = document.createElement('div');
+                qrHolder.appendChild(div);
+                safeCreateQRCode(div, raw);
+                tag.qrDiv = div;
+            });
+        } catch (err) {
+            document.body.removeChild(qrHolder);
+            Swal.fire('สร้างแท็กไม่สำเร็จ', err.message, 'error');
+            if (printWin) printWin.close();
+            return;
+        }
+
+        setTimeout(async () => {
+            try {
+                tags.forEach(tag => {
+                    const canvas = tag.qrDiv.querySelector('canvas');
+                    tag.qrDataUrl = canvas ? canvas.toDataURL('image/png') : '';
+                });
+                document.body.removeChild(qrHolder);
+                renderLGTagPrintWindow(tags, printWin);
+            } catch (err) {
+                Swal.fire('สร้างแท็กไม่สำเร็จ', err.message, 'error');
+                if (printWin) printWin.close();
+                return;
+            }
+            Swal.close();
+
+            // บันทึกว่าปริ้นแล้ว (ถ้าบันทึกไม่สำเร็จ ไม่กระทบการปริ้น)
+            try {
+                const ids = pick.idx.map(i => dayList[i].id);
+                const at = new Date().toISOString();
+                await callAppsScript('markLGPlanPrinted', { ids, printedAt: at });
+                pick.idx.forEach(i => { dayList[i].printedAt = at; });
+            } catch (e) { console.warn('markLGPlanPrinted failed', e); }
+        }, 300);
+    };
+})();
+function buildLGPlanSheetHtml(list, planDate) {
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const [y, m, d] = planDate.split('-');
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const printedAt = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    const totalQty = list.reduce((s, p) => s + (parseFloat(p.orderQty) || 0), 0);
+    const rows = list.map((p, i) => {
+        const prev = list[i - 1];
+        const newPart = prev && String(prev.partNo).trim() !== String(p.partNo).trim();
+        return `<tr class="${newPart ? 'sep' : ''}">
+            <td class="c no">${i + 1}</td>
+            <td class="c">${esc(p.startDateTime || '-')}</td>
+            <td class="c"><span class="line">${esc(p.line || '-')}</span></td>
+            <td class="wo">${esc(p.WO)}</td>
+            <td class="part">${esc(p.partNo)}</td>
+            <td>${esc(p.partName || '-')}<div class="sub">${esc(p.model || '')}${p.modelSuffix ? ' · ' + esc(p.modelSuffix) : ''}</div></td>
+            <td class="c qty">${esc(p.orderQty)}</td>
+            <td class="c cq">${esc(p.carrierQty || '-')}</td>
+            <td class="c"><span class="box"></span></td>
+            <td class="note"></td>
+        </tr>`;
+    }).join('');
+    return `<!doctype html><html><head><meta charset="utf-8"><title>แผนการผลิต LG ${d}-${m}-${y}</title>
+<style>
+@page { size: A3 landscape; margin: 12mm; }
+* { box-sizing: border-box; }
+body { zoom:1.0; font-family: 'Sarabun','Tahoma','Segoe UI',sans-serif; color:#1b1b1b; margin:0; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+.head { display:flex; justify-content:space-between; align-items:stretch; border:2px solid #c8102e; border-radius:8px; overflow:hidden; margin-bottom:8px; }
+.head .t { background:#c8102e; color:#fff; padding:8px 16px; flex:1; }
+.head .t h1 { margin:0; font-size:26px; letter-spacing:.5px; }
+.head .t div { font-size:12px; opacity:.9; }
+.head .d { padding:6px 18px; text-align:center; min-width:190px; display:flex; flex-direction:column; justify-content:center; }
+.head .d b { font-size:30px; line-height:1.1; color:#c8102e; }
+.head .d span { font-size:12px; color:#666; }
+.head .s { padding:6px 18px; text-align:center; border-left:1px solid #eee; display:flex; flex-direction:column; justify-content:center; }
+.head .s b { font-size:24px; line-height:1.1; }
+.head .s span { font-size:12px; color:#666; }
+table { width:100%; border-collapse:collapse; }
+th { background:#2b2b2b; color:#fff; font-size:13px; padding:6px 5px; border:1px solid #2b2b2b; }
+td { border:1px solid #bbb; padding:3px 6px; font-size:14px; vertical-align:middle; }
+tr:nth-child(even) td { background:#f6f6f6; }
+tr.sep td { border-top:3px solid #c8102e; }
+tr { page-break-inside:avoid; }
+.c { text-align:center; }
+.no { font-size:18px; font-weight:800; width:42px; }
+.wo { font-size:17px; font-weight:800; white-space:nowrap; }
+.part { font-size:19px; font-weight:800; white-space:nowrap; }
+.sub { font-size:11px; color:#777; }
+.line { display:inline-block; background:#c8102e; color:#fff; font-weight:800; border-radius:5px; padding:2px 8px; font-size:14px; }
+.qty { font-size:20px; font-weight:800; width:80px; }
+.cq { font-size:17px; font-weight:700; width:70px; }
+.box { display:inline-block; width:22px; height:22px; border:2.5px solid #333; border-radius:4px; background:#fff; }
+.note { width:30%; min-width:230px; height:36px; background:#fff !important; }
+.foot { margin-top:8px; display:flex; justify-content:space-between; font-size:11px; color:#666; }
+.sign { display:flex; gap:30px; margin-top:12px; }
+.sign div { flex:1; border-top:1.5px solid #333; padding-top:3px; font-size:12px; text-align:center; }
+</style></head><body>
+<div class="head">
+  <div class="t"><h1>แผนการผลิต LG · LG PRODUCTION PLAN</h1><div>ATECH AUTOMOTIVE · เรียงตามลำดับที่ต้องผลิต (บนไปล่าง)</div></div>
+  <div class="s"><b>${list.length}</b><span>รายการ</span></div>
+  <div class="s"><b>${totalQty.toLocaleString()}</b><span>ชิ้นรวม</span></div>
+  <div class="d"><span>วันที่แพลน</span><b>${d}/${m}/${y}</b></div>
+</div>
+<table>
+<thead><tr>
+  <th>ลำดับ</th><th>เวลาเริ่มผลิต</th><th>Line</th><th>WO</th><th>Part No</th><th>ชื่อชิ้นงาน / Model</th><th>จำนวน<br>สั่งผลิต</th><th>Carrier<br>Qty</th><th>เสร็จ<br>✓</th><th>ยอดที่ส่งแล้ว / หมายเหตุ</th>
+</tr></thead>
+<tbody>${rows}</tbody>
+</table>
+<div class="sign"><div>ผู้จัดทำแผน</div><div>หัวหน้าไลน์</div><div>ผู้ตรวจสอบ</div></div>
+<div class="foot"><span>พิมพ์เมื่อ ${printedAt}</span><span>ATECH STOCK IN-OUT FG SYSTEM</span></div>
+<script>window.onload=function(){setTimeout(function(){window.print();},400);};<\/script>
+</body></html>`;
+}
+
+window.printLGPlanSheet = function() {
+    const planDate = getLGSelectedDate();
+    const list = getLGPlanForDate(planDate);
+    if (list.length === 0) {
+        Swal.fire('ยังไม่มีแพลน', 'วันที่เลือกยังไม่มีแพลนให้ปริ้นครับ', 'warning');
+        return;
+    }
+    const w = window.open('', '_blank');
+    if (!w) {
+        Swal.fire('เปิดหน้าต่างไม่สำเร็จ', 'เบราว์เซอร์บล็อกป๊อปอัพ กรุณาอนุญาตป๊อปอัพสำหรับเว็บนี้แล้วกดใหม่อีกครั้งครับ', 'error');
+        return;
+    }
+    w.document.open();
+    w.document.write(buildLGPlanSheetHtml(list, planDate));
+    w.document.close();
+};
 // 🟢 เปิดหน้าต่างใหม่จัดหน้าแท็กสำหรับปริ้น
 function renderLGTagPrintWindow(tags, printWin) {
     if (!printWin) {
