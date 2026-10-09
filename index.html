@@ -5532,7 +5532,6 @@ async function handleImport(e) {
                         }
                     }
 
-                    // --- ขั้นตอนที่ 2: ตรวจสอบ FIFO ---
                     const productStock = calculatedStock.find(p => String(p.productId).trim() === String(productId).trim());
                     const availableLots = productStock ? productStock.lots.filter(l => l.quantity > 0).sort((a, b) => new Date(a.productionDate) - new Date(b.productionDate)) : [];
                     const selectedLotDates = Array.from(selectedLotRows).map(row => row.dataset.date);
@@ -5905,15 +5904,16 @@ if (mascotBubble) {
     window.mascotLoopTimer = setInterval(rotateSpeech, 5000);
 }
 function populateAll() {
-    populateStockSummary();
-    populateUserManagementTable();
-    populateProductManagementTable();
-    populateHistoryTable();
-    populateAnnouncementsTable();
-    displayActiveAnnouncements();
-    populateStockCountMainView();
-    window.app.populateDashboard(); 
-    if (typeof renderRackSummaryTable === 'function') renderRackSummaryTable(); 
+    const safe = (name, fn) => { try { fn(); } catch (err) { console.error('populateAll: ' + name + ' วาดไม่สำเร็จ', err); } };
+    safe('populateStockSummary', populateStockSummary);
+    safe('populateUserManagementTable', populateUserManagementTable);
+    safe('populateProductManagementTable', populateProductManagementTable);
+    safe('populateHistoryTable', populateHistoryTable);
+    safe('populateAnnouncementsTable', populateAnnouncementsTable);
+    safe('displayActiveAnnouncements', displayActiveAnnouncements);
+    safe('populateStockCountMainView', populateStockCountMainView);
+    safe('populateDashboard', () => window.app.populateDashboard());
+    safe('renderRackSummaryTable', () => { if (typeof renderRackSummaryTable === 'function') renderRackSummaryTable(); });
     
     // อัปเดตแดชบอร์ด Rack ถ้าเปิดดูอยู่
     if (typeof populateRackDashboard === 'function' && document.getElementById('btn-dash-rack') && document.getElementById('btn-dash-rack').checked) {
@@ -6169,7 +6169,122 @@ window.uploadForecastFile = function() {
     };
     fileInput.click();
 };
+// 🟢 สรุปสต็อกแบบโดนัท (แทนการ์ดแยกลูกค้าแบบเดิม)
+window.__stockDonut = window.__stockDonut || { mode: 'qty', all: false, data: [] };
 
+function renderStockDonut(customerSummary) {
+    const st = window.__stockDonut;
+    st.data = Array.from(customerSummary.entries()).map(([name, d]) => ({ name, qty: d.total, value: d.value }));
+    drawStockDonut();
+}
+
+window.setStockDonutMode = function(mode) { window.__stockDonut.mode = mode; drawStockDonut(); };
+window.toggleStockDonutAll = function() { window.__stockDonut.all = !window.__stockDonut.all; drawStockDonut(); };
+
+function drawStockDonut() {
+    const st = window.__stockDonut;
+    const row = document.getElementById('customer-stock-summary-row');
+    if (!row) return;
+
+    if (!document.getElementById('stock-donut-style')) {
+        const css = document.createElement('style');
+        css.id = 'stock-donut-style';
+        css.textContent = `
+        .sd-seg { display:inline-flex; background:#f1f5f9; border-radius:999px; padding:3px; }
+        .sd-seg button { border:0; background:transparent; padding:5px 16px; border-radius:999px; font-size:.8rem; font-weight:700; color:#64748b; }
+        .sd-seg button.on { background:#fff; color:#0f172a; box-shadow:0 1px 3px rgba(0,0,0,.15); }
+        .sd-donut { width:210px; height:210px; border-radius:50%; position:relative; flex:none; }
+        .sd-donut:after { content:""; position:absolute; inset:36px; background:#fff; border-radius:50%; }
+        .sd-donut .sd-c { position:absolute; inset:0; z-index:2; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; }
+        .sd-legend-row { display:flex; align-items:center; gap:10px; padding:7px 4px; border-bottom:1px solid #f1f5f9; font-size:.85rem; }
+        .sd-legend-row:last-child { border-bottom:0; }
+        .sd-dot { width:11px; height:11px; border-radius:3px; flex:none; }
+        .sd-name { flex:1; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+        .sd-col { text-align:right; color:#64748b; white-space:nowrap; }
+        .sd-col.b { color:#0f172a; font-weight:800; }
+        .sd-kpi { border-radius:16px; padding:14px 18px; color:#fff; min-width:190px; }
+        `;
+        document.head.appendChild(css);
+    }
+
+    let wrap = document.getElementById('stock-donut-wrap');
+    if (!wrap) {
+        wrap = document.createElement('div');
+        wrap.id = 'stock-donut-wrap';
+        row.parentNode.insertBefore(wrap, row);
+    }
+
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const key = st.mode === 'value' ? 'value' : 'qty';
+    const totalQty = st.data.reduce((s, d) => s + d.qty, 0);
+    const totalValue = st.data.reduce((s, d) => s + d.value, 0);
+    const short = (v) => v >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : v >= 1e3 ? (v / 1e3).toFixed(1) + 'k' : Math.round(v).toLocaleString();
+
+    if (st.data.length === 0 || (key === 'qty' ? totalQty : totalValue) <= 0) {
+        wrap.innerHTML = `<div class="card border-0 shadow-sm mb-4" style="border-radius:20px;"><div class="card-body p-4 text-center text-muted">ยังไม่มีสต็อกคงเหลือให้แสดง</div></div>`;
+        return;
+    }
+
+    const palette = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1'];
+    const sorted = st.data.slice().sort((a, b) => b[key] - a[key]);
+    const TOP = 6;
+    let items;
+    if (!st.all && sorted.length > TOP + 1) {
+        const rest = sorted.slice(TOP);
+        items = sorted.slice(0, TOP).map((d, i) => ({ ...d, color: palette[i] }));
+        items.push({ name: `อื่นๆ (${rest.length} ราย)`, qty: rest.reduce((s, d) => s + d.qty, 0), value: rest.reduce((s, d) => s + d.value, 0), color: '#94a3b8' });
+    } else {
+        items = sorted.map((d, i) => ({ ...d, color: palette[i % palette.length] }));
+    }
+    const total = key === 'qty' ? totalQty : totalValue;
+
+    let acc = 0;
+    const stops = items.map(d => {
+        const from = acc / total * 100;
+        acc += d[key];
+        return `${d.color} ${from.toFixed(2)}% ${(acc / total * 100).toFixed(2)}%`;
+    }).join(', ');
+
+    const rowsHtml = items.map(d => {
+        const pct = (d[key] / total * 100);
+        return `<div class="sd-legend-row">
+            <span class="sd-dot" style="background:${d.color}"></span>
+            <span class="sd-name" title="${esc(d.name)}">${esc(d.name)}</span>
+            <span class="sd-col" style="width:52px;">${pct.toFixed(pct < 10 ? 1 : 0)}%</span>
+            <span class="sd-col ${key === 'qty' ? 'b' : ''}" style="width:92px;">${Math.round(d.qty).toLocaleString()} ชิ้น</span>
+            <span class="sd-col ${key === 'value' ? 'b' : ''}" style="width:104px;">฿ ${Math.round(d.value).toLocaleString()}</span>
+        </div>`;
+    }).join('');
+
+    const centerMain = key === 'qty' ? Math.round(totalQty).toLocaleString() : '฿ ' + short(totalValue);
+    const centerSub = key === 'qty' ? 'ชิ้นรวม' : 'มูลค่ารวม';
+    const canExpand = sorted.length > TOP + 1;
+
+    wrap.innerHTML = `
+    <div class="card border-0 shadow-sm mb-4" style="border-radius:20px;">
+      <div class="card-body p-4">
+        <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; margin-bottom:16px;">
+          <h6 class="fw-bold mb-0"><i class="bi bi-pie-chart-fill text-primary me-2"></i>สัดส่วนสต็อกตามลูกค้า</h6>
+          <div class="sd-seg">
+            <button type="button" class="${key === 'qty' ? 'on' : ''}" onclick="window.setStockDonutMode('qty')">จำนวนชิ้น</button>
+            <button type="button" class="${key === 'value' ? 'on' : ''}" onclick="window.setStockDonutMode('value')">มูลค่า (บาท)</button>
+          </div>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; align-items:center; gap:28px;">
+          <div class="sd-donut" style="background:conic-gradient(${stops});">
+            <div class="sd-c"><div style="font-size:1.45rem; font-weight:800; line-height:1.1;">${centerMain}</div><div style="font-size:.75rem; color:#64748b;">${centerSub}</div></div>
+          </div>
+          <div style="flex:1; min-width:320px; ${st.all ? 'max-height:300px; overflow-y:auto;' : ''}">${rowsHtml}
+            ${canExpand ? `<div style="text-align:center; padding-top:8px;"><button type="button" class="btn btn-sm btn-light rounded-pill fw-bold" onclick="window.toggleStockDonutAll()">${st.all ? 'ย่อรายการ' : 'ดูลูกค้าทั้งหมด (' + sorted.length + ' ราย)'}</button></div>` : ''}
+          </div>
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <div class="sd-kpi" style="background:linear-gradient(135deg,#1e3a8a,#3b82f6);"><div style="font-size:.75rem; opacity:.9;">สต็อกรวม</div><div style="font-size:1.5rem; font-weight:800;">${Math.round(totalQty).toLocaleString()} <span style="font-size:.8rem;">ชิ้น</span></div></div>
+            <div class="sd-kpi" style="background:linear-gradient(135deg,#047857,#34d399);"><div style="font-size:.75rem; opacity:.9;">มูลค่ารวม</div><div style="font-size:1.5rem; font-weight:800;">฿ ${Math.round(totalValue).toLocaleString()}</div></div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
 // =========================================================
 function populateStockSummary() {
     const T = translations[currentLanguage];
@@ -6223,7 +6338,8 @@ function populateStockSummary() {
         summaryRow.className = 'row g-2 mb-3'; 
         summaryRow.removeAttribute('style'); 
 
-        const sortedCustomers = Array.from(customerSummary.entries()).sort((a, b) => b[1].total - a[1].total);
+        renderStockDonut(customerSummary);
+        const sortedCustomers = []; // ปิดการ์ดแยกลูกค้าแบบเดิม ใช้โดนัทแทน
         if (sortedCustomers.length === 0) {
             summaryRow.style.display = 'none';
         } else {
@@ -13749,6 +13865,7 @@ function buildLGPlanSheetHtml(list, planDate) {
     const now = new Date();
     const pad = (n) => String(n).padStart(2, '0');
     const printedAt = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    const printedBy = (typeof currentUser !== 'undefined' && currentUser && currentUser.username) ? currentUser.username : '-';
     const totalQty = list.reduce((s, p) => s + (parseFloat(p.orderQty) || 0), 0);
     const rows = list.map((p, i) => {
         const prev = list[i - 1];
@@ -13798,9 +13915,15 @@ tr { page-break-inside:avoid; }
 .box { display:inline-block; width:22px; height:22px; border:2.5px solid #333; border-radius:4px; background:#fff; }
 .note { width:30%; min-width:230px; height:36px; background:#fff !important; }
 .foot { margin-top:8px; display:flex; justify-content:space-between; font-size:11px; color:#666; }
-.sign { display:flex; gap:30px; margin-top:12px; }
-.sign div { flex:1; border-top:1.5px solid #333; padding-top:3px; font-size:12px; text-align:center; }
+.sign { display:flex; gap:40px; margin-top:6px; page-break-inside:avoid; }
+.sign > div { flex:1; text-align:center; }
+.sign b { display:block; text-align:left; font-size:13px; }
+.sign i { display:block; height:48px; border-bottom:1.5px solid #333; }
+.sign span { display:block; margin-top:6px; font-size:16px; font-weight:600; color:#222; letter-spacing:.5px; }
+.wm { position:fixed; left:0; top:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; pointer-events:none; z-index:5; }
+.wm span { transform:rotate(-25deg); font-size:36px; font-weight:800; color:rgba(200,16,46,.10); white-space:nowrap; text-align:center; line-height:1.4; }
 </style></head><body>
+<div class="wm"><span>ATECH AUTOMOTIVE<br>พิมพ์โดย ${esc(printedBy)}<br>${printedAt}</span></div>
 <div class="head">
   <div class="t"><h1>แผนการผลิต LG · LG PRODUCTION PLAN</h1><div>ATECH AUTOMOTIVE · เรียงตามลำดับที่ต้องผลิต (บนไปล่าง)</div></div>
   <div class="s"><b>${list.length}</b><span>รายการ</span></div>
@@ -13813,8 +13936,12 @@ tr { page-break-inside:avoid; }
 </tr></thead>
 <tbody>${rows}</tbody>
 </table>
-<div class="sign"><div>ผู้จัดทำแผน</div><div>หัวหน้าไลน์</div><div>ผู้ตรวจสอบ</div></div>
-<div class="foot"><span>พิมพ์เมื่อ ${printedAt}</span><span>ATECH STOCK IN-OUT FG SYSTEM</span></div>
+<div class="sign">
+  <div><b>ผู้จัดทำแผน</b><i></i><span>วันที่ ____ / ____ / ________</span></div>
+  <div><b>หัวหน้าไลน์</b><i></i><span>วันที่ ____ / ____ / ________</span></div>
+  <div><b>ผู้ตรวจสอบ</b><i></i><span>วันที่ ____ / ____ / ________</span></div>
+</div>
+<div class="foot"><span>พิมพ์โดย <b>${esc(printedBy)}</b> · พิมพ์เมื่อ ${printedAt}</span><span>ATECH STOCK IN-OUT FG SYSTEM</span></div>
 <script>window.onload=function(){setTimeout(function(){window.print();},400);};<\/script>
 </body></html>`;
 }
