@@ -6586,9 +6586,11 @@ function populateStockSummary() {
 
                         const prodDate = item.productionDate || item.ProductionDate || item.production_date;
 
-                        let quantityDisplay = item.quantity.toLocaleString();
+                        const qtyNum = parseFloat(item.quantity);
+                        const qtyText = isNaN(qtyNum) ? '-' : qtyNum.toLocaleString();
+                        let quantityDisplay = qtyText;
                         if (item.type === 'adjustment' || item.type === 'reversal') {
-                            quantityDisplay = (item.quantity > 0 ? '+' : '') + item.quantity.toLocaleString();
+                            quantityDisplay = (qtyNum > 0 ? '+' : '') + qtyText;
                         }
 
                         let displayRemark = item.remarks || '';
@@ -10340,7 +10342,7 @@ window.loadArchivedHistory = async function() {
 
         // กันข้อมูลซ้ำ เผื่อกดโหลดซ้ำ
         const existingIds = new Set(db.history.map(h => h.id));
-        const newRows = archivedRows.filter(r => !existingIds.has(r.id));
+        const newRows = archivedRows.filter(r => r && (r.type || r.productId) && !existingIds.has(r.id));
         db.history = db.history.concat(newRows);
 
         archivedHistoryLoaded = true;
@@ -15544,7 +15546,7 @@ async function populateSalesDashboard(startDate, endDate) {
                         canManageDeliveryPlan: document.getElementById('permission-canManageDeliveryPlan').checked, // 👈 สิทธิ์จัดส่ง
                         canConvertPart: document.getElementById('permission-canConvertPart').checked, // 👈 สิทธิ์ Convert
                         canManageRack: document.getElementById('permission-canManageRack').checked,
-                        canForecast: document.getElementById('user-canForecast').checked,
+                        canForecast: document.getElementById('permission-canForecast').checked,
                         canManageLotHold: document.getElementById('permission-canManageLotHold').checked,
                         canManageSupport: document.getElementById('permission-canManageSupport').checked
                     };
