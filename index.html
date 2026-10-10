@@ -7151,12 +7151,13 @@ window.populateVehicleDashboard = function() {
             if (!pendingGroups[groupKey]) {
                 pendingGroups[groupKey] = {
                     time: timeKey, customer: custKey, partsCount: 0, totalQty: 0,
-                    hasDelivery: false, hasPickup: false, remarks: new Set(), users: new Set()
+                    hasDelivery: false, hasPickup: false, hasNonOther: false, remarks: new Set(), users: new Set()
                 };
             }
             if (p.remarks && String(p.remarks).trim() !== '') pendingGroups[groupKey].remarks.add(String(p.remarks).trim());
             if (p.user && String(p.user).trim() !== '') pendingGroups[groupKey].users.add(String(p.user).trim());
 
+            if (p.jobType !== 'Other') pendingGroups[groupKey].hasNonOther = true;
             if (p.jobType === 'Pickup') pendingGroups[groupKey].hasPickup = true;
             else { pendingGroups[groupKey].hasDelivery = true; pendingGroups[groupKey].partsCount++; pendingGroups[groupKey].totalQty += parseInt(p.quantity) || 0; }
         });
@@ -14099,9 +14100,10 @@ function fmtPrintedAt(v) {
 (function() {
     // ปรับเกณฑ์ได้ตรงนี้
     const CFG = {
-        lateGraceMin: 15,     // เลยเวลานัดส่งกี่นาทีแล้วยังไม่ปล่อยรถ ถึงเริ่มเตือน
-        tripMaxHours: 3,      // ปล่อยรถไปนานกี่ชั่วโมงแล้วยังไม่กลับ ถึงนับว่าผิดปกติ
-        tripWarnMin: 30,      // เตือนสีส้มล่วงหน้ากี่นาทีก่อนครบเกณฑ์
+        lateGraceMin: 0,      // ถึงเวลานัดส่งแล้วรถยังไม่ออก เตือนทันที
+        tripMaxHours: 1.5,    // รถวิ่งเกิน "เวลาเฉลี่ยของลูกค้าเจ้านั้น" ไปอีกกี่ชั่วโมง ถึงเตือนแดง
+        tripWarnMin: 15,      // เตือนสีส้มล่วงหน้ากี่นาทีก่อนถึงจุดเตือนแดง
+        defaultAvgMin: 90,    // ลูกค้าที่ไม่เคยมีประวัติ ใช้ค่าเฉลี่ยกลางกี่นาที
         refreshMs: 30000      // เช็กใหม่ทุกกี่มิลลิวินาที
     };
     const st = { open: false, tab: 'late', sound: true, prevKeys: null, data: { late: [], trips: [] } };
@@ -14128,6 +14130,7 @@ function fmtPrintedAt(v) {
         const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
         const nowMin = now.getHours() * 60 + now.getMinutes();
         const maxMin = CFG.tripMaxHours * 60;
+        const avgByCustomer = (typeof getAvgTripMinutesByCustomer === 'function') ? getAvgTripMinutesByCustomer() : {};
         const late = new Map(), trips = new Map();
 
         ((typeof db !== 'undefined' && db.deliveryPlans) || []).forEach(p => {
@@ -14136,7 +14139,7 @@ function fmtPrintedAt(v) {
             const customer = String(p.customer || '-').trim();
 
             if (p.status === 'Pending') {
-                if (d !== todayStr || p.jobType === 'Other') return;
+                if (d !== todayStr) return;
                 const tm = toMin(p.time);
                 if (tm == null) return;
                 const over = nowMin - tm;
@@ -14153,12 +14156,14 @@ function fmtPrintedAt(v) {
                 if (isNaN(start.getTime())) return;
                 const elapsed = (now.getTime() - start.getTime()) / 60000;
                 if (elapsed < 0) return;
-                const isOver = elapsed >= maxMin;
-                if (!isOver && elapsed < maxMin - CFG.tripWarnMin) return;
+                const avgMin = avgByCustomer[p.customer] || CFG.defaultAvgMin;
+                const limit = avgMin + maxMin; // เวลาเฉลี่ยของลูกค้า + 1.5 ชม.
+                const isOver = elapsed >= limit;
+                if (!isOver && elapsed < limit - CFG.tripWarnMin) return;
                 const plate = String(p.licensePlate || '-').trim();
                 const key = `T|${d}|${rm}|${customer}|${plate}`;
                 if (!trips.has(key)) {
-                    trips.set(key, { key, customer, plate, releaseText: `${pad(Math.floor(rm / 60))}:${pad(rm % 60)}`, elapsed, isOver, overBy: elapsed - maxMin, left: maxMin - elapsed });
+                    trips.set(key, { key, customer, plate, releaseText: `${pad(Math.floor(rm / 60))}:${pad(rm % 60)}`, elapsed, isOver, avgMin, limit, overBy: elapsed - limit, left: limit - elapsed });
                 }
             }
         });
@@ -14290,8 +14295,8 @@ function fmtPrintedAt(v) {
                 <div class="al-card ${t.isOver ? '' : 'warn'}">
                     <div class="al-top"><span>${esc(t.plate)} · ${esc(t.customer)}</span>
                         <span class="${t.isOver ? 'al-red' : 'al-org'}">${t.isOver ? '+' + fmtDur(t.overBy) : 'เหลือ ' + fmtDur(t.left)}</span></div>
-                    <div class="al-bar"><i style="width:${Math.min(100, t.elapsed / maxMin * 100)}%"></i></div>
-                    <small>ออกรถ ${t.releaseText} · เกณฑ์ ${CFG.tripMaxHours} ชม. · ผ่านมา ${fmtDur(t.elapsed)}${t.isOver ? '' : ' (ใกล้ครบเกณฑ์)'}</small>
+                    <div class="al-bar"><i style="width:${Math.min(100, t.elapsed / t.limit * 100)}%"></i></div>
+                    <small>ออกรถ ${t.releaseText} · เฉลี่ยปกติ ${fmtDur(t.avgMin)} (เตือนเมื่อเกิน +${CFG.tripMaxHours} ชม.) · ผ่านมา ${fmtDur(t.elapsed)}${t.isOver ? '' : ' (ใกล้ครบเกณฑ์)'}</small>
                 </div>`).join('');
         }
 
