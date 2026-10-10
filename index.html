@@ -1732,6 +1732,44 @@
 .timeline-part-qty { font-size: 0.82rem; color: #495057; white-space: nowrap; flex-shrink: 0; }
 .timeline-parts-footer { border-top: 1px solid #f1f3f5; margin-top: 8px; padding-top: 8px; display: flex; justify-content: space-between; font-size: 0.72rem; color: #adb5bd; }
 .floating-btn-hidden { display: none !important; }
+
+/* 🚪 ออกจากระบบแบบใหม่ (แบบ A) */
+.lgo-popup { border-radius: 22px !important; padding: 28px !important; width: 380px !important; max-width: 92vw !important; font-family: inherit; }
+.lgo-popup .swal2-icon { border: none !important; width: 64px !important; height: 64px !important; margin: 0 auto 14px !important; background: #fdecee; color: #c62a3a; }
+.lgo-popup .swal2-icon .swal2-icon-content { font-size: 1rem; }
+.lgo-popup .swal2-title { font-size: 20px; font-weight: 700; color: #2b0a0e; padding: 0; }
+.lgo-popup .swal2-html-container { font-size: 13px; color: #8a6a6e; margin: 6px 0 0; }
+.lgo-popup .swal2-actions { margin-top: 20px; gap: 10px; width: 100%; flex-wrap: nowrap; }
+.lgo-btn-ok, .lgo-btn-cancel { flex: 1; padding: 11px 0; border-radius: 12px; font-size: 14px; font-weight: 600; border: none; cursor: pointer; }
+.lgo-btn-ok { background: #8f1220; color: #fff; }
+.lgo-btn-ok:hover { background: #a8182a; }
+.lgo-btn-cancel { background: #f3e4e5; color: #6b3a40; }
+.lgo-btn-cancel:hover { background: #ebd3d5; }
+
+.lgo-overlay {
+    position: fixed; inset: 0; z-index: 999999999;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; visibility: hidden; transition: opacity 0.35s ease;
+    color: #fff; text-align: center; overflow: hidden;
+    background:
+        radial-gradient(circle at 80% 15%, rgba(255,120,120,0.35), transparent 55%),
+        linear-gradient(160deg, #4a0a12 0%, #8f1220 60%, #c62a3a 125%);
+}
+.lgo-overlay.active { opacity: 1; visibility: visible; }
+.lgo-overlay::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background:
+        linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px) 0 0 / 44px 44px,
+        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px) 0 0 / 44px 44px;
+}
+.lgo-stage { position: relative; padding: 0 16px; }
+.lgo-title { font-size: 26px; font-weight: 700; margin: 0; }
+.lgo-sub { font-size: 14px; color: #ffd3d3; margin: 8px 0 0; }
+.lgo-road { position: relative; width: min(440px, 80vw); height: 44px; margin: 30px auto 0; border-bottom: 3px dashed rgba(255,255,255,0.35); }
+.lgo-truck { position: absolute; bottom: 2px; left: 0; }
+.lgo-truck.go { animation: lgoDrive 1.6s ease-in forwards; }
+@keyframes lgoDrive { from { left: 0; } to { left: calc(100% + 20px); } }
+.lgo-hint { font-size: 12px; color: #ffd3d3; margin-top: 22px; opacity: 0.85; }
 /* 🟢 แอนิเมชัน Login แบบใหม่ (วงกลมขยาย + เครื่องหมายถูก) */
 .login-circle-overlay {
     position: fixed;
@@ -1766,21 +1804,90 @@
 }
 .login-circle-check i { font-size: 34px; color: #0d6efd; }
 .login-circle-text { color: #fff; font-size: 15px; font-weight: 700; text-align: center; }
+
+/* 🚚 หน้าจอหลังล็อกอินแบบใหม่ (แบบ A: แดงเข้ม + รถบรรทุกวิ่ง) */
+.lgs-overlay {
+    position: fixed; inset: 0; z-index: 999999999;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; visibility: hidden; transition: opacity 0.35s ease;
+    color: #fff; text-align: center; overflow: hidden;
+    background:
+        radial-gradient(circle at 80% 15%, rgba(255,120,120,0.35), transparent 55%),
+        linear-gradient(160deg, #4a0a12 0%, #8f1220 60%, #c62a3a 125%);
+}
+.lgs-overlay.active { opacity: 1; visibility: visible; }
+.lgs-overlay::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background:
+        linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px) 0 0 / 44px 44px,
+        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px) 0 0 / 44px 44px;
+}
+.lgs-stage { position: relative; padding: 0 16px; }
+.lgs-logo {
+    width: 76px; height: 76px; border-radius: 20px; margin: 0 auto 16px;
+    background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.3);
+    display: flex; align-items: center; justify-content: center;
+}
+.lgs-title { font-size: 26px; font-weight: 700; margin: 0; }
+.lgs-title span { color: #ffb3b3; }
+.lgs-sub { font-size: 13px; color: #ffd3d3; margin: 6px 0 0; }
+.lgs-road {
+    position: relative; width: min(420px, 80vw); height: 44px; margin: 26px auto 0;
+    border-bottom: 3px dashed rgba(255,255,255,0.35);
+}
+.lgs-fill { position: absolute; left: 0; bottom: -3px; height: 3px; width: 0; background: #fff; }
+.lgs-truck { position: absolute; bottom: 2px; left: -46px; }
+.lgs-pct { font-size: 12px; color: #ffd3d3; margin-top: 14px; }
+.lgs-chk {
+    width: 84px; height: 84px; border-radius: 50%; background: #fff; margin: 0 auto 16px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 0 10px rgba(255,255,255,0.15), 0 0 0 22px rgba(255,255,255,0.07);
+    animation: lgsPop 0.45s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes lgsPop { from { transform: scale(0); } to { transform: scale(1); } }
+.lgs-welcome { font-size: 26px; font-weight: 700; margin: 0; }
+.lgs-name { font-size: 18px; font-weight: 500; margin: 8px 0 0; }
+.lgs-meta { font-size: 13px; color: #ffd3d3; margin: 6px 0 0; }
 </style>
 <body>
 <!-- ========================================= -->
 <!-- ========================================= -->
     <!-- 🚚 เอฟเฟกต์รถบรรทุกส่งของ (Truck Transition) -->
     <!-- ========================================= -->
-    <div id="login-circle-overlay" class="login-circle-overlay">
-        <div style="text-align: center;">
-            <div id="login-circle-ring" class="login-circle-ring"></div>
-            <div id="login-circle-check" class="login-circle-check"><i class="bi bi-check-lg"></i></div>
-            <div id="login-circle-text" class="login-circle-text">กำลังเข้าสู่ระบบ...</div>
-            <img id="login-circle-logo" src="https://i.ibb.co/KxttMHxc/291315-logo-20230216140112-5.jpg"
-                 style="width: 40px; height: auto; border-radius: 6px; margin-top: 14px; opacity: 0; transform: translateY(6px); transition: opacity 0.35s ease 0.15s, transform 0.35s ease 0.15s;">
+    <div id="login-circle-overlay" class="lgs-overlay">
+        <div class="lgs-stage">
+            <div id="lgs-loading">
+                <div class="lgs-logo">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4v10l-9 4-9-4V7z M3 7l9 4 9-4 M12 11v10"/></svg>
+                </div>
+                <h2 class="lgs-title">ATECH <span>FG STOCK</span></h2>
+                <p class="lgs-sub">กำลังเตรียมข้อมูลสต็อกให้คุณ...</p>
+                <div class="lgs-road">
+                    <div id="lgs-fill" class="lgs-fill"></div>
+                    <svg id="lgs-truck" class="lgs-truck" width="46" height="28" viewBox="0 0 46 28"><rect x="0" y="2" width="28" height="18" rx="3" fill="#fff"/><path d="M28 7h9l7 7v6H28z" fill="#ffd3d3"/><circle cx="10" cy="22" r="4.5" fill="#4a0a12" stroke="#fff" stroke-width="2"/><circle cx="35" cy="22" r="4.5" fill="#4a0a12" stroke="#fff" stroke-width="2"/></svg>
+                </div>
+                <div id="lgs-pct" class="lgs-pct">0%</div>
+            </div>
+            <div id="lgs-done" style="display:none;">
+                <div class="lgs-chk">
+                    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#8f1220" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>
+                </div>
+                <h2 class="lgs-welcome">ยินดีต้อนรับ</h2>
+                <p id="lgs-name" class="lgs-name"></p>
+                <p id="lgs-meta" class="lgs-meta"></p>
+            </div>
         </div>
     </div>
+<div id="logout-overlay" class="lgo-overlay">
+    <div class="lgo-stage">
+        <h2 class="lgo-title">แล้วพบกันใหม่</h2>
+        <p id="lgo-name" class="lgo-sub"></p>
+        <div class="lgo-road">
+            <svg id="lgo-truck" class="lgo-truck" width="46" height="28" viewBox="0 0 46 28"><rect x="0" y="2" width="28" height="18" rx="3" fill="#fff"/><path d="M28 7h9l7 7v6H28z" fill="#ffd3d3"/><circle cx="10" cy="22" r="4.5" fill="#4a0a12" stroke="#fff" stroke-width="2"/><circle cx="35" cy="22" r="4.5" fill="#4a0a12" stroke="#fff" stroke-width="2"/></svg>
+        </div>
+        <div class="lgo-hint">กำลังออกจากระบบ...</div>
+    </div>
+</div>
 <div id="login-page">
     <div class="atx-login">
 
@@ -5715,33 +5822,49 @@ async function handleImport(e) {
                 // 🚚 ฟังก์ชันออกจากระบบพร้อมแอนิเมชันรถบรรทุก
                 // ============================================
                 function logoutWithAnimation() {
-                    const transitionContainer = document.getElementById('truck-transition-container');
-                    const truck = document.getElementById('moving-truck');
-                    const truckText = document.getElementById('truck-transition-text');
-                    
-                    if (transitionContainer && truck && truckText) {
-                        // 1. เปลี่ยนข้อความและเรียกรถวิ่งเข้ามา
-                        truckText.innerText = "กำลังออกจากระบบ... 💨";
-                        transitionContainer.classList.add('active');
-                        truck.className = 'moving-truck drive-in'; 
-                        
-                        // 2. รอให้รถวิ่งมาจอดตรงกลาง
+                    const overlay = document.getElementById('logout-overlay');
+                    const truck = document.getElementById('lgo-truck');
+                    const nameEl = document.getElementById('lgo-name');
+
+                    if (overlay && truck) {
+                        // 1. โชว์หน้าลาก่อน + ให้รถวิ่งออกไปทางขวา
+                        if (nameEl) {
+                            const who = currentUser ? (currentUser.fullname || currentUser.username) : '';
+                            nameEl.innerText = who ? 'ขอบคุณที่ใช้งาน, ' + who : 'ขอบคุณที่ใช้งาน';
+                        }
+                        truck.classList.remove('go');
+                        void truck.getBoundingClientRect(); // รีเซ็ตแอนิเมชันให้เริ่มใหม่ทุกครั้ง
+                        overlay.classList.add('active');
+                        truck.classList.add('go');
+
+                        // 2. รอรถวิ่งพ้นจอ แล้วสลับกลับเป็นหน้า Login ด้านหลังฉาก
                         setTimeout(() => {
-                            // สลับกลับเป็นหน้า Login
-                            showLoginPage(); 
-                            
-                            // 3. สั่งให้รถวิ่งต่อไปทางขวา
-                            truck.className = 'moving-truck drive-out';
-                            
-                            // 4. รอรถวิ่งพ้นจอค่อยซ่อน Container
+                            showLoginPage();
+                            // 3. จางหน้าลาก่อนออก
                             setTimeout(() => {
-                                transitionContainer.classList.remove('active');
-                            }, 800);
-                        }, 1200);
+                                overlay.classList.remove('active');
+                                truck.classList.remove('go');
+                            }, 350);
+                        }, 1700);
                     } else {
                         showLoginPage();
                     }
                 }
+
+                // 🚪 กล่องถามยืนยันก่อนออกจากระบบ (ดีไซน์ใหม่)
+                window.confirmLogout = function() {
+                    Swal.fire({
+                        iconHtml: '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#c62a3a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>',
+                        title: 'ออกจากระบบ?',
+                        text: 'งานที่บันทึกแล้วจะไม่หาย พร้อมออกใช่ไหม',
+                        showCancelButton: true,
+                        confirmButtonText: 'ออกจากระบบ',
+                        cancelButtonText: 'ยกเลิก',
+                        reverseButtons: true,
+                        buttonsStyling: false,
+                        customClass: { popup: 'lgo-popup', confirmButton: 'lgo-btn-ok', cancelButton: 'lgo-btn-cancel' }
+                    }).then((r) => { if (r.isConfirmed) logoutWithAnimation(); });
+                };
                 function showLoginPage() {
                     stopDataSync();
                     clearTimeout(inactivityTimer);
@@ -7994,7 +8117,7 @@ window.generateVehicleReport = function(fileType) {
                 // --- ADD EVENT LISTENERS ---
                 function addEventListeners() {
                     loginForm.addEventListener('submit', handleLogin);
-                    logoutBtn.addEventListener('click', () => confirmAction(translations[currentLanguage].confirm_logout_title, '', logoutWithAnimation));
+                    logoutBtn.addEventListener('click', () => window.confirmLogout());
                     document.getElementById('refresh-stock-summary-btn').addEventListener('click', () => loadDataFromSheet(true));
                     const manualRefreshDeliveryBtn = document.getElementById('manual-refresh-delivery-btn');
                     if (manualRefreshDeliveryBtn) {
@@ -11468,22 +11591,33 @@ async function handleLogin(e) {
             // 🚀 เริ่มแอนิเมชัน Login แบบใหม่ (วงกลมขยาย + เครื่องหมายถูก)
             // ============================================
             const circleOverlay = document.getElementById('login-circle-overlay');
-            const circleRing = document.getElementById('login-circle-ring');
-            const circleCheck = document.getElementById('login-circle-check');
-            const circleText = document.getElementById('login-circle-text');
+            const lgsLoading = document.getElementById('lgs-loading');
+            const lgsDone = document.getElementById('lgs-done');
+            const lgsFill = document.getElementById('lgs-fill');
+            const lgsTruck = document.getElementById('lgs-truck');
+            const lgsPct = document.getElementById('lgs-pct');
 
-            const circleLogo = document.getElementById('login-circle-logo');
-
-            if (circleOverlay && circleRing && circleCheck && circleText) {
-                // 1. โชว์วงกลมพร้อมวงแหวนหมุน (ยังไม่โชว์โลโก้ช่วงนี้)
-                circleRing.style.display = 'block';
-                circleCheck.style.display = 'none';
-                circleCheck.style.transform = 'scale(0)';
-                circleText.innerText = 'กำลังเข้าสู่ระบบ...';
-                if (circleLogo) { circleLogo.style.opacity = '0'; circleLogo.style.transform = 'translateY(6px)'; }
+            if (circleOverlay && lgsLoading && lgsDone) {
+                // 1. โชว์หน้าโหลด ให้รถบรรทุกวิ่งตามเปอร์เซ็นต์
+                const setProgress = (p) => {
+                    if (lgsFill) lgsFill.style.width = p + '%';
+                    if (lgsTruck) lgsTruck.style.left = 'calc(' + p + '% - 46px)';
+                    if (lgsPct) lgsPct.innerText = p + '%';
+                };
+                lgsLoading.style.display = 'block';
+                lgsDone.style.display = 'none';
+                setProgress(0);
                 circleOverlay.classList.add('active');
 
-                // 2. รอ 0.9 วิ ให้ดูเป็นการ "ตรวจสอบ" อยู่จริง แล้วเปลี่ยนเป็นเครื่องหมายถูก
+                const t0 = performance.now();
+                const tick = (now) => {
+                    const p = Math.min(100, Math.round((now - t0) / 900 * 100));
+                    setProgress(p);
+                    if (p < 100) requestAnimationFrame(tick);
+                };
+                requestAnimationFrame(tick);
+
+                // 2. ครบแล้วเปลี่ยนเป็นเครื่องหมายถูก + ยินดีต้อนรับ
                 setTimeout(() => {
                     sessionStorage.setItem('currentUser', JSON.stringify(foundUser));
                     checkLoginState();
@@ -11492,18 +11626,26 @@ async function handleLogin(e) {
                         document.getElementById('floating-mascot-container').classList.remove('d-none');
                     }
 
-                    circleRing.style.display = 'none';
-                    circleCheck.style.display = 'flex';
-                    requestAnimationFrame(() => { circleCheck.style.transform = 'scale(1)'; });
-                    circleText.innerText = 'ยินดีต้อนรับ, ' + foundUser.username;
-                    if (circleLogo) { circleLogo.style.opacity = '1'; circleLogo.style.transform = 'translateY(0)'; }
+                    const nameEl = document.getElementById('lgs-name');
+                    const metaEl = document.getElementById('lgs-meta');
+                    if (nameEl) nameEl.innerText = foundUser.fullname || foundUser.username;
+                    if (metaEl) {
+                        const dateTh = new Date().toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                        metaEl.innerText = 'สิทธิ์: ' + (foundUser.role || '-') + ' · ' + dateTh;
+                    }
+                    lgsLoading.style.display = 'none';
+                    lgsDone.style.display = 'block';
 
-                    // 3. รอโชว์เครื่องหมายถูกอีก 1.1 วิ แล้วค่อยจางหายไป
+                    // 3. โชว์ต้อนรับ 1.4 วิ แล้วค่อยจางหายไป
                     setTimeout(() => {
                         circleOverlay.classList.remove('active');
-                    }, 1100);
+                    }, 1400);
 
-                }, 900);
+                }, 950);
+            } else {
+                // กันเหนียว: ถ้าหาหน้าจอแอนิเมชันไม่เจอ ก็ให้เข้าระบบตามปกติ
+                sessionStorage.setItem('currentUser', JSON.stringify(foundUser));
+                checkLoginState();
             }
     } else {
         if (errorMsg) errorMsg.classList.remove('d-none');
