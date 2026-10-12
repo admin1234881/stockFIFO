@@ -2980,6 +2980,9 @@
                             <button type="button" class="btn btn-dark fw-bold ms-2" onclick="window.printLGTags()">
                                 <i class="bi bi-printer-fill me-1"></i> ปริ้นแท็ก
                             </button>
+                                <button type="button" id="lg-tagcheck-btn" class="btn btn-outline-danger fw-bold ms-2" style="display:none;" onclick="window.showLGTagCheck()">
+                                <i class="bi bi-clipboard2-check-fill me-1"></i> เช็คแท็กค้างสแกน
+                            </button>
                         </div>
                     </div>
                                             <!-- 🟢 ฟอร์มเพิ่มแพลน LG แบบคีย์ในหน้า -->
@@ -5523,7 +5526,144 @@ async function init() {
                         showLoginPage();
                     }
                 }
+// 📦 แอนิเมชันรับเข้าสินค้า: รถถอยเทียบคลัง → เปิดตู้ → กล่องสินค้าเข้าชั้นวาง → ปิดตู้ → รถออก
+// row = กล่องที่ครอบปุ่ม "บันทึกการรับเข้า"  info = { productId, total, lots }
+window.__riPlayImportAnim = function(row, info) {
+    return new Promise(resolve => {
+        if (!row) { resolve(); return; }
+        const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+        if (!document.getElementById('ri-anim-css')) {
+            const st = document.createElement('style');
+            st.id = 'ri-anim-css';
+            st.textContent = `
+            .ri-wrap{width:100%}
+            .ri-chip{display:table;margin:0 auto 6px;background:#eef4ff;border:1px solid #bcd3ee;border-radius:999px;padding:4px 12px;font-size:.8rem;font-weight:700;color:#1e3a8a;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+            .ri-chip b{color:#0d6efd}
+            .ri-scene{position:relative;height:92px;border-radius:12px;overflow:hidden;background:linear-gradient(180deg,#bfdbfe 0%,#e0f2fe 60%,#f0f9ff 100%);border:1px solid #bcd3ee}
+            .ri-svg{position:absolute;left:0;top:0;width:100%;height:92px;overflow:visible}
+            .ri-truck{animation:ri-back .8s cubic-bezier(.2,.7,.3,1) 0s backwards,ri-leave .8s cubic-bezier(.55,0,.85,.55) var(--leave) forwards}
+            @keyframes ri-back{from{transform:translateX(330px)}to{transform:translateX(0)}}
+            @keyframes ri-leave{from{transform:translateX(0)}to{transform:translateX(330px)}}
+            .ri-ride{animation:ri-back .8s cubic-bezier(.2,.7,.3,1) 0s backwards}
+            .ri-hopbox{transform-box:fill-box;transform-origin:50% 50%;animation:ri-hop .5s cubic-bezier(.4,.1,.3,1) both}
+            @keyframes ri-hop{
+                0%{transform:translate(0,0) rotate(0)}
+                45%{transform:translate(calc(var(--x1)*.5),calc(var(--y1)*.3 - 40px)) rotate(-8deg)}
+                85%{transform:translate(var(--x1),calc(var(--y1) + 2px)) rotate(2deg)}
+                100%{transform:translate(var(--x1),var(--y1)) rotate(0)}
+            }
+            .ri-wheel{transform-box:fill-box;transform-origin:50% 50%;animation:ri-spinr .4s linear 0s 2,ri-spin .32s linear var(--leave) infinite}
+            @keyframes ri-spinr{to{transform:rotate(-360deg)}}
+            @keyframes ri-spin{to{transform:rotate(360deg)}}
+            .ri-shut{transform-box:fill-box;transform-origin:50% 0;animation:ri-up .35s ease-in-out var(--up) both,ri-down .3s ease-in-out var(--down) forwards}
+            @keyframes ri-up{from{transform:scaleY(1)}to{transform:scaleY(.05)}}
+            @keyframes ri-down{from{transform:scaleY(.05)}to{transform:scaleY(1)}}
+            .ri-rev{opacity:0;animation:ri-blink .2s steps(1) 0s 4}
+            @keyframes ri-blink{0%{opacity:1}50%{opacity:.15}}
+            .ri-dash{animation:ri-dashr .4s linear 0s 2,ri-dashf .4s linear var(--leave) infinite}
+            @keyframes ri-dashr{to{stroke-dashoffset:-26}}
+            @keyframes ri-dashf{to{stroke-dashoffset:26}}
+            .ri-dust{opacity:0;transform-box:fill-box;transform-origin:50% 50%;animation:ri-dustk .7s ease-out var(--leave) infinite}
+            @keyframes ri-dustk{0%{opacity:.7;transform:translate(0,0) scale(.4)}100%{opacity:0;transform:translate(-26px,-10px) scale(1.5)}}
+            .ri-ok{position:absolute;left:74%;top:46%;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;background:#22c55e;box-shadow:0 5px 14px rgba(34,197,94,.45);display:flex;align-items:center;justify-content:center;transform:scale(0);animation:ri-pop .45s cubic-bezier(.3,1.6,.5,1) var(--ok) forwards;z-index:6}
+            @keyframes ri-pop{to{transform:scale(1)}}
+            .ri-caps{position:relative;height:22px;margin-top:6px;text-align:center}
+            .ri-caps span{position:absolute;left:0;right:0;top:0;font-weight:700;font-size:.82rem;color:#334155;opacity:0}
+            .ri-caps span.ri-in{animation:ri-cin .25s ease var(--s) forwards}
+            .ri-caps span.ri-out{animation:ri-cin .25s ease var(--s) forwards,ri-cout .22s ease var(--e) forwards}
+            .ri-caps span.ri-done{color:#15803d}
+            @keyframes ri-cin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+            @keyframes ri-cout{to{opacity:0;transform:translateY(-6px)}}
+            `;
+            document.head.appendChild(st);
+        }
+
+        const n = Math.max(1, Math.min(6, parseInt(info && info.lots) || 1));
+        const tUp = 0.85, tHop0 = 1.2, step = 0.14, flight = 0.5;
+        const tHopEnd = tHop0 + step * (n - 1) + flight;
+        const tDown = tHopEnd + 0.05;
+        const tLeave = tDown + 0.35;
+        const tDone = tLeave + 0.65;
+        const total = tDone + 0.5;
+
+        // ตำแหน่งกล่องในตู้รถ → ตำแหน่งบนชั้นวางในคลัง
+        const truckSlots = [[14,58],[46,58],[78,58],[110,58],[30,30],[62,30]];
+        const shelfSlots = [[-200,84],[-166,84],[-132,84],[-98,84],[-183,56],[-149,56]];
+        let boxes = '';
+        for (let k = 0; k < n; k++) {
+            const f = truckSlots[k], s = shelfSlots[k];
+            // กล่องที่อยู่ตำแหน่งบน (k>=4) หยิบออกก่อน เพื่อให้ดูสมจริง
+            const order = (k >= 4) ? (k - 4) : (k + (n > 4 ? 2 : 0));
+            boxes += `<g class="ri-ride" style="--leave:${tLeave.toFixed(2)}s"><g class="ri-hopbox" style="--x1:${s[0] - f[0]}px;--y1:${s[1] - f[1]}px;animation-delay:${(tHop0 + step * order).toFixed(2)}s">
+                <rect x="${f[0]}" y="${f[1]}" width="28" height="28" rx="2" fill="#d9a066" stroke="#a8703a" stroke-width="1.2"/>
+                <rect x="${f[0] + 11}" y="${f[1]}" width="6" height="28" fill="#f3dfbf" opacity=".75"/>
+                <rect x="${f[0] + 3}" y="${f[1] + 18}" width="9" height="6" rx="1" fill="#fff" opacity=".85"/>
+            </g></g>`;
+        }
+        const wheel = (cx) => `<g class="ri-wheel"><circle cx="${cx}" cy="108" r="12" fill="#111827"/><circle cx="${cx}" cy="108" r="6" fill="#cbd5e1"/><line x1="${cx}" y1="99" x2="${cx}" y2="117" stroke="#64748b" stroke-width="2"/><line x1="${cx - 9}" y1="108" x2="${cx + 9}" y2="108" stroke="#64748b" stroke-width="2"/></g>`;
+
+        const svg = `
+        <svg class="ri-svg" viewBox="-232 -2 482 132" preserveAspectRatio="xMidYMax meet" style="--leave:${tLeave.toFixed(2)}s;--up:${tUp}s;--down:${tDown.toFixed(2)}s">
+            <!-- ถนน -->
+            <rect x="-700" y="119" width="1500" height="40" fill="#475569"/>
+            <rect x="-700" y="119" width="1500" height="2.5" fill="#94a3b8"/>
+            <line class="ri-dash" x1="-700" x2="800" y1="126" y2="126" stroke="#fde68a" stroke-width="2.2" stroke-dasharray="13 13"/>
+            <!-- คลังสินค้า + ชั้นวาง -->
+            <rect x="-226" y="20" width="218" height="99" rx="3" fill="#e8edf5" stroke="#94a3b8" stroke-width="1.5"/>
+            <rect x="-226" y="20" width="218" height="19" rx="3" fill="#0d6efd"/>
+            <rect x="-226" y="30" width="218" height="9" fill="#0d6efd"/>
+            <text x="-216" y="34" font-size="10" font-weight="800" fill="#fff" font-family="Arial,sans-serif" letter-spacing="1">WAREHOUSE · FG</text>
+            <rect x="-216" y="46" width="198" height="73" fill="#1e293b"/>
+            <rect x="-214" y="84" width="194" height="3" fill="#a16207"/>
+            <rect x="-214" y="112" width="194" height="3.5" fill="#a16207"/>
+            <rect x="-216" y="46" width="3" height="73" fill="#f59e0b"/><rect x="-21" y="46" width="3" height="73" fill="#f59e0b"/>
+            <!-- ตัวถังรถ (ถอยเข้า) -->
+            <g class="ri-truck" style="--leave:${tLeave.toFixed(2)}s">
+                <ellipse cx="113" cy="121" rx="118" ry="4" fill="#000" opacity=".16"/>
+                <rect x="0" y="0" width="148" height="97" rx="5" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+                <rect x="0" y="0" width="148" height="16" rx="5" fill="#0d6efd"/>
+                <rect x="0" y="9" width="148" height="7" fill="#0d6efd"/>
+                <text x="12" y="12.5" font-size="10" font-weight="800" fill="#fff" font-family="Arial,sans-serif" letter-spacing="1">ATECH</text>
+                <rect x="8" y="20" width="132" height="70" fill="#1e293b"/>
+            </g>
+            ${boxes}
+            <g class="ri-truck" style="--leave:${tLeave.toFixed(2)}s">
+                <g class="ri-shut">
+                    <rect x="8" y="20" width="132" height="70" fill="#94a3b8"/>
+                    <g stroke="#7b8aa0" stroke-width="1.4"><line x1="8" y1="30" x2="140" y2="30"/><line x1="8" y1="40" x2="140" y2="40"/><line x1="8" y1="50" x2="140" y2="50"/><line x1="8" y1="60" x2="140" y2="60"/><line x1="8" y1="70" x2="140" y2="70"/><line x1="8" y1="80" x2="140" y2="80"/></g>
+                    <rect x="62" y="82" width="24" height="5" rx="2" fill="#475569"/>
+                </g>
+                <path d="M150 38 L188 38 Q198 38 204 50 L222 70 Q227 75 227 82 L227 97 L150 97 Z" fill="#0d6efd" stroke="#0a58ca" stroke-width="1.2"/>
+                <path d="M160 46 L184 46 Q190 46 194 54 L206 70 L160 70 Z" fill="#bfdbfe"/>
+                <rect x="150" y="38" width="3" height="59" fill="#0a58ca"/>
+                <rect x="219" y="82" width="9" height="7" rx="2" fill="#fde047"/>
+                <rect x="-2" y="96" width="232" height="8" rx="3" fill="#1e293b"/>
+                <rect class="ri-rev" x="-5" y="80" width="6" height="10" rx="1.5" fill="#fff"/>
+                <circle class="ri-rev" cx="-5" cy="85" r="7" fill="#fff" opacity=".35"/>
+                ${wheel(38)}${wheel(104)}${wheel(188)}
+                <circle class="ri-dust" cx="-6" cy="112" r="7" fill="#e5e7eb" style="animation-delay:${tLeave.toFixed(2)}s"/>
+                <circle class="ri-dust" cx="-6" cy="112" r="6" fill="#e5e7eb" style="animation-delay:${(tLeave + 0.22).toFixed(2)}s"/>
+            </g>
+        </svg>`;
+
+        const caps = [
+            ['ri-out', 0.05, tUp + 0.2, 'รถกำลังถอยเทียบท่าคลัง...'],
+            ['ri-out', tUp + 0.25, tDown, `กำลังนำสินค้าเข้าชั้นวาง...`],
+            ['ri-out', tDown + 0.05, tDone - 0.2, 'ปิดตู้ รถออกจากคลัง...'],
+            ['ri-in ri-done', tDone + 0.05, 0, `✔ รับเข้าคลังเรียบร้อย +${esc(Number(info.total).toLocaleString())} ชิ้น`]
+        ].map(c => `<span class="${c[0]}" style="--s:${c[1].toFixed(2)}s;--e:${(c[2] - 0.1).toFixed(2)}s">${c[3]}</span>`).join('');
+
+        const chip = `<div class="ri-chip">รับเข้า <b>${esc(info.productId)}</b> · <b>${esc(Number(info.total).toLocaleString())}</b> ชิ้น · ${esc(info.lots)} ล็อต</div>`;
+        const html = `<div class="ri-wrap">${chip}<div class="ri-scene">${svg}<div class="ri-ok" style="--ok:${(tDone - 0.05).toFixed(2)}s"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div></div><div class="ri-caps">${caps}</div></div>`;
+
+        Array.from(row.children).forEach(c => { c.style.display = 'none'; });
+        row.style.display = 'block';
+        row.insertAdjacentHTML('beforeend', html);
+
+        setTimeout(resolve, Math.round(total * 1000));
+    });
+};
 async function handleImport(e) {
     e.preventDefault();
     const T = translations[currentLanguage];
@@ -5614,11 +5754,23 @@ async function handleImport(e) {
         }
     }
 
+   // 🔒 กันกดซ้ำระหว่างเล่นแอนิเมชัน
+    if (window.__importBusy) return;
+    window.__importBusy = true;
+    setTimeout(() => { window.__importBusy = false; }, 15000);
+
     // --- 1. บันทึกข้อมูลและอัปเดตสต็อก ---
     newHistoryEntries.forEach(entry => db.history.unshift(entry));
     calculateStockFromHistory();
     populateAll();
-    showSuccess(T.import_success.replace('{name}', productName));
+    // 🚚 เล่นแอนิเมชันรับเข้า (ถ้าไม่มีก็ข้าม)
+    try {
+        const __riRow = (document.querySelector('#import-form button[type="submit"]') || {}).parentElement;
+        if (typeof window.__riPlayImportAnim === 'function') {
+            await window.__riPlayImportAnim(__riRow, { productId: productId, total: totalImportQuantity, lots: newHistoryEntries.length });
+        }
+    } catch (animErr) { console.warn('import animation skipped', animErr); }
+    window.__importBusy = false;
 
     // --- 2. ล้างช่องฟอร์มกรอกด้านบน ---
     renderImportForm();
@@ -5975,6 +6127,8 @@ clearInterval(window.mascotLoopTimer);
         if (document.getElementById('nav-lot-hold-item')) document.getElementById('nav-lot-hold-item').style.display = canManageLotHold ? '' : 'none';
         const canManageSupport = isMasterAdmin || currentUser.canManageSupport;
         if (document.getElementById('nav-support-item')) document.getElementById('nav-support-item').style.display = canManageSupport ? '' : 'none';
+        const canCheckLGTags = isMasterAdmin || currentUser.canCheckLGTags === true || String(currentUser.canCheckLGTags).toUpperCase() === 'TRUE';
+        if (document.getElementById('lg-tagcheck-btn')) document.getElementById('lg-tagcheck-btn').style.display = canCheckLGTags ? '' : 'none';
         if (document.getElementById('nav-archive-item')) document.getElementById('nav-archive-item').style.display = isMasterAdmin ? '' : 'none';
  // 3. จัดการปุ่มดาวน์โหลดสำรองข้อมูลแบบใหม่ (Dropdown)
         const backupDropdown = document.getElementById('backup-dropdown-container');
@@ -9449,6 +9603,183 @@ async function callAppsScriptWithRetry(action, payload, maxRetries = 2) {
     }
     throw lastError;
 }
+// 🚚 แอนิเมชันปล่อยรถ: เปิดตู้ → กล่องชิ้นงานเข้าหลังรถ → ปิดตู้ → รถวิ่งออกไป (อยู่ในกรอบ)
+window.__rlPlayTruckAnim = function(plate, customer, partCount, mode) {
+    const mini = (mode !== 'big');
+    return new Promise(resolve => {
+        const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+        if (!document.getElementById('rl-anim-css')) {
+            const st = document.createElement('style');
+            st.id = 'rl-anim-css';
+            st.textContent = `
+            .rl-scene{position:relative;height:236px;border-radius:16px;overflow:hidden;background:linear-gradient(180deg,#bfdbfe 0%,#e0f2fe 58%,#f0f9ff 100%);border:1px solid #bcd3ee;box-shadow:inset 0 -2px 6px rgba(0,0,0,.06)}
+            .rl-chip{position:absolute;left:12px;top:10px;z-index:5;background:rgba(255,255,255,.92);border-radius:999px;padding:4px 12px;font-size:.78rem;font-weight:700;color:#1e3a8a;box-shadow:0 1px 4px rgba(0,0,0,.12);max-width:calc(100% - 24px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+            .rl-chip b{color:#c8102e}
+            .rl-cloud{position:absolute;background:#fff;border-radius:999px;opacity:.85;animation:rl-cloud 14s linear infinite}
+            .rl-cloud::after{content:"";position:absolute;left:18%;top:-45%;width:48%;height:130%;background:#fff;border-radius:50%}
+            @keyframes rl-cloud{from{transform:translateX(0)}to{transform:translateX(-80px)}}
+            .rl-ground{position:absolute;left:0;right:0;bottom:0;height:46px;background:#475569;border-top:4px solid #94a3b8}
+            .rl-road{position:absolute;left:0;right:0;top:20px;height:4px;background:repeating-linear-gradient(90deg,#fde68a 0 26px,transparent 26px 52px);background-size:52px 4px}
+            .rl-svg{position:absolute;left:160px;bottom:32px;width:300px;height:162px;overflow:visible}
+            .rl-truck{animation:rl-go 1s cubic-bezier(.55,0,.85,.55) var(--go) forwards}
+            @keyframes rl-go{from{transform:translateX(0)}to{transform:translateX(var(--out,360px))}}
+            .rl-body{animation:rl-bob .22s ease-in-out var(--rum) infinite alternate}
+            @keyframes rl-bob{from{transform:translateY(0)}to{transform:translateY(-1.4px)}}
+            .rl-wheel{transform-box:fill-box;transform-origin:50% 50%;animation:rl-spin .32s linear var(--go) infinite}
+            @keyframes rl-spin{to{transform:rotate(360deg)}}
+            .rl-shut{transform-box:fill-box;transform-origin:50% 0;animation:rl-up .45s ease-in-out var(--up) both,rl-down .4s ease-in-out var(--down) forwards}
+            @keyframes rl-up{from{transform:scaleY(1)}to{transform:scaleY(.05)}}
+            @keyframes rl-down{from{transform:scaleY(.05)}to{transform:scaleY(1)}}
+            .rl-box{animation:rl-in .55s cubic-bezier(.4,.1,.3,1) both}
+            @keyframes rl-in{
+                0%{transform:translate(var(--x0),var(--y0)) rotate(0)}
+                45%{transform:translate(calc(var(--x0)*.45),calc(var(--y0)*.4 - 34px)) rotate(-7deg)}
+                85%{transform:translate(0,2px) rotate(2deg)}
+                100%{transform:translate(0,0) rotate(0)}
+            }
+            .rl-beam{opacity:0;animation:rl-beam .3s ease var(--go) forwards}
+            @keyframes rl-beam{to{opacity:.55}}
+            .rl-dust{opacity:0;transform-box:fill-box;transform-origin:50% 50%;animation:rl-dust .7s ease-out infinite}
+            @keyframes rl-dust{0%{opacity:.7;transform:translate(0,0) scale(.4)}100%{opacity:0;transform:translate(-26px,-10px) scale(1.5)}}
+            .rl-ok{position:absolute;left:50%;top:46%;width:74px;height:74px;margin:-37px 0 0 -37px;border-radius:50%;background:#22c55e;box-shadow:0 6px 18px rgba(34,197,94,.45);display:flex;align-items:center;justify-content:center;transform:scale(0);animation:rl-pop .45s cubic-bezier(.3,1.6,.5,1) var(--ok) forwards;z-index:6}
+            @keyframes rl-pop{to{transform:scale(1)}}
+            .rl-caps{position:relative;height:30px;margin-top:10px;text-align:center}
+            .rl-caps span{position:absolute;left:0;right:0;top:0;font-weight:700;font-size:.95rem;color:#334155;opacity:0}
+            .rl-caps span.rl-in{animation:rl-cin .25s ease var(--s) forwards}
+            .rl-caps span.rl-out{animation:rl-cin .25s ease var(--s) forwards,rl-cout .22s ease var(--e) forwards}
+            .rl-caps span.rl-done{color:#15803d;font-size:1.05rem}
+            @keyframes rl-cin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+            @keyframes rl-cout{to{opacity:0;transform:translateY(-6px)}}
+
+            .rl-mini{height:84px;width:360px;max-width:100%;margin:0 auto;border-radius:12px}
+            .rl-mini .rl-cloud{display:none}
+            .rl-chipm{display:table;margin:2px auto 8px;background:#eef4ff;border:1px solid #bcd3ee;border-radius:999px;padding:5px 14px;font-size:.85rem;font-weight:700;color:#1e3a8a;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+            .rl-chipm b{color:#c8102e}
+            .rl-mini .rl-ground{height:16px;border-top-width:2px}
+            .rl-mini .rl-road{top:6px;height:2px;background:repeating-linear-gradient(90deg,#fde68a 0 12px,transparent 12px 26px);background-size:52px 2px}
+            .rl-mini .rl-svg{left:100px;bottom:10.5px;width:126px;height:68px}
+            .rl-mini .rl-ok{width:40px;height:40px;margin:-20px 0 0 -20px;top:46%}
+            .rl-mini .rl-ok svg{width:22px;height:22px}
+            .rl-capsm{height:22px !important;margin-top:6px !important}
+            .rl-capsm span{font-size:.82rem !important}
+            `;
+            document.head.appendChild(st);
+        }
+
+        const n = Math.max(1, Math.min(6, parseInt(partCount) || 1));
+        const tUp = 0.35, tBox0 = 0.9, step = 0.2, flight = 0.55;
+        const tBoxEnd = tBox0 + step * (n - 1) + flight;
+        const tDown = tBoxEnd + 0.1;
+        const tGo = tDown + 0.5;
+        const tDone = tGo + 0.95;
+        const total = tDone + 0.6;
+
+        // ตำแหน่งกล่องในตู้ (ลำดับวางจากแถวล่างขึ้นบน) และตำแหน่งกองบนพาเลท
+        const finalSlots = [[14,58],[46,58],[78,58],[110,58],[30,30],[62,30]];
+        const pileSlots  = [[-116,84],[-84,84],[-52,84],[-100,56],[-68,56],[-84,28]];
+        let boxes = '';
+        for (let k = 0; k < n; k++) {
+            const idx = n - 1 - k;                  // หยิบจากกองด้านบนก่อน
+            const f = finalSlots[idx], p = pileSlots[idx];
+            const x0 = p[0] - f[0], y0 = p[1] - f[1];
+            boxes += `<g class="rl-box" style="--x0:${x0}px;--y0:${y0}px;animation-delay:${(tBox0 + step * k).toFixed(2)}s">
+                <rect x="${f[0]}" y="${f[1]}" width="28" height="28" rx="2" fill="#d9a066" stroke="#a8703a" stroke-width="1.2"/>
+                <rect x="${f[0] + 11}" y="${f[1]}" width="6" height="28" fill="#f3dfbf" opacity=".75"/>
+                <rect x="${f[0] + 3}" y="${f[1] + 18}" width="9" height="6" rx="1" fill="#fff" opacity=".85"/>
+            </g>`;
+        }
+
+        const svg = `
+        <svg class="rl-svg" viewBox="0 0 240 130" style="--out:${mini ? "540px" : "360px"};--go:${tGo.toFixed(2)}s;--up:${tUp}s;--down:${tDown.toFixed(2)}s;--rum:${(tGo - 0.35).toFixed(2)}s">
+            <rect x="-124" y="112" width="104" height="7" rx="1.5" fill="#a16207"/>
+            <rect x="-120" y="119" width="12" height="4" fill="#854d0e"/><rect x="-76" y="119" width="12" height="4" fill="#854d0e"/><rect x="-34" y="119" width="12" height="4" fill="#854d0e"/>
+            <g class="rl-truck">
+                <ellipse cx="113" cy="121" rx="118" ry="4" fill="#000" opacity=".16"/>
+                <g class="rl-body">
+                    <rect x="0" y="0" width="148" height="97" rx="5" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+                    <rect x="0" y="0" width="148" height="16" rx="5" fill="#0d6efd"/>
+                    <rect x="0" y="9" width="148" height="7" fill="#0d6efd"/>
+                    <text x="12" y="12.5" font-size="10" font-weight="800" fill="#fff" font-family="Arial,sans-serif" letter-spacing="1">ATECH</text>
+                    <rect x="8" y="20" width="132" height="70" fill="#1e293b"/>
+                    ${boxes}
+                    <g class="rl-shut">
+                        <rect x="8" y="20" width="132" height="70" fill="#94a3b8"/>
+                        <g stroke="#7b8aa0" stroke-width="1.4"><line x1="8" y1="30" x2="140" y2="30"/><line x1="8" y1="40" x2="140" y2="40"/><line x1="8" y1="50" x2="140" y2="50"/><line x1="8" y1="60" x2="140" y2="60"/><line x1="8" y1="70" x2="140" y2="70"/><line x1="8" y1="80" x2="140" y2="80"/></g>
+                        <rect x="62" y="82" width="24" height="5" rx="2" fill="#475569"/>
+                    </g>
+                    <path d="M150 38 L188 38 Q198 38 204 50 L222 70 Q227 75 227 82 L227 97 L150 97 Z" fill="#0d6efd" stroke="#0a58ca" stroke-width="1.2"/>
+                    <path d="M160 46 L184 46 Q190 46 194 54 L206 70 L160 70 Z" fill="#bfdbfe"/>
+                    <rect x="150" y="38" width="3" height="59" fill="#0a58ca"/>
+                    <rect x="219" y="82" width="9" height="7" rx="2" fill="#fde047"/>
+                    <polygon class="rl-beam" points="228,83 262,72 262,98" fill="#fde047"/>
+                    <rect x="-1" y="84" width="4" height="8" rx="1" fill="#ef4444"/>
+                    <rect x="-2" y="96" width="232" height="8" rx="3" fill="#1e293b"/>
+                </g>
+                <g class="rl-wheel"><circle cx="38" cy="108" r="12" fill="#111827"/><circle cx="38" cy="108" r="6" fill="#cbd5e1"/><line x1="38" y1="99" x2="38" y2="117" stroke="#64748b" stroke-width="2"/><line x1="29" y1="108" x2="47" y2="108" stroke="#64748b" stroke-width="2"/></g>
+                <g class="rl-wheel"><circle cx="104" cy="108" r="12" fill="#111827"/><circle cx="104" cy="108" r="6" fill="#cbd5e1"/><line x1="104" y1="99" x2="104" y2="117" stroke="#64748b" stroke-width="2"/><line x1="95" y1="108" x2="113" y2="108" stroke="#64748b" stroke-width="2"/></g>
+                <g class="rl-wheel"><circle cx="188" cy="108" r="12" fill="#111827"/><circle cx="188" cy="108" r="6" fill="#cbd5e1"/><line x1="188" y1="99" x2="188" y2="117" stroke="#64748b" stroke-width="2"/><line x1="179" y1="108" x2="197" y2="108" stroke="#64748b" stroke-width="2"/></g>
+                <circle class="rl-dust" cx="-6" cy="112" r="7" fill="#e5e7eb" style="animation-delay:${tGo.toFixed(2)}s"/>
+                <circle class="rl-dust" cx="-6" cy="112" r="6" fill="#e5e7eb" style="animation-delay:${(tGo + 0.22).toFixed(2)}s"/>
+                <circle class="rl-dust" cx="-6" cy="112" r="8" fill="#e5e7eb" style="animation-delay:${(tGo + 0.45).toFixed(2)}s"/>
+            </g>
+        </svg>`;
+
+        const caps = [
+            ['rl-out', 0.05, tBox0 - 0.1, 'กำลังเปิดตู้...'],
+            ['rl-out', tBox0 - 0.05, tDown - 0.05, `กำลังโหลดสินค้า ${n} กล่องเข้าตู้...`],
+            ['rl-out', tDown, tGo - 0.05, 'ปิดตู้ ตรวจความเรียบร้อย'],
+            ['rl-out', tGo, tDone - 0.2, 'รถกำลังออกเดินทาง...'],
+            ['rl-in rl-done', tDone + 0.05, 0, '✔ ปล่อยรถเรียบร้อย']
+        ].map(c => `<span class="${c[0]}" style="--s:${c[1].toFixed(2)}s;--e:${(c[2] - 0.1).toFixed(2)}s">${c[3]}</span>`).join('');
+
+        const chipHtml = `<div class="rl-chipm">ทะเบียน <b>${esc(plate)}</b> · ${esc(customer)} · <b>${esc(partCount)}</b> พาร์ท</div>`;
+        const scene = `
+        ${mini ? chipHtml : ''}
+        <div class="rl-scene${mini ? ' rl-mini' : ''}">
+            ${mini ? '' : chipHtml.replace('rl-chipm', 'rl-chip')}
+            <div class="rl-cloud" style="left:40px;top:44px;width:54px;height:14px"></div>
+            <div class="rl-cloud" style="left:330px;top:62px;width:70px;height:16px;animation-duration:19s"></div>
+            <div class="rl-ground"><div class="rl-road" style="animation:none"></div></div>
+            ${svg}
+            <div class="rl-ok" style="--ok:${(tDone - 0.05).toFixed(2)}s"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+        </div>
+        <div class="rl-caps${mini ? ' rl-capsm' : ''}">${caps}</div>`;
+
+        // ถนนวิ่งตอนรถออกตัว
+        const sw = (window.Swal);
+        let box;
+        if (mini) {
+            // 🟢 แบบแถบเล็ก: แทนที่ปุ่ม "ปล่อยรถ & บันทึก / ยกเลิก" ด้วยฉากรถ (ฟอร์มด้านบนจางลง)
+            const acts = sw.getActions();
+            acts.style.display = 'block';
+            acts.style.width = '100%';
+            Array.from(acts.children).forEach(c => { c.style.display = 'none'; });
+            acts.insertAdjacentHTML('beforeend', scene);
+            const hc = sw.getHtmlContainer();
+            if (hc) { hc.style.transition = 'opacity .3s'; hc.style.opacity = '.45'; hc.style.pointerEvents = 'none'; }
+            box = acts;
+        } else {
+            if (sw.getTitle()) sw.getTitle().innerHTML = '<h3 class="fw-bolder mb-0 mt-2">กำลังปล่อยรถ...</h3>';
+            if (sw.getActions()) sw.getActions().style.display = 'none';
+            if (sw.getCloseButton && sw.getCloseButton()) sw.getCloseButton().style.display = 'none';
+            box = sw.getHtmlContainer();
+            box.style.overflow = 'visible';
+            box.innerHTML = scene;
+        }
+
+        // ให้เส้นถนนวิ่งเมื่อรถออกตัว
+        const road = box.querySelector('.rl-road');
+        if (road) road.style.animation = `rl-roadmove .45s linear ${tGo.toFixed(2)}s infinite`;
+        if (!document.getElementById('rl-road-kf')) {
+            const k = document.createElement('style'); k.id = 'rl-road-kf';
+            k.textContent = '@keyframes rl-roadmove{to{background-position:-52px 0}}';
+            document.head.appendChild(k);
+        }
+
+        setTimeout(resolve, Math.round(total * 1000));
+    });
+};
 // 🟢 2. ฟังก์ชันปล่อยรถ (แก้บั๊ก Error โค้ด และเพิ่มระบบดักจับ "ทะเบียนรถกำลังวิ่ง")
 window.releaseGroupVehicle = async function(date, displayTime, customer) {
     const safeDate = typeof formatDate === 'function' ? formatDate(date) : date;
@@ -9591,7 +9922,10 @@ window.releaseGroupVehicle = async function(date, displayTime, customer) {
             }
 
             if (hasDeliveryItems && !inv) { Swal.showValidationMessage('กรุณาระบุเลขที่ Invoice สำหรับตัดสต็อก'); return false; }
-            return { licensePlate: plate, invoiceNumber: inv };
+            // 🚚 เล่นแอนิเมชันรถปล่อยออกจากกรอบ แล้วค่อยบันทึก (ถ้าแอนิเมชันมีปัญหาก็ข้ามไปบันทึกตามปกติ)
+            return window.__rlPlayTruckAnim(plate, safeCustomer, plansToUpdate.length, 'mini')
+                .catch(function () {})
+                .then(function () { return { licensePlate: plate, invoiceNumber: inv }; });
         }
     });
 
@@ -12543,7 +12877,8 @@ const permissions = [
                         { key: 'canManageRack', label: 'ระบบจัดการ Rack (แพ็คกิ้ง)' },
                         { key: 'canForecast', label: 'อัปโหลด Forecast' },
                         { key: 'canManageLotHold', label: 'ตรวจสอบ/ปลดล็อกล็อตค้าง (Q)' },
-                        { key: 'canManageSupport', label: 'ดูรายการแจ้งปัญหาการใช้งาน' }
+                        { key: 'canManageSupport', label: 'ดูรายการแจ้งปัญหาการใช้งาน' },
+                        { key: 'canCheckLGTags', label: 'เช็คแท็ก LG ที่ยังไม่สแกน' }
                     ];
                     let permissionsHtml = permissions.map(p => `
                 <div class="form-check form-switch">
@@ -14041,6 +14376,31 @@ window.printLGTags = async function() {
             }
             Swal.close();
 
+            // 🟢 เก็บรายการแท็กทุกใบไว้ (ใช้เช็คว่าใบไหนสแกนแล้ว/ยัง)
+            try {
+                const by = (currentUser && currentUser.username) || '';
+                const at0 = nowPrintedStr();
+                const tagRows = tags.map((t, ti) => ({
+                    seqNo: ti + 1,
+                    batchTotal: tags.length,
+                    docNumber: t.docNumber,
+                    planDate: lgPlanDateOf(t.refPlan),
+                    partNo: t.refPlan.partNo,
+                    line: t.refPlan.line || '',
+                    tagQty: t.total,
+                    woList: t.groups.map(g => `${g.WO}:${g.qty}`).join(' | '),
+                    printedBy: by,
+                    printedAt: at0,
+                    status: 'active'
+                }));
+                await callAppsScript('saveLGTags', tagRows);
+                if (!db.lgTagLog) db.lgTagLog = [];
+                tagRows.forEach(r => db.lgTagLog.push(r));
+            } catch (e) {
+                console.warn('saveLGTags failed', e);
+                Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title: 'ปริ้นแล้ว แต่บันทึกรายการแท็กไม่สำเร็จ', showConfirmButton: false, timer: 4000 });
+            }
+
             // บันทึกว่าปริ้นแล้ว (ถ้าบันทึกไม่สำเร็จ ไม่กระทบการปริ้น)
             try {
                 const ids = pick.idx.map(i => dayList[i].id);
@@ -14050,6 +14410,157 @@ window.printLGTags = async function() {
                 window.renderLGMatchTable();
             } catch (e) { console.warn('markLGPlanPrinted failed', e); }
         }, 300);
+    };
+    
+    // ================= เช็คแท็กค้างสแกน (เฉพาะผู้มีสิทธิ์) =================
+    window.showLGTagCheck = async function() {
+        const cu = (typeof currentUser !== 'undefined') ? currentUser : null;
+        const allowed = cu && (cu.username === 'admin' || cu.canCheckLGTags === true || String(cu.canCheckLGTags).toUpperCase() === 'TRUE');
+        if (!allowed) { Swal.fire('ไม่มีสิทธิ์', 'ไม่มีสิทธิ์เข้าใช้งานส่วนนี้', 'warning'); return; }
+
+        const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        const pad = (n) => String(n).padStart(2, '0');
+        const fmt = (v) => {
+            if (!v) return '-';
+            const d = new Date(v);
+            if (isNaN(d)) return String(v);
+            return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        };
+        const getDoc = (s) => { const p = parseLGBarcode(s); return p ? String(p.docNumber).trim() : ''; };
+
+        Swal.fire({ title: 'กำลังโหลดข้อมูลล่าสุด...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        const reload = async () => {
+            const r = await fetchWithRetry(SCRIPT_URL + '?action=getData&t=' + Date.now(), { method: 'GET', cache: 'no-store', redirect: 'follow' });
+            const j = await r.json();
+            db.lgScanLog = j.lgScanLog || [];
+            db.lgTagLog = j.lgTagLog || [];
+        };
+        try { await reload(); } catch (e) { console.warn('reload failed, use cached', e); }
+
+        let mode = 'all';
+        const css = `<style>
+            .lgtc-chip{display:inline-block;padding:6px 14px;border-radius:12px;font-weight:700;margin:0 4px 6px 0;font-size:.9rem}
+            .lgtc-tbl td,.lgtc-tbl th{font-size:.85rem;vertical-align:middle}
+            .lgtc-doc{font-family:monospace;font-weight:700;font-size:.8rem}
+        </style>`;
+        const html = `${css}
+            <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+                <label class="fw-bold mb-0">วันที่แพลน:</label>
+                <input type="date" id="lgtc-date" class="form-control" style="max-width:180px;">
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="lgtc-refresh"><i class="bi bi-arrow-clockwise"></i> รีเฟรช</button>
+                <div class="btn-group btn-group-sm ms-auto" id="lgtc-mode">
+                    <button type="button" class="btn btn-outline-dark active" data-m="all">ทั้งหมด</button>
+                    <button type="button" class="btn btn-outline-warning" data-m="unused">ยังไม่ใช้</button>
+                    <button type="button" class="btn btn-outline-success" data-m="used">ใช้แล้ว</button>
+                    <button type="button" class="btn btn-outline-secondary" data-m="void">ยกเลิก</button>
+                </div>
+            </div>
+            <div id="lgtc-sum" class="text-start mb-1"></div>
+            <div style="max-height:420px;overflow:auto;" class="border rounded">
+                <table class="table table-sm table-hover align-middle mb-0 lgtc-tbl">
+                    <thead class="table-light" style="position:sticky;top:0;"><tr>
+                        <th>#</th><th>ใบที่</th><th class="text-start">เลขแท็ก</th><th class="text-start">Part No</th><th>Line</th><th>จำนวน</th><th class="text-start">WO</th><th>ปริ้นเมื่อ / โดย</th><th>สถานะ</th><th></th>
+                    </tr></thead>
+                    <tbody id="lgtc-body"></tbody>
+                </table>
+            </div>`;
+
+        Swal.fire({
+            title: 'เช็คแท็กค้างสแกน',
+            width: 1100,
+            html,
+            showConfirmButton: false,
+            showCloseButton: true,
+            didOpen: () => {
+                const dateEl = document.getElementById('lgtc-date');
+                dateEl.value = getLGSelectedDate();
+
+                const render = () => {
+                    const d = dateEl.value;
+                    const scanMap = {};
+                    (db.lgScanLog || []).forEach(l => {
+                        const k = getDoc(l.rawBarcode);
+                        if (!k) return;
+                        const t = new Date(l.scannedAt).getTime() || 0;
+                        if (!scanMap[k] || t < scanMap[k].t) scanMap[k] = { t, at: l.scannedAt, by: l.scannedBy };
+                    });
+                    const tags = (db.lgTagLog || [])
+                        .filter(t => String(t.planDate || '').trim().slice(0, 10) === d)
+                        .sort((a, b) => String(a.printedAt).localeCompare(String(b.printedAt)) || ((parseInt(a.seqNo) || 0) - (parseInt(b.seqNo) || 0)) || String(a.docNumber).localeCompare(String(b.docNumber)))
+                        .map(t => {
+                            const key = String(t.docNumber).trim();
+                            const st = String(t.status) === 'void' ? 'void' : (scanMap[key] ? 'used' : 'unused');
+                            return { t, st, scan: scanMap[key] };
+                        });
+                    const cnt = { used: 0, unused: 0, void: 0 };
+                    tags.forEach(x => cnt[x.st]++);
+                    const active = cnt.used + cnt.unused;
+                    document.getElementById('lgtc-sum').innerHTML =
+                        `<span class="lgtc-chip" style="background:#e9ecef;">ปริ้นทั้งหมด ${active} ใบ</span>` +
+                        `<span class="lgtc-chip" style="background:#d1e7dd;color:#0f5132;">ใช้แล้ว ${cnt.used}</span>` +
+                        `<span class="lgtc-chip" style="background:#fff3cd;color:#664d03;">ยังไม่ใช้ ${cnt.unused}</span>` +
+                        (cnt.void ? `<span class="lgtc-chip" style="background:#e2e3e5;color:#41464b;">ยกเลิก ${cnt.void}</span>` : '');
+
+                    const shown = tags.filter(x => mode === 'all' || x.st === mode);
+                    const body = document.getElementById('lgtc-body');
+                    if (shown.length === 0) {
+                        body.innerHTML = `<tr><td colspan="10" class="text-center text-muted py-4">${tags.length === 0 ? 'ไม่มีข้อมูลแท็กของวันที่นี้ (แท็กที่ปริ้นก่อนเริ่มใช้ฟังก์ชันนี้จะไม่มีในรายการ)' : 'ไม่มีรายการในตัวกรองนี้'}</td></tr>`;
+                        return;
+                    }
+                    const badge = { used: '<span class="badge bg-success">ใช้แล้ว</span>', unused: '<span class="badge bg-warning text-dark">ยังไม่ใช้</span>', void: '<span class="badge bg-secondary">ยกเลิก</span>' };
+                    body.innerHTML = shown.map((x, i) => {
+                        const t = x.t;
+                        const scanTxt = x.scan ? `<div class="small text-success">สแกน ${esc(fmt(x.scan.at))} · ${esc(x.scan.by || '-')}</div>` : '';
+                        const voidTxt = x.st === 'void' ? `<div class="small text-muted">โดย ${esc(t.voidedBy || '-')}</div>` : '';
+                        const btn = x.st === 'void'
+                            ? `<button class="btn btn-sm btn-outline-secondary lgtc-void" data-d="${esc(t.docNumber)}" data-s="active">คืนสถานะ</button>`
+                            : (x.st === 'unused' ? `<button class="btn btn-sm btn-outline-danger lgtc-void" data-d="${esc(t.docNumber)}" data-s="void">ยกเลิกใบนี้</button>` : '');
+                        return `<tr class="${x.st === 'unused' ? 'table-warning' : ''}">
+                            <td>${i + 1}</td>
+                            <td class="fw-bold">${t.seqNo ? esc(t.seqNo) + '/' + esc(t.batchTotal) : '-'}</td>
+                            <td class="text-start lgtc-doc">${esc(t.docNumber)}</td>
+                            <td class="text-start fw-bold">${esc(t.partNo)}</td>
+                            <td>${esc(t.line || '-')}</td>
+                            <td class="fw-bold">${esc(t.tagQty)}</td>
+                            <td class="text-start small">${esc(t.woList)}</td>
+                            <td class="small">${esc(fmt(t.printedAt))}<div class="text-muted">${esc(t.printedBy || '-')}</div></td>
+                            <td>${badge[x.st]}${scanTxt}${voidTxt}</td>
+                            <td>${btn}</td>
+                        </tr>`;
+                    }).join('');
+                };
+
+                dateEl.onchange = render;
+                document.querySelectorAll('#lgtc-mode button').forEach(b => {
+                    b.onclick = () => {
+                        mode = b.dataset.m;
+                        document.querySelectorAll('#lgtc-mode button').forEach(x => x.classList.toggle('active', x === b));
+                        render();
+                    };
+                });
+                document.getElementById('lgtc-refresh').onclick = async () => {
+                    const btn = document.getElementById('lgtc-refresh');
+                    btn.disabled = true;
+                    try { await reload(); } catch (e) { alert('รีเฟรชไม่สำเร็จ: ' + e.message); }
+                    btn.disabled = false;
+                    render();
+                };
+                document.getElementById('lgtc-body').onclick = async (ev) => {
+                    const b = ev.target.closest('.lgtc-void');
+                    if (!b) return;
+                    const doc = b.dataset.d, newSt = b.dataset.s;
+                    if (!confirm(newSt === 'void' ? `ยกเลิกแท็ก ${doc} ?\n(ใบนี้จะไม่ถูกนับเป็น "ค้างสแกน")` : `คืนสถานะแท็ก ${doc} ?`)) return;
+                    b.disabled = true;
+                    try {
+                        await callAppsScript('voidLGTag', { docNumber: doc, status: newSt, by: currentUser.username, at: nowPrintedStr() });
+                        const row = (db.lgTagLog || []).find(r => String(r.docNumber).trim() === String(doc).trim());
+                        if (row) { row.status = newSt; row.voidedBy = newSt === 'void' ? currentUser.username : ''; }
+                    } catch (e) { alert('บันทึกไม่สำเร็จ: ' + e.message); }
+                    render();
+                };
+                render();
+            }
+        });
     };
 })();
 function buildLGPlanSheetHtml(list, planDate) {
@@ -14545,7 +15056,7 @@ function renderLGTagPrintWindow(tags, printWin) {
             <div class="lg-tag-footer">
                 <span>Printed: ${tag.printedDate}</span>
                 <span>${tag.docNumber}</span>
-                <span style="font-size:12px; font-weight:300;">ใบที่ ${idx + 1}/${total}</span>
+                <span style="font-size:11px; font-weight:800;">ใบที่ ${idx + 1}/${total}</span>
             </div>
         </div>
     `;
@@ -15695,7 +16206,8 @@ async function populateSalesDashboard(startDate, endDate) {
                         canManageRack: document.getElementById('permission-canManageRack').checked,
                         canForecast: document.getElementById('permission-canForecast').checked,
                         canManageLotHold: document.getElementById('permission-canManageLotHold').checked,
-                        canManageSupport: document.getElementById('permission-canManageSupport').checked
+                        canManageSupport: document.getElementById('permission-canManageSupport').checked,
+                        canCheckLGTags: document.getElementById('permission-canCheckLGTags').checked
                     };
 
                         Swal.fire({
