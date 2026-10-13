@@ -5003,7 +5003,7 @@ async function loadDataFromSheet(isInitialLoad = false) {
                                 } catch (e) { /* เช็คไม่ได้ก็ปล่อยผ่าน */ }
 
                                 if (!alreadyReversed) {
-                                    await callAppsScriptWithRetry('appendHistory', reversalEntry);
+                                    for (let i = 0; ; i++) { try { await callAppsScript('appendHistory', reversalEntry); break; } catch (e) { if (i >= 2) throw e; await new Promise(r => setTimeout(r, 1000)); } }
                                 }
                                 db.history.unshift(reversalEntry);
                                 calculateStockFromHistory();
