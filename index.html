@@ -6782,6 +6782,194 @@ function populateStockSummary() {
         stockSummaryTable.appendChild(row);
     });
 }
+    // 🟢 ดีไซน์ใหม่ของกรอบ "สรุปยอดสต็อกสินค้าคงเหลือ" (แบบ A: กล่องสรุป + แถบความพอเพียงเทียบเป้า 3 วัน)
+populateStockSummary = function() {
+    if (!document.getElementById('stock-a-style')) {
+        const css = document.createElement('style');
+        css.id = 'stock-a-style';
+        css.textContent = `
+        .sa-kpis{display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+        .sa-kpi{flex:1;min-width:150px;border-radius:14px;padding:12px 16px;border:1.5px solid transparent;user-select:none;transition:box-shadow .15s,transform .15s}
+        .sa-kpi small{display:block;font-size:.72rem;font-weight:700;opacity:.85}
+        .sa-kpi b{font-size:1.5rem;font-weight:800;line-height:1.2}
+        .sa-kpi span{font-size:.72rem;font-weight:600;margin-left:4px;opacity:.85}
+        .sa-kpi.click{cursor:pointer}
+        .sa-kpi.click:hover{transform:translateY(-2px)}
+        .sa-kpi.on{box-shadow:0 0 0 3px rgba(13,110,253,.35)}
+        .sa-k1{background:#eff6ff;color:#1d4ed8}.sa-k2{background:#f0fdf4;color:#15803d}
+        .sa-k3{background:#fef2f2;color:#b91c1c;border-color:#fecaca}.sa-k4{background:#fffbeb;color:#b45309;border-color:#fde68a}
+        #stock-summary-table-header th{font-size:.76rem;font-weight:800;color:#64748b;background:#f8fafc !important;border-bottom:2px solid #e2e8f0 !important;padding:10px 12px;white-space:nowrap}
+        #stock-summary-table td{padding:11px 12px;vertical-align:middle}
+        #stock-summary-table tr.sa-low > td{background-color:#fff5f5}
+        #stock-summary-table tr.sa-old > td{background-color:#fffbeb}
+        #stock-summary-table tr.sa-low > td:first-child{border-left:4px solid #ef4444}
+        #stock-summary-table tr.sa-old > td:first-child{border-left:4px solid #f59e0b}
+        #stock-summary-table tr.sa-ok > td:first-child{border-left:4px solid transparent}
+        .sa-pid{display:inline-block;background:#eef2ff;color:#3730a3;font-weight:800;font-size:.78rem;border-radius:99px;padding:2px 10px}
+        .sa-nm{font-size:.76rem;color:#64748b;margin-top:2px}
+        .sa-cust{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:.82rem;color:#0f172a}
+        .sa-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
+        .sa-num{font-weight:800;font-size:1.05rem}
+        .sa-bar{height:9px;background:#e2e8f0;border-radius:99px;position:relative;width:170px;max-width:100%}
+        .sa-bar i{position:absolute;left:0;top:0;bottom:0;border-radius:99px}
+        .sa-bar u{position:absolute;top:-4px;bottom:-4px;width:2px;background:#0f172a;opacity:.55;border-radius:2px}
+        .sa-days{font-size:.76rem;font-weight:700;color:#64748b;margin-top:4px}
+        .sa-pill{display:inline-flex;align-items:center;gap:5px;border-radius:99px;padding:3px 11px;font-size:.74rem;font-weight:800;white-space:nowrap}
+        .sa-p-ok{background:#dcfce7;color:#166534}.sa-p-low{background:#ef4444;color:#fff}.sa-p-old{background:#fde68a;color:#78350f}
+        `;
+        document.head.appendChild(css);
+    }
+
+    const T = translations[currentLanguage];
+    const header = document.getElementById('stock-summary-table-header');
+    const isAdmin = currentUser.role === 'admin';
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+    header.innerHTML = `<tr>
+        <th>${T.stock_table_product}</th>
+        <th>${T.customer}</th>
+        <th>${T.stock_table_balance}</th>
+        <th>เป้า 3 วัน</th>
+        <th>ความพอเพียงเทียบเป้า</th>
+        <th>สถานะ</th>
+        ${isAdmin ? `<th>${T.actions}</th>` : ''}
+    </tr>`;
+
+    const stockSummaryTable = document.getElementById('stock-summary-table');
+    stockSummaryTable.innerHTML = '';
+    const filterOldStock = document.getElementById('show-old-stock-filter').checked;
+    const showLowStockFilter = document.getElementById('show-low-stock-filter');
+    const filterLowStock = showLowStockFilter ? showLowStockFilter.checked : false;
+    const searchTerm = document.getElementById('stock-search-input').value.toLowerCase();
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+    // ---------- สรุปตามลูกค้า (ใช้วาดโดนัทด้านบน) ----------
+    const customerSummary = new Map();
+    calculatedStock.forEach(stockItem => {
+        if (stockItem.totalQuantity <= 0) return;
+        const productInfo = db.products.find(p => String(p.id).trim() === String(stockItem.productId).trim()) || {};
+        const customer = productInfo.customer || 'ไม่ระบุลูกค้า';
+        const group = productInfo.customerGroup || 'Other';
+        const unitPrice = parseFloat(productInfo.unitPrice) || 0;
+        if (!customerSummary.has(customer)) customerSummary.set(customer, { total: 0, autopart: 0, electronic: 0, other: 0, value: 0 });
+        const custData = customerSummary.get(customer);
+        custData.total += stockItem.totalQuantity;
+        custData.value += stockItem.totalQuantity * unitPrice;
+        if (group === 'Autopart') custData.autopart += stockItem.totalQuantity;
+        else if (group === 'Electronic') custData.electronic += stockItem.totalQuantity;
+        else custData.other += stockItem.totalQuantity;
+    });
+    const summaryRow = document.getElementById('customer-stock-summary-row');
+    if (summaryRow) {
+        summaryRow.innerHTML = '';
+        summaryRow.className = 'row g-2 mb-3';
+        summaryRow.removeAttribute('style');
+        renderStockDonut(customerSummary);
+        summaryRow.style.display = 'none';
+    }
+
+    // ---------- รายการสินค้า ----------
+    let summary = calculatedStock.map(stockItem => {
+        let productInfo = db.products.find(p => String(p.id).trim() === String(stockItem.productId).trim());
+        if (!productInfo) {
+            productInfo = { id: stockItem.productId, name: T.product_not_found.replace('{id}', stockItem.productId), customer: '-', erpCode: '-', req3Days: 0 };
+        }
+        const hasOldStock = stockItem.lots.some(l => l.quantity > 0 && new Date(formatDate(l.productionDate)) < threeMonthsAgo);
+        return { ...productInfo, ...stockItem, hasOldStock };
+    });
+    summary = summary.filter(p => p.totalQuantity > 0);
+
+    const isLow = (p) => (p.req3Days || 0) > 0 && p.totalQuantity < p.req3Days;
+
+    // ---------- กล่องสรุป 4 ช่อง (คำนวณจากสต็อกทั้งหมด ไม่ขึ้นกับตัวกรอง) ----------
+    let kpiHost = document.getElementById('stock-kpi-row');
+    if (!kpiHost) {
+        const grp = document.getElementById('stock-search-input').closest('.input-group');
+        kpiHost = document.createElement('div');
+        kpiHost.id = 'stock-kpi-row';
+        grp.parentNode.insertBefore(kpiHost, grp);
+    }
+    const nAll = summary.length;
+    const qAll = summary.reduce((s, p) => s + p.totalQuantity, 0);
+    const nLow = summary.filter(isLow).length;
+    const nOld = summary.filter(p => p.hasOldStock).length;
+    kpiHost.innerHTML = `<div class="sa-kpis">
+        <div class="sa-kpi sa-k1"><small>รายการสินค้า</small><b>${nAll.toLocaleString()}</b><span>รายการ</span></div>
+        <div class="sa-kpi sa-k2"><small>สต็อกรวม</small><b>${Math.round(qAll).toLocaleString()}</b><span>ชิ้น</span></div>
+        <div class="sa-kpi sa-k3 click ${filterLowStock ? 'on' : ''}" onclick="window.__stockKpiClick('low')"><small>สต็อกต่ำ (ไม่พอ 3 วัน)</small><b>${nLow.toLocaleString()}</b><span>รายการ · กดเพื่อกรอง</span></div>
+        <div class="sa-kpi sa-k4 click ${filterOldStock ? 'on' : ''}" onclick="window.__stockKpiClick('old')"><small>ค้างเกิน 3 เดือน</small><b>${nOld.toLocaleString()}</b><span>รายการ · กดเพื่อกรอง</span></div>
+    </div>`;
+
+    // ---------- ตัวกรอง ----------
+    if (filterOldStock) summary = summary.filter(p => p.hasOldStock);
+    if (filterLowStock) summary = summary.filter(isLow);
+    if (searchTerm) {
+        summary = summary.filter(item =>
+            String(item.id).trim().toLowerCase().includes(searchTerm) ||
+            String(item.name || '').toLowerCase().includes(searchTerm) ||
+            (item.customer && item.customer.toLowerCase().includes(searchTerm))
+        );
+    }
+    summary.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+
+    if (summary.length === 0) {
+        let message = T.stock_summary_no_stock;
+        if (searchTerm) message = T.stock_summary_no_results;
+        else if (filterOldStock) message = T.stock_summary_no_old_stock;
+        else if (filterLowStock) message = 'ไม่มียอดสต็อกที่ไม่พอ 3 วันจ้าาา 📦✨';
+        stockSummaryTable.innerHTML = `<tr><td colspan="${isAdmin ? 7 : 6}" class="text-center p-4">${message}</td></tr>`;
+        return;
+    }
+
+    const groupColor = (g) => g === 'Autopart' ? '#f59e0b' : g === 'Electronic' ? '#06b6d4' : '#94a3b8';
+
+    summary.forEach(item => {
+        const row = document.createElement('tr');
+        row.dataset.productId = item.id;
+        row.style.cursor = 'pointer';
+
+        const req3Days = item.req3Days || 0;
+        const low = isLow(item);
+        const state = low ? 'low' : (item.hasOldStock ? 'old' : 'ok');
+        row.className = 'sa-' + state;
+
+        const pill = state === 'low' ? '<span class="sa-pill sa-p-low">● สต็อกต่ำ</span>'
+                   : state === 'old' ? '<span class="sa-pill sa-p-old">● ค้าง &gt; 3 เดือน</span>'
+                   : '<span class="sa-pill sa-p-ok">● ปกติ</span>';
+        const barColor = state === 'low' ? '#ef4444' : state === 'old' ? '#f59e0b' : '#22c55e';
+
+        let coverHtml = '<span style="color:#94a3b8;font-size:.78rem;">ไม่ได้ตั้งเป้า</span>';
+        if (req3Days > 0) {
+            const ratio = Math.min(1.5, item.totalQuantity / req3Days);
+            const days = item.totalQuantity / (req3Days / 3);
+            const daysTxt = days >= 10 ? Math.round(days) : days.toFixed(1);
+            coverHtml = `<div class="sa-bar"><i style="width:${(ratio / 1.5 * 100).toFixed(1)}%;background:${barColor};"></i><u style="left:${(100 / 1.5).toFixed(2)}%;"></u></div>
+                         <div class="sa-days">พอใช้ ~${daysTxt} วัน</div>`;
+        }
+
+        row.innerHTML = `
+            <td><span class="sa-pid">${esc(item.id)}</span><div class="sa-nm">${esc(item.name)}</div></td>
+            <td><span class="sa-cust"><span class="sa-dot" style="background:${groupColor(item.customerGroup)}"></span>${esc(item.customer || '-')}</span></td>
+            <td><span class="sa-num" style="color:${low ? '#dc2626' : '#0d6efd'}">${item.totalQuantity.toLocaleString()}</span></td>
+            <td style="color:#64748b;font-weight:700;">${req3Days > 0 ? req3Days.toLocaleString() : '-'}</td>
+            <td>${coverHtml}</td>
+            <td>${pill}</td>
+            ${isAdmin ? `<td><button class="btn btn-warning btn-sm shadow-sm" onclick="event.stopPropagation(); window.app.editStockTotal('${item.id}')" title="${T.edit_stock_modal_title}"><i class="bi bi-pencil-fill"></i></button></td>` : ''}
+        `;
+        row.addEventListener('click', () => window.app.showLotDetails(item.id));
+        stockSummaryTable.appendChild(row);
+    });
+};
+
+// กดกล่อง "สต็อกต่ำ" / "ค้างเกิน 3 เดือน" = เปิด/ปิดสวิตช์กรองเดิม
+window.__stockKpiClick = function(kind) {
+    const el = document.getElementById(kind === 'low' ? 'show-low-stock-filter' : 'show-old-stock-filter');
+    if (!el) return;
+    el.checked = !el.checked;
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    populateStockSummary();
+};
                 function populateHistoryTable() {
                     const T = translations[currentLanguage];
                     const header = document.getElementById('history-table-header');
