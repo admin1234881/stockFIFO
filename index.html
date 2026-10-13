@@ -1321,6 +1321,14 @@
 #pills-tab:has(:focus-visible) .icon-nav-label { opacity: 1; transition-delay: .06s; }
 #pills-tab .icon-nav-badge { top: 1px; right: 3px; border-color: #0b1b33; }
 #pills-tab .icon-nav-btn:hover .icon-nav-label { max-width: none; margin-left: 0; }
+/* ดันเนื้อหาไปทางขวาเมื่อชี้เมนู (เฉพาะจอคอม) */
+@media (min-width: 769px) {
+    #main-dashboard { transition: padding-left .28s cubic-bezier(.4,0,.2,1); }
+    #main-dashboard:has(#pills-tab:hover),
+    #main-dashboard:has(#pills-tab :focus-visible) {
+        padding-left: 292px;
+    }
+}
 /* จอเล็ก/มือถือ */
 @media (max-width: 768px) {
     #main-dashboard { padding-left: 64px; }
