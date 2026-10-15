@@ -14503,7 +14503,7 @@ window.printLGTags = async function() {
 
     try {
         tags.forEach((tag, idx) => {
-            const docNumber = `${prefixChoice}F${stamp}${String((runningSeed + idx * 137) % 1000000).padStart(6, '0')}`;
+            const docNumber = `${(window.lgPrefixOf(tag.refPlan) || prefixChoice)}F${stamp}${String((runningSeed + idx * 137) % 1000000).padStart(6, '0')}`;
             const raw = buildLGTagBarcode({
                 docNumber,
                 line: tag.refPlan.line,
@@ -14633,9 +14633,12 @@ window.printLGTags = async function() {
             width: 760,
             html: `
             <div class="text-start mb-2">
-                <span class="fw-bold me-2">รหัสนำหน้า:</span>
-                <label class="me-3"><input type="radio" name="lg-prefix" value="ANE" checked> ANE</label>
-                <label><input type="radio" name="lg-prefix" value="ANF"> ANF</label>
+                <span class="text-muted small">🏷️ รหัส ANE/ANF ระบบดึงจากคอลัมน์ Model ของแพลนให้อัตโนมัติ</span>
+            </div>
+            <div class="text-start mb-2">
+                <span class="fw-bold me-2">ขนาดแท็ก:</span>
+                <label class="me-3"><input type="radio" name="lg-format" value="A4L" checked> A4L (แบบเดิม)</label>
+                <label><input type="radio" name="lg-format" value="A4P"> A4P (แบบยาว)</label>
             </div>
             <div class="text-start mb-2">
                 <button type="button" class="btn btn-sm btn-outline-dark" id="lg-pick-all">เลือกทั้งหมด</button>
@@ -14662,7 +14665,7 @@ window.printLGTags = async function() {
                 const idx = Array.from(document.querySelectorAll('.lg-pick')).filter(b => b.checked).map(b => parseInt(b.dataset.i, 10));
                 if (idx.length === 0) { Swal.showValidationMessage('กรุณาเลือกอย่างน้อย 1 รายการ'); return false; }
                 const prefix = (document.querySelector('input[name="lg-prefix"]:checked') || {}).value || 'ANE';
-                return { idx, prefix };
+                window.__lgTagFormat = (document.querySelector('input[name="lg-format"]:checked') || {}).value || 'A4L'; return { idx, prefix };
             }
         });
         return res.isConfirmed ? res.value : null;
@@ -14699,7 +14702,7 @@ window.printLGTags = async function() {
         };
         dayList.forEach((p, i) => {
             if (!selectedSet.has(i)) { flush(); return; }
-            if (run.length && String(run[0].partNo).trim() !== String(p.partNo).trim()) flush();
+            if (run.length && (String(run[0].partNo).trim() !== String(p.partNo).trim() || (window.lgPrefixOf(run[0]) || '') !== (window.lgPrefixOf(p) || ''))) flush();
             run.push(p);
         });
         flush();
@@ -14746,7 +14749,7 @@ window.printLGTags = async function() {
 
         try {
             tags.forEach((tag, idx) => {
-                const docNumber = `${prefixChoice}F${stamp}${String((runningSeed + idx * 137) % 1000000).padStart(6, '0')}`;
+                const docNumber = `${(window.lgPrefixOf(tag.refPlan) || prefixChoice)}F${stamp}${String((runningSeed + idx * 137) % 1000000).padStart(6, '0')}`;
                 const raw = buildLGTagBarcode({
                     docNumber,
                     line: tag.refPlan.line,
@@ -15611,7 +15614,903 @@ renderLGTagPrintWindow = function(tags, printWin) {
     `);
     printWin.document.close();
 };
-// ===== จบ LG-TAG-BIG =====
+// ===== LG-TAG-2FORMAT: แท็ก LG เลือกได้ 2 แบบ (A4L = แบบเดิมขนาดใหญ่ / A4P = แบบยาว) =====
+renderLGTagPrintWindow = function(tags, printWin) {
+    if (!printWin) {
+        Swal.fire('เปิดหน้าต่างไม่สำเร็จ', 'เบราว์เซอร์บล็อกป๊อปอัพ กรุณาอนุญาตป๊อปอัพสำหรับเว็บนี้ (กดไอคอนที่แถบ URL ด้านบน) แล้วกดปริ้นแท็กใหม่อีกครั้งครับ', 'error');
+        return;
+    }
+    const total = tags.length;
+    const FORMAT = (window.__lgTagFormat === 'A4P') ? 'A4P' : 'A4L';
+
+    // 🔧 ปรับขนาดตรงนี้ได้ (หน่วย มม.)
+    const A4L_TAG_W_MM = 86;    // ความกว้างแท็กแบบ A4L ต่อใบ (เดิม ~96 ลดลง 1 ซม.)
+    const A4L_PER_PAGE = 6;     // 8 = ขนาดเดิม, 6 = ใหญ่ขึ้น, 4 = ใหญ่มาก
+    const A4P_TAG_W_MM = 194;   // ความกว้างแท็กแบบยาว
+    const A4P_PER_PAGE = 4;     // แท็กแบบยาวต่อหน้า
+
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    let pagesHtml = '';
+    let css = '';
+
+    if (FORMAT === 'A4P') {
+        // ---------- แบบยาว (A4P) ----------
+        const longTag = (tag, idx) => {
+            const groups = tag.groups.length ? tag.groups : [{ WO: '-', modelSuffix: '-', qty: tag.total }];
+            const nRows = Math.max(4, groups.length);
+            const small = groups.length > 4 ? ' small' : '';
+            const bodyRows = Array.from({ length: nRows }, (_, i) => {
+                const g = groups[i];
+                return g
+                    ? `<tr><td class="q">${esc(g.qty)}</td><td>~</td><td class="ms">${esc(g.modelSuffix || '-')}</td><td class="wo">${esc(g.WO)}</td></tr>`
+                    : `<tr><td class="q">&nbsp;</td><td></td><td></td><td></td></tr>`;
+            }).join('');
+            return `
+            <div class="lt-wrap">
+              <div class="lt">
+                <div class="c lab-l" style="grid-area:1/1/2/2"><i>Line</i><b class="v">${esc(tag.refPlan.line || '-')}</b></div>
+                <div class="c" style="grid-area:1/2/2/6"><i>Seq No</i></div>
+                <div class="c qrc" style="grid-area:1/6/3/7"><img src="${tag.qrDataUrl}"></div>
+                <div class="c lab-l" style="grid-area:2/1/3/2"><i>Qty</i><b class="v">${esc(tag.total)}</b></div>
+                <div class="c" style="grid-area:2/2/3/6"><i>Description</i><b class="v desc">${esc(tag.refPlan.partName || '-')}</b></div>
+                <div class="c lab-l" style="grid-area:3/1/4/2"><i>Made by</i><b class="v">ATECH</b></div>
+                <div class="c" style="grid-area:3/2/4/3"><i>Part No</i><b class="v part">${esc(tag.refPlan.partNo)}</b></div>
+                <div class="c lab-l" style="grid-area:4/1/5/2"><i>Carrier ID</i><b class="v">ATECH</b></div>
+                <div class="c" style="grid-area:4/2/5/3"><b class="v insp">INSPECTION</b></div>
+                <div class="c lab-l" style="grid-area:5/1/6/2"><i>To Locator Group</i><b class="v">${esc(tag.refPlan.locatorGroup || '-')}</b></div>
+                <div class="c" style="grid-area:5/2/6/3"><i>PST</i><b class="v pst">${esc(tag.refPlan.startDateTime || '-')}</b></div>
+                <div class="sub${small}" style="grid-area:3/3/6/7">
+                    <table><thead><tr><th style="width:12%">Qty</th><th style="width:22%">Prod Seq No</th><th>Model.Suffix</th><th style="width:25%">W/O</th></tr></thead>
+                    <tbody>${bodyRows}</tbody></table>
+                </div>
+                <div class="ft" style="grid-area:6/1/7/7"><span>Printed Date : &nbsp; ${esc(tag.printedDate)}</span><span>${esc(tag.docNumber)}</span></div>
+              </div>
+              <div class="by"><span>Printed by ATECH</span><span>ใบที่ ${idx + 1}/${total}</span></div>
+            </div>`;
+        };
+        for (let p = 0; p < tags.length; p += A4P_PER_PAGE) {
+            pagesHtml += `<div class="lg-page">${tags.slice(p, p + A4P_PER_PAGE).map((t, i) => longTag(t, p + i)).join('')}</div>`;
+        }
+        css = `
+        .lg-page { display: grid; grid-template-columns: ${A4P_TAG_W_MM}mm; justify-content: center; grid-template-rows: repeat(${A4P_PER_PAGE}, 1fr); gap: 2mm; width: 194mm; height: 281mm; page-break-after: always; }
+        .lg-page:last-child { page-break-after: auto; }
+        .lt-wrap { display: flex; flex-direction: column; min-height: 0; page-break-inside: avoid; }
+        .lt { flex: 1; min-height: 0; border: 1.2px solid #000; display: grid;
+              grid-template-columns: 20% 24% 7% 13% 23% 13%;
+              grid-template-rows: 1fr 1fr 1.05fr 1fr 1fr 0.6fr; }
+        .lt .c { border-right: 1px solid #000; border-bottom: 1px solid #000; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 3mm 1mm 0.6mm; }
+        .lt .c i { position: absolute; left: 1mm; top: 0.4mm; font-style: normal; font-size: 6.5pt; color: #222; line-height: 1; }
+        .lt .v { font-size: 13pt; font-weight: 700; text-align: center; line-height: 1.05; }
+        .lt .v.desc { font-size: 15pt; } .lt .v.part { font-size: 13pt; } .lt .v.insp { font-size: 13pt; letter-spacing: .5px; } .lt .v.pst { font-size: 11pt; }
+        .lt .qrc { padding: 1mm; border-right: 0; } .lt .qrc img { height: 100%; max-width: 100%; aspect-ratio: 1; object-fit: contain; }
+        .lt .sub { border-bottom: 1px solid #000; display: flex; }
+        .lt .sub table { width: 100%; height: 100%; border-collapse: collapse; table-layout: fixed; }
+        .lt .sub th { font-size: 8.5pt; font-weight: 400; border-left: 1px solid #000; border-bottom: 1px solid #000; padding: 0.4mm 0; text-align: center; }
+        .lt .sub td { font-size: 9pt; text-align: center; border-left: 1px solid #000; border-top: 1px solid #000; padding: 0 0.5mm; overflow: hidden; white-space: nowrap; }
+        .lt .sub tbody tr:first-child td { border-top: 0; }
+        .lt .sub td.q { font-size: 10pt; } .lt .sub td.wo { font-size: 8.5pt; } .lt .sub td.ms { font-size: 8.5pt; }
+        .lt .sub.small td, .lt .sub.small th { font-size: 6.5pt; }
+        .lt .ft { display: flex; justify-content: space-between; align-items: center; padding: 0 4mm; font-size: 10pt; border: 0; }
+        .by { display: flex; justify-content: space-between; font-size: 7pt; padding: 0.6mm 1mm 0; color: #222; }
+        `;
+    } else {
+        // ---------- แบบ A4L (แบบเดิม ขนาดใหญ่ มีช่องประทับตรา) ----------
+        const LAYOUTS = { 8: { rows: 4, k: 1.0 }, 6: { rows: 3, k: 1.25 }, 4: { rows: 2, k: 1.9 } };
+        const LY = LAYOUTS[A4L_PER_PAGE] || LAYOUTS[6];
+        const tagCardHtml = (tag, idx) => {
+            const woList = tag.groups.map(g => g.WO).join(', ');
+            const modelSuffixList = [...new Set(tag.groups.map(g => g.modelSuffix || '-'))].join(' + ');
+            return `
+            <div class="lg-tag">
+                <table class="lg-tag-table">
+                    <tr>
+                        <td class="lbl" style="width:18%;">Line</td>
+                        <td class="val" style="width:32%;">${tag.refPlan.line || '-'}</td>
+                        <td class="qr" rowspan="2" style="width:22%;"><img src="${tag.qrDataUrl}"></td>
+                    </tr>
+                    <tr>
+                        <td class="lbl">Part No</td>
+                        <td class="val part-big">${tag.refPlan.partNo}</td>
+                    </tr>
+                    <tr>
+                        <td class="lbl">Qty</td>
+                        <td class="val big" colspan="2">${tag.total}</td>
+                    </tr>
+                    <tr>
+                        <td class="lbl">Description</td>
+                        <td class="val" colspan="2">${tag.refPlan.partName || '-'}</td>
+                    </tr>
+                </table>
+                <table class="lg-tag-table2">
+                    <tr>
+                        <td class="lbl">Made by</td><td class="val">ATECH</td>
+                        <td class="lbl">Seq No</td><td class="val"></td>
+                        <td class="lbl">Qty</td><td class="val">${tag.total}</td>
+                        <td class="lbl">W/O</td><td class="val brk" colspan="3">${woList}</td>
+                    </tr>
+                    <tr>
+                        <td class="lbl">Carrier ID</td><td class="val">ATECH</td>
+                        <td class="val" colspan="4">INSPECTION</td>
+                        <td class="lbl">Model.Suffix</td><td class="val brk" colspan="3">${modelSuffixList || '-'}</td>
+                    </tr>
+                    <tr>
+                        <td class="lbl">To Locator<br>Group</td><td class="val">${tag.refPlan.locatorGroup || '-'}</td>
+                        <td class="lbl">PST</td><td class="val" colspan="7">${tag.refPlan.startDateTime || '-'}</td>
+                    </tr>
+                </table>
+                <div class="lg-stamps">
+                    <div class="lg-stamp"><span>INSPECTION</span><em>QC STAMP</em></div>
+                    <div class="lg-stamp"><span>RoHS</span><em>QC STAMP</em></div>
+                </div>
+                <div class="lg-tag-footer">
+                    <span>Printed: ${tag.printedDate}</span>
+                    <span>${tag.docNumber}</span>
+                    <span style="font-size:${(11 * Math.min(LY.k, 1.25)).toFixed(1)}px; font-weight:800;">ใบที่ ${idx + 1}/${total}</span>
+                </div>
+            </div>`;
+        };
+        for (let p = 0; p < tags.length; p += A4L_PER_PAGE) {
+            pagesHtml += `<div class="lg-page">${tags.slice(p, p + A4L_PER_PAGE).map((tag, i) => tagCardHtml(tag, p + i)).join('')}</div>`;
+        }
+        css = `
+        :root { --k: ${LY.k}; --fk: ${Math.min(LY.k, 1.35)}; }
+        .lg-page { display: grid; grid-template-columns: repeat(2, ${A4L_TAG_W_MM}mm); justify-content: center; grid-template-rows: repeat(${LY.rows}, 1fr); gap: 2mm; width: 194mm; height: 281mm; page-break-after: always; }
+        .lg-page:last-child { page-break-after: auto; }
+        .lg-tag { border: 1.2px solid #333; padding: 2mm; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+        .lg-tag-table, .lg-tag-table2 { width: 100%; border-collapse: collapse; font-size: calc(7.5px * var(--k)); margin-bottom: 1mm; flex: none; }
+        .lg-tag-table td, .lg-tag-table2 td { border: 1px solid #999; padding: 1px 3px; line-height: 1.2; }
+        .lg-tag-table2 .brk { overflow-wrap: anywhere; word-break: break-all; }
+        .lbl { color: #0d6efd; font-size: calc(6.5px * var(--k)); }
+        .val { font-weight: bold; }
+        .val.big { font-size: calc(10px * var(--k)); }
+        .val.part-big { font-size: calc(13px * var(--k)); letter-spacing: 0.2px; }
+        .qr img { width: 100%; display: block; }
+        .lg-stamps { flex: 1 1 auto; min-height: 14mm; display: grid; grid-template-columns: 1fr 1fr; gap: 2mm; margin: 0.5mm 0 1mm; }
+        .lg-stamp { position: relative; border: 1.4px dashed #6b7280; border-radius: 2mm; }
+        .lg-stamp span { position: absolute; left: 2mm; top: 1mm; font-size: calc(7px * var(--k)); font-weight: 800; color: #374151; letter-spacing: .6px; }
+        .lg-stamp em { position: absolute; right: 2mm; bottom: 1mm; font-style: normal; font-size: calc(5.5px * var(--k)); color: #b6bcc6; letter-spacing: .5px; }
+        .lg-tag-footer { display: flex; justify-content: space-between; align-items: flex-end; font-size: calc(6.5px * var(--fk)); margin-top: auto; padding-top: 0.5mm; flex: none; }
+        @media print { .lg-tag { page-break-inside: avoid; } }
+        `;
+    }
+
+    printWin.document.open();
+    printWin.document.write(`
+    <!DOCTYPE html>
+    <html><head><meta charset="UTF-8"><title>ปริ้นแท็ก LG (${FORMAT})</title>
+    <style>
+        * { box-sizing: border-box; }
+        @page { size: A4; margin: 8mm; }
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        ${css}
+    </style>
+    </head><body>
+    ${pagesHtml}
+    <script>window.onload = () => setTimeout(() => window.print(), 300);<\/script>
+    </body></html>
+    `);
+    printWin.document.close();
+};
+// ===== LG-PREFIX-FROM-MODEL: ให้แท็กดึง ANE/ANF จากคอลัมน์ Model ในแพลนเอง =====
+window.lgPrefixOf = function(plan) {
+    const m = String((plan && plan.model) || '').toUpperCase();
+    if (m.indexOf('ANF') !== -1) return 'ANF';
+    if (m.indexOf('ANE') !== -1) return 'ANE';
+    return null; // ไม่ระบุ -> ใช้รหัสสำรองที่เลือกในหน้าต่างปริ้น
+};
+// ===== LG-TAG-2FORMAT v2: แท็ก LG เลือกได้ 2 แบบ ขนาดพอดีช่องใส่แท็ก 17x9 ซม. (A4L = แบบเดิม / A4P = แบบยาว) =====
+renderLGTagPrintWindow = function(tags, printWin) {
+    if (!printWin) {
+        Swal.fire('เปิดหน้าต่างไม่สำเร็จ', 'เบราว์เซอร์บล็อกป๊อปอัพ กรุณาอนุญาตป๊อปอัพสำหรับเว็บนี้ (กดไอคอนที่แถบ URL ด้านบน) แล้วกดปริ้นแท็กใหม่อีกครั้งครับ', 'error');
+        return;
+    }
+    const total = tags.length;
+    const FORMAT = (window.__lgTagFormat === 'A4P') ? 'A4P' : 'A4L';
+
+    // 🔧 ปรับขนาดตรงนี้ได้ (หน่วย มม.) — ช่องใส่แท็ก 170 x 90 มม. ทำแท็กเล็กกว่าช่องประมาณ 2 ซม.
+    const A4L_W_MM = 150, A4L_H_MM = 68;   // แท็กแบบ A4L (แบบเดิม มีช่องประทับตรา) ยาว x กว้าง
+    const A4P_W_MM = 150, A4P_H_MM = 68;   // แท็กแบบ A4P (แบบยาว) ยาว x กว้าง (รวมช่องประทับตรา QC)
+    const PER_PAGE = 4;                    // จำนวนแท็กต่อหน้า A4 แนวตั้ง
+    const GAP_MM = 1.5;
+
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    let pagesHtml = '';
+    let css = '';
+
+    if (FORMAT === 'A4P') {
+        // ---------- แบบยาว (A4P) ----------
+        const longTag = (tag, idx) => {
+            const groups = tag.groups.length ? tag.groups : [{ WO: '-', modelSuffix: '-', qty: tag.total }];
+            const nRows = Math.max(4, groups.length);
+            const small = groups.length > 4 ? ' small' : '';
+            const bodyRows = Array.from({ length: nRows }, (_, i) => {
+                const g = groups[i];
+                return g
+                    ? `<tr><td class="q">${esc(g.qty)}</td><td>~</td><td class="ms">${esc(g.modelSuffix || '-')}</td><td class="wo">${esc(g.WO)}</td></tr>`
+                    : `<tr><td class="q">&nbsp;</td><td></td><td></td><td></td></tr>`;
+            }).join('');
+            return `
+            <div class="lt-wrap">
+              <div class="lt">
+                <div class="c lab-l" style="grid-area:1/1/2/2"><i>Line</i><b class="v">${esc(tag.refPlan.line || '-')}</b></div>
+                <div class="c" style="grid-area:1/2/2/6"><i>Seq No</i></div>
+                <div class="c qrc" style="grid-area:1/6/3/7"><img src="${tag.qrDataUrl}"></div>
+                <div class="c lab-l" style="grid-area:2/1/3/2"><i>Qty</i><b class="v">${esc(tag.total)}</b></div>
+                <div class="c" style="grid-area:2/2/3/6"><i>Description</i><b class="v desc">${esc(tag.refPlan.partName || '-')}</b></div>
+                <div class="c lab-l" style="grid-area:3/1/4/2"><i>Made by</i><b class="v">ATECH</b></div>
+                <div class="c" style="grid-area:3/2/4/3"><i>Part No</i><b class="v part">${esc(tag.refPlan.partNo)}</b></div>
+                <div class="c lab-l" style="grid-area:4/1/5/2"><i>Carrier ID</i><b class="v">ATECH</b></div>
+                <div class="c" style="grid-area:4/2/5/3"><b class="v insp">INSPECTION</b></div>
+                <div class="c lab-l" style="grid-area:5/1/6/2"><i>To Locator Group</i><b class="v">${esc(tag.refPlan.locatorGroup || '-')}</b></div>
+                <div class="c" style="grid-area:5/2/6/3"><i>PST</i><b class="v pst">${esc(tag.refPlan.startDateTime || '-')}</b></div>
+                <div class="sub${small}" style="grid-area:3/3/6/7">
+                    <table><thead><tr><th style="width:11%">Qty</th><th style="width:19%">Prod Seq No</th><th>Model.Suffix</th><th style="width:24%">W/O</th></tr></thead>
+                    <tbody>${bodyRows}</tbody></table>
+                </div>
+                <div class="ft" style="grid-area:6/1/7/7"><span>Printed Date : &nbsp;${esc(tag.printedDate)} &nbsp;·&nbsp; Printed by ATECH</span><span>${esc(tag.docNumber)}</span><span>ใบที่ ${idx + 1}/${total}</span></div>
+                <div class="stp" style="grid-area:7/1/8/4"><i>INSPECTION</i><em>QC STAMP</em></div>
+                <div class="stp" style="grid-area:7/4/8/7"><i>RoHS</i><em>QC STAMP</em></div>
+              </div>
+            </div>`;
+        };
+        for (let p = 0; p < tags.length; p += PER_PAGE) {
+            pagesHtml += `<div class="lg-page">${tags.slice(p, p + PER_PAGE).map((t, i) => longTag(t, p + i)).join('')}</div>`;
+        }
+        css = `
+        .lg-page { display: grid; grid-template-columns: ${A4P_W_MM}mm; justify-content: center; grid-template-rows: repeat(${PER_PAGE}, ${A4P_H_MM}mm); align-content: start; gap: ${GAP_MM}mm; width: 194mm; height: 281mm; page-break-after: always; }
+        .lg-page:last-child { page-break-after: auto; }
+        .lt-wrap { display: flex; flex-direction: column; min-height: 0; page-break-inside: avoid; }
+        .lt { flex: 1; min-height: 0; border: 1.2px solid #000; display: grid;
+              grid-template-columns: 18% 22% 7% 13% 27% 13%;
+              grid-template-rows: 1fr 1fr 1.05fr 1fr 1fr 6.5mm 14mm; }
+        .lt .c { border-right: 1px solid #000; border-bottom: 1px solid #000; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 2.4mm 1mm 0.4mm; }
+        .lt .c i { position: absolute; left: 1mm; top: 0.4mm; font-style: normal; font-size: 6.5pt; color: #222; line-height: 1; }
+        .lt .v { font-size: 12pt; font-weight: 700; text-align: center; line-height: 1.05; }
+        .lt .v.desc { font-size: 14pt; } .lt .v.part { font-size: 12.5pt; } .lt .v.insp { font-size: 12pt; letter-spacing: .5px; } .lt .v.pst { font-size: 10.5pt; }
+        .lt .qrc { padding: 1mm; border-right: 0; } .lt .qrc img { height: 100%; max-width: 100%; aspect-ratio: 1; object-fit: contain; }
+        .lt .sub { border-bottom: 1px solid #000; display: flex; }
+        .lt .sub table { width: 100%; height: 100%; border-collapse: collapse; table-layout: fixed; }
+        .lt .sub th { white-space: nowrap; font-size: 7.5pt; font-weight: 400; border-left: 1px solid #000; border-bottom: 1px solid #000; padding: 0.4mm 0; text-align: center; }
+        .lt .sub td { font-size: 9pt; text-align: center; border-left: 1px solid #000; border-top: 1px solid #000; padding: 0 0.5mm; overflow: hidden; white-space: nowrap; }
+        .lt .sub tbody tr:first-child td { border-top: 0; }
+        .lt .sub td.q { font-size: 10pt; } .lt .sub td.wo { font-size: 8pt; } .lt .sub td.ms { font-size: 7.5pt; }
+        .lt .sub.small td, .lt .sub.small th { font-size: 6.5pt; }
+        .lt .ft { display: flex; justify-content: space-between; align-items: center; padding: 0 3mm; font-size: 8.5pt; border: 0; border-bottom: 1px solid #000; }
+        .lt .stp { position: relative; border-right: 1px solid #000; }
+        .lt .stp:last-child { border-right: 0; }
+        .lt .stp i { position: absolute; left: 1.5mm; top: 0.6mm; font-style: normal; font-size: 7pt; font-weight: 800; color: #374151; letter-spacing: .5px; }
+        .lt .stp em { position: absolute; right: 1.5mm; bottom: 0.6mm; font-style: normal; font-size: 5pt; color: #b6bcc6; letter-spacing: .5px; }
+        `;
+    } else {
+        // ---------- แบบ A4L (แบบเดิม มีช่องประทับตรา INSPECTION / RoHS) ----------
+        const tagCardHtml = (tag, idx) => {
+            const woList = tag.groups.map(g => g.WO).join(', ');
+            const modelSuffixList = [...new Set(tag.groups.map(g => g.modelSuffix || '-'))].join(' + ');
+            return `
+            <div class="lg-tag">
+                <table class="lg-tag-table">
+                    <tr>
+                        <td class="lbl" style="width:14%;">Line</td>
+                        <td class="val">${esc(tag.refPlan.line || '-')}</td>
+                        <td class="qr" rowspan="4" style="width:26mm;"><img src="${tag.qrDataUrl}"></td>
+                    </tr>
+                    <tr><td class="lbl">Part No</td><td class="val part-big">${esc(tag.refPlan.partNo)}</td></tr>
+                    <tr><td class="lbl">Qty</td><td class="val big">${esc(tag.total)}</td></tr>
+                    <tr><td class="lbl">Description</td><td class="val">${esc(tag.refPlan.partName || '-')}</td></tr>
+                </table>
+                <table class="lg-tag-table2">
+                    <tr>
+                        <td class="lbl">Made by</td><td class="val">ATECH</td>
+                        <td class="lbl">Seq No</td><td class="val"></td>
+                        <td class="lbl">Qty</td><td class="val">${esc(tag.total)}</td>
+                        <td class="lbl">W/O</td><td class="val brk" colspan="3">${esc(woList)}</td>
+                    </tr>
+                    <tr>
+                        <td class="lbl">Carrier ID</td><td class="val">ATECH</td>
+                        <td class="val" colspan="4">INSPECTION</td>
+                        <td class="lbl">Model.Suffix</td><td class="val brk" colspan="3">${esc(modelSuffixList || '-')}</td>
+                    </tr>
+                    <tr>
+                        <td class="lbl">To Locator Group</td><td class="val">${esc(tag.refPlan.locatorGroup || '-')}</td>
+                        <td class="lbl">PST</td><td class="val" colspan="7">${esc(tag.refPlan.startDateTime || '-')}</td>
+                    </tr>
+                </table>
+                <div class="lg-stamps">
+                    <div class="lg-stamp"><span>INSPECTION</span><em>QC STAMP</em></div>
+                    <div class="lg-stamp"><span>RoHS</span><em>QC STAMP</em></div>
+                </div>
+                <div class="lg-tag-footer">
+                    <span>Printed: ${esc(tag.printedDate)}</span>
+                    <span>${esc(tag.docNumber)}</span>
+                    <span style="font-size:8pt; font-weight:800;">ใบที่ ${idx + 1}/${total}</span>
+                </div>
+            </div>`;
+        };
+        for (let p = 0; p < tags.length; p += PER_PAGE) {
+            pagesHtml += `<div class="lg-page">${tags.slice(p, p + PER_PAGE).map((tag, i) => tagCardHtml(tag, p + i)).join('')}</div>`;
+        }
+        css = `
+        .lg-page { display: grid; grid-template-columns: ${A4L_W_MM}mm; justify-content: center; grid-template-rows: repeat(${PER_PAGE}, ${A4L_H_MM}mm); align-content: start; gap: ${GAP_MM}mm; width: 194mm; height: 281mm; page-break-after: always; }
+        .lg-page:last-child { page-break-after: auto; }
+        .lg-tag { border: 1.2px solid #333; padding: 1.5mm; overflow: hidden; display: flex; flex-direction: column; min-height: 0; page-break-inside: avoid; }
+        .lg-tag-table, .lg-tag-table2 { width: 100%; border-collapse: collapse; font-size: 7.5pt; margin-bottom: 1mm; flex: none; }
+        .lg-tag-table td, .lg-tag-table2 td { border: 1px solid #999; padding: 0.3mm 1.2mm; line-height: 1.15; }
+        .lg-tag-table2 .brk { overflow-wrap: anywhere; word-break: break-all; }
+        .lbl { color: #0d6efd; font-size: 5.5pt; white-space: nowrap; }
+        .val { font-weight: bold; }
+        .val.big { font-size: 11pt; }
+        .val.part-big { font-size: 14pt; letter-spacing: 0.2px; }
+        .qr { padding: 0.5mm !important; text-align: center; }
+        .qr img { width: 24mm; height: 24mm; display: block; margin: 0 auto; }
+        .lg-stamps { flex: 1 1 auto; min-height: 12mm; display: grid; grid-template-columns: 1fr 1fr; gap: 2mm; margin: 0.3mm 0 0.8mm; }
+        .lg-stamp { position: relative; border: 1.3px dashed #6b7280; border-radius: 1.5mm; }
+        .lg-stamp span { position: absolute; left: 1.5mm; top: 0.6mm; font-size: 6.5pt; font-weight: 800; color: #374151; letter-spacing: .5px; }
+        .lg-stamp em { position: absolute; right: 1.5mm; bottom: 0.6mm; font-style: normal; font-size: 5pt; color: #b6bcc6; letter-spacing: .5px; }
+        .lg-tag-footer { display: flex; justify-content: space-between; align-items: flex-end; font-size: 6pt; flex: none; }
+        `;
+    }
+
+    printWin.document.open();
+    printWin.document.write(`
+    <!DOCTYPE html>
+    <html><head><meta charset="UTF-8"><title>ปริ้นแท็ก LG (${FORMAT})</title>
+    <style>
+        * { box-sizing: border-box; }
+        @page { size: A4; margin: 8mm; }
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        ${css}
+    </style>
+    </head><body>
+    ${pagesHtml}
+    <script>window.onload = () => setTimeout(() => window.print(), 300);<\/script>
+    </body></html>
+    `);
+    printWin.document.close();
+};
+// ===== LG-TAG-2FORMAT v3: แท็ก LG เลือกได้ 2 แบบ ขนาดพอดีช่องใส่แท็ก 17x9 ซม. (A4L = แบบเดิม / A4P = แบบยาว) =====
+renderLGTagPrintWindow = function(tags, printWin) {
+    if (!printWin) {
+        Swal.fire('เปิดหน้าต่างไม่สำเร็จ', 'เบราว์เซอร์บล็อกป๊อปอัพ กรุณาอนุญาตป๊อปอัพสำหรับเว็บนี้ (กดไอคอนที่แถบ URL ด้านบน) แล้วกดปริ้นแท็กใหม่อีกครั้งครับ', 'error');
+        return;
+    }
+    const total = tags.length;
+    const FORMAT = (window.__lgTagFormat === 'A4P') ? 'A4P' : 'A4L';
+
+    // 🔧 ปรับขนาดตรงนี้ได้ (หน่วย มม.) — แท็กแบบยาวทำให้พอดีช่องใส่แท็ก 170 x 90 มม. (เล็กกว่าช่องประมาณ 2 ซม.)
+    const A4L_TAG_W_MM = 95, A4L_PER_PAGE = 6;   // แท็กแบบ A4L (แบบเดิม 2 คอลัมน์ มีช่องประทับตรา) กว้างต่อใบ / จำนวนต่อหน้า (8 = ขนาดเดิม, 6 = ใหญ่ขึ้น, 4 = ใหญ่มาก)
+    const A4P_W_MM = 150, A4P_H_MM = 68;   // แท็กแบบ A4P (แบบยาว) ยาว x กว้าง (รวมช่องประทับตรา QC)
+    const PER_PAGE = 4;                    // จำนวนแท็กแบบยาว (A4P) ต่อหน้า A4 แนวตั้ง
+    const GAP_MM = 1.5;
+
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    let pagesHtml = '';
+    let css = '';
+
+    if (FORMAT === 'A4P') {
+        // ---------- แบบยาว (A4P) ----------
+        const longTag = (tag, idx) => {
+            const groups = tag.groups.length ? tag.groups : [{ WO: '-', modelSuffix: '-', qty: tag.total }];
+            const nRows = Math.max(4, groups.length);
+            const small = groups.length > 4 ? ' small' : '';
+            const bodyRows = Array.from({ length: nRows }, (_, i) => {
+                const g = groups[i];
+                return g
+                    ? `<tr><td class="q">${esc(g.qty)}</td><td>~</td><td class="ms">${esc(g.modelSuffix || '-')}</td><td class="wo">${esc(g.WO)}</td></tr>`
+                    : `<tr><td class="q">&nbsp;</td><td></td><td></td><td></td></tr>`;
+            }).join('');
+            return `
+            <div class="lt-wrap">
+              <div class="lt">
+                <div class="c lab-l" style="grid-area:1/1/2/2"><i>Line</i><b class="v">${esc(tag.refPlan.line || '-')}</b></div>
+                <div class="c" style="grid-area:1/2/2/6"><i>Seq No</i></div>
+                <div class="c qrc" style="grid-area:1/6/3/7"><img src="${tag.qrDataUrl}"></div>
+                <div class="c lab-l" style="grid-area:2/1/3/2"><i>Qty</i><b class="v">${esc(tag.total)}</b></div>
+                <div class="c" style="grid-area:2/2/3/6"><i>Description</i><b class="v desc">${esc(tag.refPlan.partName || '-')}</b></div>
+                <div class="c lab-l" style="grid-area:3/1/4/2"><i>Made by</i><b class="v">ATECH</b></div>
+                <div class="c" style="grid-area:3/2/4/3"><i>Part No</i><b class="v part">${esc(tag.refPlan.partNo)}</b></div>
+                <div class="c lab-l" style="grid-area:4/1/5/2"><i>Carrier ID</i><b class="v">ATECH</b></div>
+                <div class="c" style="grid-area:4/2/5/3"><b class="v insp">INSPECTION</b></div>
+                <div class="c lab-l" style="grid-area:5/1/6/2"><i>To Locator Group</i><b class="v">${esc(tag.refPlan.locatorGroup || '-')}</b></div>
+                <div class="c" style="grid-area:5/2/6/3"><i>PST</i><b class="v pst">${esc(tag.refPlan.startDateTime || '-')}</b></div>
+                <div class="sub${small}" style="grid-area:3/3/6/7">
+                    <table><thead><tr><th style="width:11%">Qty</th><th style="width:19%">Prod Seq No</th><th>Model.Suffix</th><th style="width:24%">W/O</th></tr></thead>
+                    <tbody>${bodyRows}</tbody></table>
+                </div>
+                <div class="ft" style="grid-area:6/1/7/7"><span>Printed Date : &nbsp;${esc(tag.printedDate)} &nbsp;·&nbsp; Printed by ATECH</span><span>${esc(tag.docNumber)}</span><span>ใบที่ ${idx + 1}/${total}</span></div>
+                <div class="stp" style="grid-area:7/1/8/4"><i>INSPECTION</i><em>QC STAMP</em></div>
+                <div class="stp" style="grid-area:7/4/8/7"><i>RoHS</i><em>QC STAMP</em></div>
+              </div>
+            </div>`;
+        };
+        for (let p = 0; p < tags.length; p += PER_PAGE) {
+            pagesHtml += `<div class="lg-page">${tags.slice(p, p + PER_PAGE).map((t, i) => longTag(t, p + i)).join('')}</div>`;
+        }
+        css = `
+        .lg-page { display: grid; grid-template-columns: ${A4P_W_MM}mm; justify-content: center; grid-template-rows: repeat(${PER_PAGE}, ${A4P_H_MM}mm); align-content: start; gap: ${GAP_MM}mm; width: 194mm; height: 281mm; page-break-after: always; }
+        .lg-page:last-child { page-break-after: auto; }
+        .lt-wrap { display: flex; flex-direction: column; min-height: 0; page-break-inside: avoid; }
+        .lt { flex: 1; min-height: 0; border: 1.2px solid #000; display: grid;
+              grid-template-columns: 18% 22% 7% 13% 27% 13%;
+              grid-template-rows: 1fr 1fr 1.05fr 1fr 1fr 6.5mm 14mm; }
+        .lt .c { border-right: 1px solid #000; border-bottom: 1px solid #000; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 2.4mm 1mm 0.4mm; }
+        .lt .c i { position: absolute; left: 1mm; top: 0.4mm; font-style: normal; font-size: 6.5pt; color: #222; line-height: 1; }
+        .lt .v { font-size: 12pt; font-weight: 700; text-align: center; line-height: 1.05; }
+        .lt .v.desc { font-size: 14pt; } .lt .v.part { font-size: 12.5pt; } .lt .v.insp { font-size: 12pt; letter-spacing: .5px; } .lt .v.pst { font-size: 10.5pt; }
+        .lt .qrc { padding: 1mm; border-right: 0; } .lt .qrc img { height: 100%; max-width: 100%; aspect-ratio: 1; object-fit: contain; }
+        .lt .sub { border-bottom: 1px solid #000; display: flex; }
+        .lt .sub table { width: 100%; height: 100%; border-collapse: collapse; table-layout: fixed; }
+        .lt .sub th { white-space: nowrap; font-size: 7.5pt; font-weight: 400; border-left: 1px solid #000; border-bottom: 1px solid #000; padding: 0.4mm 0; text-align: center; }
+        .lt .sub td { font-size: 9pt; text-align: center; border-left: 1px solid #000; border-top: 1px solid #000; padding: 0 0.5mm; overflow: hidden; white-space: nowrap; }
+        .lt .sub tbody tr:first-child td { border-top: 0; }
+        .lt .sub td.q { font-size: 10pt; } .lt .sub td.wo { font-size: 8pt; } .lt .sub td.ms { font-size: 7.5pt; }
+        .lt .sub.small td, .lt .sub.small th { font-size: 6.5pt; }
+        .lt .ft { display: flex; justify-content: space-between; align-items: center; padding: 0 3mm; font-size: 8.5pt; border: 0; border-bottom: 1px solid #000; }
+        .lt .stp { position: relative; border-right: 1px solid #000; }
+        .lt .stp:last-child { border-right: 0; }
+        .lt .stp i { position: absolute; left: 1.5mm; top: 0.6mm; font-style: normal; font-size: 7pt; font-weight: 800; color: #374151; letter-spacing: .5px; }
+        .lt .stp em { position: absolute; right: 1.5mm; bottom: 0.6mm; font-style: normal; font-size: 5pt; color: #b6bcc6; letter-spacing: .5px; }
+        `;
+    } else {
+        // ---------- แบบ A4L (แบบเดิม ขนาดใหญ่ มีช่องประทับตรา) ----------
+        const LAYOUTS = { 8: { rows: 4, k: 1.0 }, 6: { rows: 3, k: 1.25 }, 4: { rows: 2, k: 1.9 } };
+        const LY = LAYOUTS[A4L_PER_PAGE] || LAYOUTS[6];
+        const tagCardHtml = (tag, idx) => {
+            const woList = tag.groups.map(g => g.WO).join(', ');
+            const modelSuffixList = [...new Set(tag.groups.map(g => g.modelSuffix || '-'))].join(' + ');
+            return `
+            <div class="lg-tag">
+                <table class="lg-tag-table">
+                    <tr>
+                        <td class="lbl" style="width:18%;">Line</td>
+                        <td class="val" style="width:32%;">${tag.refPlan.line || '-'}</td>
+                        <td class="qr" rowspan="2" style="width:22%;"><img src="${tag.qrDataUrl}"></td>
+                    </tr>
+                    <tr>
+                        <td class="lbl">Part No</td>
+                        <td class="val part-big">${tag.refPlan.partNo}</td>
+                    </tr>
+                    <tr>
+                        <td class="lbl">Qty</td>
+                        <td class="val big" colspan="2">${tag.total}</td>
+                    </tr>
+                    <tr>
+                        <td class="lbl">Description</td>
+                        <td class="val" colspan="2">${tag.refPlan.partName || '-'}</td>
+                    </tr>
+                </table>
+                <table class="lg-tag-table2">
+                    <tr>
+                        <td class="lbl">Made by</td><td class="val">ATECH</td>
+                        <td class="lbl">Seq No</td><td class="val"></td>
+                        <td class="lbl">Qty</td><td class="val">${tag.total}</td>
+                        <td class="lbl">W/O</td><td class="val brk" colspan="3">${woList}</td>
+                    </tr>
+                    <tr>
+                        <td class="lbl">Carrier ID</td><td class="val">ATECH</td>
+                        <td class="val" colspan="4">INSPECTION</td>
+                        <td class="lbl">Model.Suffix</td><td class="val brk" colspan="3">${modelSuffixList || '-'}</td>
+                    </tr>
+                    <tr>
+                        <td class="lbl">To Locator<br>Group</td><td class="val">${tag.refPlan.locatorGroup || '-'}</td>
+                        <td class="lbl">PST</td><td class="val" colspan="7">${tag.refPlan.startDateTime || '-'}</td>
+                    </tr>
+                </table>
+                <div class="lg-stamps">
+                    <div class="lg-stamp"><span>INSPECTION</span><em>QC STAMP</em></div>
+                    <div class="lg-stamp"><span>RoHS</span><em>QC STAMP</em></div>
+                </div>
+                <div class="lg-tag-footer">
+                    <span>Printed: ${tag.printedDate}</span>
+                    <span>${tag.docNumber}</span>
+                    <span style="font-size:${(11 * Math.min(LY.k, 1.25)).toFixed(1)}px; font-weight:800;">ใบที่ ${idx + 1}/${total}</span>
+                </div>
+            </div>`;
+        };
+        for (let p = 0; p < tags.length; p += A4L_PER_PAGE) {
+            pagesHtml += `<div class="lg-page">${tags.slice(p, p + A4L_PER_PAGE).map((tag, i) => tagCardHtml(tag, p + i)).join('')}</div>`;
+        }
+        css = `
+        :root { --k: ${LY.k}; --fk: ${Math.min(LY.k, 1.35)}; }
+        .lg-page { display: grid; grid-template-columns: repeat(2, ${A4L_TAG_W_MM}mm); justify-content: center; grid-template-rows: repeat(${LY.rows}, 1fr); gap: 2mm; width: 194mm; height: 281mm; page-break-after: always; }
+        .lg-page:last-child { page-break-after: auto; }
+        .lg-tag { border: 1.2px solid #333; padding: 2mm; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+        .lg-tag-table, .lg-tag-table2 { width: 100%; border-collapse: collapse; font-size: calc(7.5px * var(--k)); margin-bottom: 1mm; flex: none; }
+        .lg-tag-table td, .lg-tag-table2 td { border: 1px solid #999; padding: 1px 3px; line-height: 1.2; }
+        .lg-tag-table2 .brk { overflow-wrap: anywhere; word-break: break-all; }
+        .lbl { color: #0d6efd; font-size: calc(6.5px * var(--k)); }
+        .val { font-weight: bold; }
+        .val.big { font-size: calc(10px * var(--k)); }
+        .val.part-big { font-size: calc(13px * var(--k)); letter-spacing: 0.2px; }
+        .qr img { width: 100%; display: block; }
+        .lg-stamps { flex: 1 1 auto; min-height: 14mm; display: grid; grid-template-columns: 1fr 1fr; gap: 2mm; margin: 0.5mm 0 1mm; }
+        .lg-stamp { position: relative; border: 1.4px dashed #6b7280; border-radius: 2mm; }
+        .lg-stamp span { position: absolute; left: 2mm; top: 1mm; font-size: calc(7px * var(--k)); font-weight: 800; color: #374151; letter-spacing: .6px; }
+        .lg-stamp em { position: absolute; right: 2mm; bottom: 1mm; font-style: normal; font-size: calc(5.5px * var(--k)); color: #b6bcc6; letter-spacing: .5px; }
+        .lg-tag-footer { display: flex; justify-content: space-between; align-items: flex-end; font-size: calc(6.5px * var(--fk)); margin-top: auto; padding-top: 0.5mm; flex: none; }
+        @media print { .lg-tag { page-break-inside: avoid; } }
+        `;
+    }
+
+    printWin.document.open();
+    printWin.document.write(`
+    <!DOCTYPE html>
+    <html><head><meta charset="UTF-8"><title>ปริ้นแท็ก LG (${FORMAT})</title>
+    <style>
+        * { box-sizing: border-box; }
+        @page { size: A4; margin: 8mm; }
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        ${css}
+    </style>
+    </head><body>
+    ${pagesHtml}
+    <script>window.onload = () => setTimeout(() => window.print(), 300);<\/script>
+    </body></html>
+    `);
+    printWin.document.close();
+};
+// ===== LG-TAG-2FORMAT v4: แท็ก LG เลือกได้ 2 แบบ ขนาดพอดีช่องใส่แท็ก 17x9 ซม. (A4L = แบบเดิม / A4P = แบบยาว) =====
+renderLGTagPrintWindow = function(tags, printWin) {
+    if (!printWin) {
+        Swal.fire('เปิดหน้าต่างไม่สำเร็จ', 'เบราว์เซอร์บล็อกป๊อปอัพ กรุณาอนุญาตป๊อปอัพสำหรับเว็บนี้ (กดไอคอนที่แถบ URL ด้านบน) แล้วกดปริ้นแท็กใหม่อีกครั้งครับ', 'error');
+        return;
+    }
+    const total = tags.length;
+    const FORMAT = (window.__lgTagFormat === 'A4P') ? 'A4P' : 'A4L';
+
+    // 🔧 ปรับขนาดตรงนี้ได้ (หน่วย มม.) — แท็กแบบยาวทำให้พอดีช่องใส่แท็ก 170 x 90 มม. (เล็กกว่าช่องประมาณ 2 ซม.)
+    const A4L_TAG_W_MM = 90, A4L_PER_PAGE = 6;   // แท็กแบบ A4L (แบบเดิม 2 คอลัมน์ มีช่องประทับตรา) กว้างต่อใบ / จำนวนต่อหน้า (8 = ขนาดเดิม, 6 = ใหญ่ขึ้น, 4 = ใหญ่มาก)
+    const A4P_W_MM = 150, A4P_H_MM = 68;   // แท็กแบบ A4P (แบบยาว) ยาว x กว้าง (รวมช่องประทับตรา QC)
+    const PER_PAGE = 4;                    // จำนวนแท็กแบบยาว (A4P) ต่อหน้า A4 แนวตั้ง
+    const GAP_MM = 1.5;
+
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    let pagesHtml = '';
+    let css = '';
+
+    if (FORMAT === 'A4P') {
+        // ---------- แบบยาว (A4P) ----------
+        const longTag = (tag, idx) => {
+            const groups = tag.groups.length ? tag.groups : [{ WO: '-', modelSuffix: '-', qty: tag.total }];
+            const nRows = Math.max(4, groups.length);
+            const small = groups.length > 4 ? ' small' : '';
+            const bodyRows = Array.from({ length: nRows }, (_, i) => {
+                const g = groups[i];
+                return g
+                    ? `<tr><td class="q">${esc(g.qty)}</td><td>~</td><td class="ms">${esc(g.modelSuffix || '-')}</td><td class="wo">${esc(g.WO)}</td></tr>`
+                    : `<tr><td class="q">&nbsp;</td><td></td><td></td><td></td></tr>`;
+            }).join('');
+            return `
+            <div class="lt-wrap">
+              <div class="lt">
+                <div class="c lab-l" style="grid-area:1/1/2/2"><i>Line</i><b class="v">${esc(tag.refPlan.line || '-')}</b></div>
+                <div class="c" style="grid-area:1/2/2/6"><i>Seq No</i></div>
+                <div class="c qrc" style="grid-area:1/6/3/7"><img src="${tag.qrDataUrl}"></div>
+                <div class="c lab-l" style="grid-area:2/1/3/2"><i>Qty</i><b class="v">${esc(tag.total)}</b></div>
+                <div class="c" style="grid-area:2/2/3/6"><i>Description</i><b class="v desc">${esc(tag.refPlan.partName || '-')}</b></div>
+                <div class="c lab-l" style="grid-area:3/1/4/2"><i>Made by</i><b class="v">ATECH</b></div>
+                <div class="c" style="grid-area:3/2/4/3"><i>Part No</i><b class="v part">${esc(tag.refPlan.partNo)}</b></div>
+                <div class="c lab-l" style="grid-area:4/1/5/2"><i>Carrier ID</i><b class="v">ATECH</b></div>
+                <div class="c" style="grid-area:4/2/5/3"><b class="v insp">INSPECTION</b></div>
+                <div class="c lab-l" style="grid-area:5/1/6/2"><i>To Locator Group</i><b class="v">${esc(tag.refPlan.locatorGroup || '-')}</b></div>
+                <div class="c" style="grid-area:5/2/6/3"><i>PST</i><b class="v pst">${esc(tag.refPlan.startDateTime || '-')}</b></div>
+                <div class="sub${small}" style="grid-area:3/3/6/7">
+                    <table><thead><tr><th style="width:11%">Qty</th><th style="width:19%">Prod Seq No</th><th>Model.Suffix</th><th style="width:24%">W/O</th></tr></thead>
+                    <tbody>${bodyRows}</tbody></table>
+                </div>
+                <div class="ft" style="grid-area:6/1/7/7"><span>Printed Date : &nbsp;${esc(tag.printedDate)} &nbsp;·&nbsp; Printed by ATECH</span><span>${esc(tag.docNumber)}</span><span>ใบที่ ${idx + 1}/${total}</span></div>
+                <div class="stp" style="grid-area:7/1/8/4"><i>INSPECTION</i><em>QC STAMP</em></div>
+                <div class="stp" style="grid-area:7/4/8/7"><i>RoHS</i><em>QC STAMP</em></div>
+              </div>
+            </div>`;
+        };
+        for (let p = 0; p < tags.length; p += PER_PAGE) {
+            pagesHtml += `<div class="lg-page">${tags.slice(p, p + PER_PAGE).map((t, i) => longTag(t, p + i)).join('')}</div>`;
+        }
+        css = `
+        .lg-page { display: grid; grid-template-columns: ${A4P_W_MM}mm; justify-content: center; grid-template-rows: repeat(${PER_PAGE}, ${A4P_H_MM}mm); align-content: start; gap: ${GAP_MM}mm; width: 194mm; height: 279mm; page-break-after: always; }
+        .lg-page:last-child { page-break-after: auto; }
+        .lt-wrap { display: flex; flex-direction: column; min-height: 0; page-break-inside: avoid; }
+        .lt { flex: 1; min-height: 0; border: 1.2px solid #000; display: grid;
+              grid-template-columns: 18% 22% 7% 13% 27% 13%;
+              grid-template-rows: 1fr 1fr 1.05fr 1fr 1fr 6.5mm 14mm; }
+        .lt .c { border-right: 1px solid #000; border-bottom: 1px solid #000; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 2.4mm 1mm 0.4mm; }
+        .lt .c i { position: absolute; left: 1mm; top: 0.4mm; font-style: normal; font-size: 6.5pt; color: #222; line-height: 1; }
+        .lt .v { font-size: 12pt; font-weight: 700; text-align: center; line-height: 1.05; }
+        .lt .v.desc { font-size: 14pt; } .lt .v.part { font-size: 12.5pt; } .lt .v.insp { font-size: 12pt; letter-spacing: .5px; } .lt .v.pst { font-size: 10.5pt; }
+        .lt .qrc { padding: 1mm; border-right: 0; } .lt .qrc img { height: 100%; max-width: 100%; aspect-ratio: 1; object-fit: contain; }
+        .lt .sub { border-bottom: 1px solid #000; display: flex; }
+        .lt .sub table { width: 100%; height: 100%; border-collapse: collapse; table-layout: fixed; }
+        .lt .sub th { white-space: nowrap; font-size: 7.5pt; font-weight: 400; border-left: 1px solid #000; border-bottom: 1px solid #000; padding: 0.4mm 0; text-align: center; }
+        .lt .sub td { font-size: 9pt; text-align: center; border-left: 1px solid #000; border-top: 1px solid #000; padding: 0 0.5mm; overflow: hidden; white-space: nowrap; }
+        .lt .sub tbody tr:first-child td { border-top: 0; }
+        .lt .sub td.q { font-size: 10pt; } .lt .sub td.wo { font-size: 8pt; } .lt .sub td.ms { font-size: 7.5pt; }
+        .lt .sub.small td, .lt .sub.small th { font-size: 6.5pt; }
+        .lt .ft { display: flex; justify-content: space-between; align-items: center; padding: 0 3mm; font-size: 8.5pt; border: 0; border-bottom: 1px solid #000; }
+        .lt .stp { position: relative; border-right: 1px solid #000; }
+        .lt .stp:last-child { border-right: 0; }
+        .lt .stp i { position: absolute; left: 1.5mm; top: 0.6mm; font-style: normal; font-size: 7pt; font-weight: 800; color: #374151; letter-spacing: .5px; }
+        .lt .stp em { position: absolute; right: 1.5mm; bottom: 0.6mm; font-style: normal; font-size: 5pt; color: #b6bcc6; letter-spacing: .5px; }
+        `;
+    } else {
+        // ---------- แบบ A4L (แบบเดิม ขนาดใหญ่ มีช่องประทับตรา) ----------
+        const LAYOUTS = { 8: { rows: 4, k: 1.0 }, 6: { rows: 3, k: 1.25 }, 4: { rows: 2, k: 1.9 } };
+        const LY = LAYOUTS[A4L_PER_PAGE] || LAYOUTS[6];
+        const tagCardHtml = (tag, idx) => {
+            const woList = tag.groups.map(g => g.WO).join(', ');
+            const modelSuffixList = [...new Set(tag.groups.map(g => g.modelSuffix || '-'))].join(' + ');
+            return `
+            <div class="lg-tag">
+                <table class="lg-tag-table">
+                    <tr>
+                        <td class="lbl" style="width:18%;">Line</td>
+                        <td class="val" style="width:32%;">${tag.refPlan.line || '-'}</td>
+                        <td class="qr" rowspan="2" style="width:22%;"><img src="${tag.qrDataUrl}"></td>
+                    </tr>
+                    <tr>
+                        <td class="lbl">Part No</td>
+                        <td class="val part-big">${tag.refPlan.partNo}</td>
+                    </tr>
+                    <tr>
+                        <td class="lbl">Qty</td>
+                        <td class="val big" colspan="2">${tag.total}</td>
+                    </tr>
+                    <tr>
+                        <td class="lbl">Description</td>
+                        <td class="val" colspan="2">${tag.refPlan.partName || '-'}</td>
+                    </tr>
+                </table>
+                <table class="lg-tag-table2">
+                    <tr>
+                        <td class="lbl">Made by</td><td class="val">ATECH</td>
+                        <td class="lbl">Seq No</td><td class="val"></td>
+                        <td class="lbl">Qty</td><td class="val">${tag.total}</td>
+                        <td class="lbl">W/O</td><td class="val brk" colspan="3">${woList}</td>
+                    </tr>
+                    <tr>
+                        <td class="lbl">Carrier ID</td><td class="val">ATECH</td>
+                        <td class="val" colspan="4">INSPECTION</td>
+                        <td class="lbl">Model.Suffix</td><td class="val brk" colspan="3">${modelSuffixList || '-'}</td>
+                    </tr>
+                    <tr>
+                        <td class="lbl">To Locator<br>Group</td><td class="val">${tag.refPlan.locatorGroup || '-'}</td>
+                        <td class="lbl">PST</td><td class="val" colspan="7">${tag.refPlan.startDateTime || '-'}</td>
+                    </tr>
+                </table>
+                <div class="lg-stamps">
+                    <div class="lg-stamp"><span>INSPECTION</span><em>QC STAMP</em></div>
+                    <div class="lg-stamp"><span>RoHS</span><em>QC STAMP</em></div>
+                </div>
+                <div class="lg-tag-footer">
+                    <span>Printed: ${tag.printedDate}</span>
+                    <span>${tag.docNumber}</span>
+                    <span style="font-size:${(11 * Math.min(LY.k, 1.25)).toFixed(1)}px; font-weight:800;">ใบที่ ${idx + 1}/${total}</span>
+                </div>
+            </div>`;
+        };
+        for (let p = 0; p < tags.length; p += A4L_PER_PAGE) {
+            pagesHtml += `<div class="lg-page">${tags.slice(p, p + A4L_PER_PAGE).map((tag, i) => tagCardHtml(tag, p + i)).join('')}</div>`;
+        }
+        css = `
+        :root { --k: ${LY.k}; --fk: ${Math.min(LY.k, 1.35)}; }
+        .lg-page { display: grid; grid-template-columns: repeat(2, ${A4L_TAG_W_MM}mm); justify-content: center; grid-template-rows: repeat(${LY.rows}, 1fr); gap: 2mm; width: 194mm; height: 279mm; page-break-after: always; }
+        .lg-page:last-child { page-break-after: auto; }
+        .lg-tag { border: 1.2px solid #333; padding: 2mm; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+        .lg-tag-table, .lg-tag-table2 { width: 100%; border-collapse: collapse; font-size: calc(7.5px * var(--k)); margin-bottom: 1mm; flex: none; }
+        .lg-tag-table td, .lg-tag-table2 td { border: 1px solid #999; padding: 1px 3px; line-height: 1.2; }
+        .lg-tag-table2 .brk { overflow-wrap: anywhere; word-break: break-all; }
+        .lbl { color: #0d6efd; font-size: calc(6.5px * var(--k)); }
+        .val { font-weight: bold; }
+        .val.big { font-size: calc(10px * var(--k)); }
+        .val.part-big { font-size: calc(13px * var(--k)); letter-spacing: 0.2px; }
+        .qr img { width: 100%; display: block; }
+        .lg-stamps { flex: none; height: 19mm; display: grid; grid-template-columns: 1fr 1fr; gap: 2mm; margin: auto 0 1mm; }
+        .lg-stamp { position: relative; border: 1.4px dashed #6b7280; border-radius: 2mm; }
+        .lg-stamp span { position: absolute; left: 2mm; top: 1mm; font-size: calc(7px * var(--k)); font-weight: 800; color: #374151; letter-spacing: .6px; }
+        .lg-stamp em { position: absolute; right: 2mm; bottom: 1mm; font-style: normal; font-size: calc(5.5px * var(--k)); color: #b6bcc6; letter-spacing: .5px; }
+        .lg-tag-footer { display: flex; justify-content: space-between; align-items: flex-end; font-size: calc(6.5px * var(--fk)); margin-top: 0; padding-top: 0.5mm; flex: none; }
+        @media print { .lg-tag { page-break-inside: avoid; } }
+        `;
+    }
+
+    printWin.document.open();
+    printWin.document.write(`
+    <!DOCTYPE html>
+    <html><head><meta charset="UTF-8"><title>ปริ้นแท็ก LG (${FORMAT})</title>
+    <style>
+        * { box-sizing: border-box; }
+        @page { size: A4; margin: 8mm; }
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        ${css}
+    </style>
+    </head><body>
+    ${pagesHtml}
+    <script>window.onload = () => setTimeout(() => window.print(), 300);<\/script>
+    </body></html>
+    `);
+    printWin.document.close();
+};
+// ===== LG-TAG-2FORMAT v5: แท็ก LG เลือกได้ 2 แบบ ขนาดพอดีช่องใส่แท็ก 17x9 ซม. (A4L = แบบเดิม / A4P = แบบยาว) =====
+renderLGTagPrintWindow = function(tags, printWin) {
+    if (!printWin) {
+        Swal.fire('เปิดหน้าต่างไม่สำเร็จ', 'เบราว์เซอร์บล็อกป๊อปอัพ กรุณาอนุญาตป๊อปอัพสำหรับเว็บนี้ (กดไอคอนที่แถบ URL ด้านบน) แล้วกดปริ้นแท็กใหม่อีกครั้งครับ', 'error');
+        return;
+    }
+    const total = tags.length;
+    const FORMAT = (window.__lgTagFormat === 'A4P') ? 'A4P' : 'A4L';
+
+    // 🔧 ปรับขนาดตรงนี้ได้ (หน่วย มม.) — แท็กแบบยาวทำให้พอดีช่องใส่แท็ก 170 x 90 มม. (เล็กกว่าช่องประมาณ 2 ซม.)
+    const A4L_TAG_W_MM = 90, A4L_TAG_H_MM = 82, A4L_PER_PAGE = 6;   // แท็กแบบ A4L (แบบเดิม 2 คอลัมน์ มีช่องประทับตรา) กว้างต่อใบ / จำนวนต่อหน้า (8 = ขนาดเดิม, 6 = ใหญ่ขึ้น, 4 = ใหญ่มาก)
+    const A4P_W_MM = 150, A4P_H_MM = 68;   // แท็กแบบ A4P (แบบยาว) ยาว x กว้าง (รวมช่องประทับตรา QC)
+    const PER_PAGE = 4;                    // จำนวนแท็กแบบยาว (A4P) ต่อหน้า A4 แนวตั้ง
+    const GAP_MM = 1.5;
+
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    let pagesHtml = '';
+    let css = '';
+
+    if (FORMAT === 'A4P') {
+        // ---------- แบบยาว (A4P) ----------
+        const longTag = (tag, idx) => {
+            const groups = tag.groups.length ? tag.groups : [{ WO: '-', modelSuffix: '-', qty: tag.total }];
+            const nRows = Math.max(4, groups.length);
+            const small = groups.length > 4 ? ' small' : '';
+            const bodyRows = Array.from({ length: nRows }, (_, i) => {
+                const g = groups[i];
+                return g
+                    ? `<tr><td class="q">${esc(g.qty)}</td><td>~</td><td class="ms">${esc(g.modelSuffix || '-')}</td><td class="wo">${esc(g.WO)}</td></tr>`
+                    : `<tr><td class="q">&nbsp;</td><td></td><td></td><td></td></tr>`;
+            }).join('');
+            return `
+            <div class="lt-wrap">
+              <div class="lt">
+                <div class="c lab-l" style="grid-area:1/1/2/2"><i>Line</i><b class="v">${esc(tag.refPlan.line || '-')}</b></div>
+                <div class="c" style="grid-area:1/2/2/6"><i>Seq No</i></div>
+                <div class="c qrc" style="grid-area:1/6/3/7"><img src="${tag.qrDataUrl}"></div>
+                <div class="c lab-l" style="grid-area:2/1/3/2"><i>Qty</i><b class="v">${esc(tag.total)}</b></div>
+                <div class="c" style="grid-area:2/2/3/6"><i>Description</i><b class="v desc">${esc(tag.refPlan.partName || '-')}</b></div>
+                <div class="c lab-l" style="grid-area:3/1/4/2"><i>Made by</i><b class="v">ATECH</b></div>
+                <div class="c" style="grid-area:3/2/4/3"><i>Part No</i><b class="v part">${esc(tag.refPlan.partNo)}</b></div>
+                <div class="c lab-l" style="grid-area:4/1/5/2"><i>Carrier ID</i><b class="v">ATECH</b></div>
+                <div class="c" style="grid-area:4/2/5/3"><b class="v insp">INSPECTION</b></div>
+                <div class="c lab-l" style="grid-area:5/1/6/2"><i>To Locator Group</i><b class="v">${esc(tag.refPlan.locatorGroup || '-')}</b></div>
+                <div class="c" style="grid-area:5/2/6/3"><i>PST</i><b class="v pst">${esc(tag.refPlan.startDateTime || '-')}</b></div>
+                <div class="sub${small}" style="grid-area:3/3/6/7">
+                    <table><thead><tr><th style="width:11%">Qty</th><th style="width:19%">Prod Seq No</th><th>Model.Suffix</th><th style="width:24%">W/O</th></tr></thead>
+                    <tbody>${bodyRows}</tbody></table>
+                </div>
+                <div class="ft" style="grid-area:6/1/7/7"><span>Printed Date : &nbsp;${esc(tag.printedDate)} &nbsp;·&nbsp; Printed by ATECH</span><span>${esc(tag.docNumber)}</span><span>ใบที่ ${idx + 1}/${total}</span></div>
+                <div class="stp" style="grid-area:7/1/8/4"><i>INSPECTION</i><em>QC STAMP</em></div>
+                <div class="stp" style="grid-area:7/4/8/7"><i>RoHS</i><em>QC STAMP</em></div>
+              </div>
+            </div>`;
+        };
+        for (let p = 0; p < tags.length; p += PER_PAGE) {
+            pagesHtml += `<div class="lg-page">${tags.slice(p, p + PER_PAGE).map((t, i) => longTag(t, p + i)).join('')}</div>`;
+        }
+        css = `
+        .lg-page { display: grid; grid-template-columns: ${A4P_W_MM}mm; justify-content: center; grid-template-rows: repeat(${PER_PAGE}, ${A4P_H_MM}mm); align-content: start; gap: ${GAP_MM}mm; width: 194mm; height: 279mm; page-break-after: always; }
+        .lg-page:last-child { page-break-after: auto; }
+        .lt-wrap { display: flex; flex-direction: column; min-height: 0; page-break-inside: avoid; }
+        .lt { flex: 1; min-height: 0; border: 1.2px solid #000; display: grid;
+              grid-template-columns: 18% 22% 7% 13% 27% 13%;
+              grid-template-rows: 1fr 1fr 1.05fr 1fr 1fr 6.5mm 14mm; }
+        .lt .c { border-right: 1px solid #000; border-bottom: 1px solid #000; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 2.4mm 1mm 0.4mm; }
+        .lt .c i { position: absolute; left: 1mm; top: 0.4mm; font-style: normal; font-size: 6.5pt; color: #222; line-height: 1; }
+        .lt .v { font-size: 12pt; font-weight: 700; text-align: center; line-height: 1.05; }
+        .lt .v.desc { font-size: 14pt; } .lt .v.part { font-size: 12.5pt; } .lt .v.insp { font-size: 12pt; letter-spacing: .5px; } .lt .v.pst { font-size: 10.5pt; }
+        .lt .qrc { padding: 1mm; border-right: 0; } .lt .qrc img { height: 100%; max-width: 100%; aspect-ratio: 1; object-fit: contain; }
+        .lt .sub { border-bottom: 1px solid #000; display: flex; }
+        .lt .sub table { width: 100%; height: 100%; border-collapse: collapse; table-layout: fixed; }
+        .lt .sub th { white-space: nowrap; font-size: 7.5pt; font-weight: 400; border-left: 1px solid #000; border-bottom: 1px solid #000; padding: 0.4mm 0; text-align: center; }
+        .lt .sub td { font-size: 9pt; text-align: center; border-left: 1px solid #000; border-top: 1px solid #000; padding: 0 0.5mm; overflow: hidden; white-space: nowrap; }
+        .lt .sub tbody tr:first-child td { border-top: 0; }
+        .lt .sub td.q { font-size: 10pt; } .lt .sub td.wo { font-size: 8pt; } .lt .sub td.ms { font-size: 7.5pt; }
+        .lt .sub.small td, .lt .sub.small th { font-size: 6.5pt; }
+        .lt .ft { display: flex; justify-content: space-between; align-items: center; padding: 0 3mm; font-size: 8.5pt; border: 0; border-bottom: 1px solid #000; }
+        .lt .stp { position: relative; border-right: 1px solid #000; }
+        .lt .stp:last-child { border-right: 0; }
+        .lt .stp i { position: absolute; left: 1.5mm; top: 0.6mm; font-style: normal; font-size: 7pt; font-weight: 800; color: #374151; letter-spacing: .5px; }
+        .lt .stp em { position: absolute; right: 1.5mm; bottom: 0.6mm; font-style: normal; font-size: 5pt; color: #b6bcc6; letter-spacing: .5px; }
+        `;
+    } else {
+        // ---------- แบบ A4L (แบบเดิม ขนาดใหญ่ มีช่องประทับตรา) ----------
+        const LAYOUTS = { 8: { rows: 4, k: 1.0 }, 6: { rows: 3, k: 1.2 }, 4: { rows: 2, k: 1.9 } };
+        const LY = LAYOUTS[A4L_PER_PAGE] || LAYOUTS[6];
+        const tagCardHtml = (tag, idx) => {
+            const woList = tag.groups.map(g => g.WO).join(', ');
+            const modelSuffixList = [...new Set(tag.groups.map(g => g.modelSuffix || '-'))].join(' + ');
+            return `
+            <div class="lg-tag">
+                <table class="lg-tag-table">
+                    <tr>
+                        <td class="lbl" style="width:18%;">Line</td>
+                        <td class="val" style="width:32%;">${tag.refPlan.line || '-'}</td>
+                        <td class="qr" rowspan="2" style="width:22%;"><img src="${tag.qrDataUrl}"></td>
+                    </tr>
+                    <tr>
+                        <td class="lbl">Part No</td>
+                        <td class="val part-big">${tag.refPlan.partNo}</td>
+                    </tr>
+                    <tr>
+                        <td class="lbl">Qty</td>
+                        <td class="val big" colspan="2">${tag.total}</td>
+                    </tr>
+                    <tr>
+                        <td class="lbl">Description</td>
+                        <td class="val" colspan="2">${tag.refPlan.partName || '-'}</td>
+                    </tr>
+                </table>
+                <table class="lg-tag-table2">
+                    <tr>
+                        <td class="lbl">Made by</td><td class="val">ATECH</td>
+                        <td class="lbl">Seq No</td><td class="val"></td>
+                        <td class="lbl">Qty</td><td class="val">${tag.total}</td>
+                        <td class="lbl">W/O</td><td class="val brk" colspan="3">${woList}</td>
+                    </tr>
+                    <tr>
+                        <td class="lbl">Carrier ID</td><td class="val">ATECH</td>
+                        <td class="val" colspan="4">INSPECTION</td>
+                        <td class="lbl">Model.Suffix</td><td class="val brk" colspan="3">${modelSuffixList || '-'}</td>
+                    </tr>
+                    <tr>
+                        <td class="lbl">To Locator<br>Group</td><td class="val">${tag.refPlan.locatorGroup || '-'}</td>
+                        <td class="lbl">PST</td><td class="val" colspan="7">${tag.refPlan.startDateTime || '-'}</td>
+                    </tr>
+                </table>
+                <div class="lg-stamps">
+                    <div class="lg-stamp"><span>INSPECTION</span><em>QC STAMP</em></div>
+                    <div class="lg-stamp"><span>RoHS</span><em>QC STAMP</em></div>
+                </div>
+                <div class="lg-tag-footer">
+                    <span>Printed: ${tag.printedDate}</span>
+                    <span>${tag.docNumber}</span>
+                    <span style="font-size:${(11 * Math.min(LY.k, 1.25)).toFixed(1)}px; font-weight:800;">ใบที่ ${idx + 1}/${total}</span>
+                </div>
+            </div>`;
+        };
+        for (let p = 0; p < tags.length; p += A4L_PER_PAGE) {
+            pagesHtml += `<div class="lg-page">${tags.slice(p, p + A4L_PER_PAGE).map((tag, i) => tagCardHtml(tag, p + i)).join('')}</div>`;
+        }
+        css = `
+        :root { --k: ${LY.k}; --fk: ${Math.min(LY.k, 1.35)}; }
+        .lg-page { display: grid; grid-template-columns: repeat(2, ${A4L_TAG_W_MM}mm); justify-content: center; grid-template-rows: repeat(${LY.rows}, ${A4L_TAG_H_MM}mm); align-content: start; gap: 2mm; width: 194mm; height: 279mm; page-break-after: always; }
+        .lg-page:last-child { page-break-after: auto; }
+        .lg-tag { border: 1.2px solid #333; padding: 2mm; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+        .lg-tag-table, .lg-tag-table2 { width: 100%; border-collapse: collapse; font-size: calc(7.5px * var(--k)); margin-bottom: 1mm; flex: none; }
+        .lg-tag-table td, .lg-tag-table2 td { border: 1px solid #999; padding: 1px 3px; line-height: 1.2; }
+        .lg-tag-table2 .brk { overflow-wrap: anywhere; word-break: break-all; }
+        .lbl { color: #0d6efd; font-size: calc(6.5px * var(--k)); }
+        .val { font-weight: bold; }
+        .val.big { font-size: calc(10px * var(--k)); }
+        .val.part-big { font-size: calc(13px * var(--k)); letter-spacing: 0.2px; }
+        .qr img { width: 100%; display: block; }
+        .lg-stamps { flex: none; height: 17mm; display: grid; grid-template-columns: 1fr 1fr; gap: 2mm; margin: auto 0 1mm; }
+        .lg-stamp { position: relative; border: 1.4px dashed #6b7280; border-radius: 2mm; }
+        .lg-stamp span { position: absolute; left: 2mm; top: 1mm; font-size: calc(7px * var(--k)); font-weight: 800; color: #374151; letter-spacing: .6px; }
+        .lg-stamp em { position: absolute; right: 2mm; bottom: 1mm; font-style: normal; font-size: calc(5.5px * var(--k)); color: #b6bcc6; letter-spacing: .5px; }
+        .lg-tag-footer { display: flex; justify-content: space-between; align-items: flex-end; font-size: calc(6.5px * var(--fk)); margin-top: 0; padding-top: 0.5mm; flex: none; }
+        @media print { .lg-tag { page-break-inside: avoid; } }
+        `;
+    }
+
+    printWin.document.open();
+    printWin.document.write(`
+    <!DOCTYPE html>
+    <html><head><meta charset="UTF-8"><title>ปริ้นแท็ก LG (${FORMAT})</title>
+    <style>
+        * { box-sizing: border-box; }
+        @page { size: A4; margin: 8mm; }
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        ${css}
+    </style>
+    </head><body>
+    ${pagesHtml}
+    <script>window.onload = () => setTimeout(() => window.print(), 300);<\/script>
+    </body></html>
+    `);
+    printWin.document.close();
+};
+// ===== จบ LG-TAG-2FORMAT =====
 // อัปโหลดไฟล์แพลนที่กรอกแล้ว
 window.handleLGPlanFileUpload = function(event) {
     const file = event.target.files[0];
