@@ -17536,6 +17536,148 @@ renderLGTagPrintWindow = function(tags, printWin) {
     setTimeout(fit, 300);
 })();
 // ===== จบ LG-FIT-HEIGHT =====
+// ===== LG-LINE-FILTER: เลือกดูทีละไลน์ในแท็บ LG Delivery (วางต่อท้ายบล็อก LG ทั้งหมด) =====
+// มีผลกับ ตัวเลขสรุป / กราฟ / ตาราง / สแกนล่าสุด และรูป-PDF ที่บันทึกด้วย
+(function () {
+    if (window.__lgLineFilter) return;
+    window.__lgLineFilter = true;
+    if (typeof window.renderLGDashboard !== 'function') return;
+
+    const TX = {
+        th: { all: 'ทุกไลน์', line: 'ไลน์', lines: 'ไลน์', clear: 'ล้าง / ดูทุกไลน์', tip: 'เลือกไลน์ที่ต้องการดู (เลือกได้หลายไลน์)' },
+        en: { all: 'All lines', line: 'Line', lines: 'Lines', clear: 'Clear / all lines', tip: 'Choose production lines (multiple allowed)' }
+    };
+    const lang = () => {
+        let l = 'th';
+        try { if (typeof currentLanguage !== 'undefined') l = currentLanguage; else l = sessionStorage.getItem('currentLanguage') || 'th'; } catch (e) {}
+        return TX[l] ? l : 'th';
+    };
+    const T = (k) => TX[lang()][k];
+    const lineOf = (p) => String(p.line === undefined || p.line === null ? '' : p.line).trim() || '-';
+    const escH = (x) => String(x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    let sel = [];          // [] = ทุกไลน์
+    let sig = '';
+    const labelOf = () => sel.length === 0 ? T('all') : (sel.length <= 3 ? T('lines') + ' ' + sel.join(', ') : sel.length + ' ' + T('lines'));
+
+    const dateVal = () => { const d = document.getElementById('lgd-date'); return (d && d.value) || lgTodayStr(); };
+
+    function lineList() {
+        const date = dateVal();
+        const set = {};
+        (db.lgPlan || []).forEach(p => { if (lgPlanDateOf(p) === date) set[lineOf(p)] = 1; });
+        return Object.keys(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    }
+
+    function injectCss() {
+        if (document.getElementById('lgd-line-style')) return;
+        const st = document.createElement('style');
+        st.id = 'lgd-line-style';
+        st.textContent = `
+        #lgd-linewrap{position:relative}
+        #lgd-linebtn{border:1px solid #ced4da;background:#fff;border-radius:12px;padding:6px 12px;font-weight:700;font-size:.9rem;min-width:130px;max-width:230px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;color:#1b2a41}
+        #lgd-linebtn.on{border-color:#0d6efd;color:#0d6efd;background:#eef4ff}
+        #lgd-linebtn:after{content:"▾";margin-left:8px;opacity:.6}
+        #lgd-linemenu{position:absolute;top:calc(100% + 6px);left:0;z-index:50;background:#fff;border:1px solid #d5dce8;border-radius:14px;box-shadow:0 8px 24px rgba(20,40,80,.16);padding:8px;min-width:190px;max-height:320px;overflow:auto}
+        #lgd-linemenu.d-none{display:none}
+        #lgd-linemenu label{display:flex;align-items:center;gap:9px;padding:6px 10px;border-radius:8px;cursor:pointer;font-size:.85rem;font-weight:700;margin:0;color:#1b2a41}
+        #lgd-linemenu label:hover{background:#f1f5fb}
+        #lgd-linemenu input{width:16px;height:16px;cursor:pointer}
+        #lgd-linemenu .lgd-lclear{display:block;width:100%;border:0;background:#f4f6fa;border-radius:8px;padding:6px;margin-bottom:6px;font-size:.78rem;font-weight:700;color:#4a5a70;cursor:pointer}`;
+        document.head.appendChild(st);
+    }
+
+    function ensureSelect() {
+        injectCss();
+        let wrap = document.getElementById('lgd-linewrap');
+        if (!wrap) {
+            const dt = document.getElementById('lgd-date');
+            if (!dt) return null;
+            const old = document.getElementById('lgd-line'); if (old) old.remove();
+            wrap = document.createElement('div');
+            wrap.id = 'lgd-linewrap';
+            wrap.innerHTML = '<button type="button" id="lgd-linebtn"></button><div id="lgd-linemenu" class="d-none"></div>';
+            dt.parentNode.insertBefore(wrap, dt);
+            const btn = wrap.querySelector('#lgd-linebtn'), menu = wrap.querySelector('#lgd-linemenu');
+            btn.addEventListener('click', (e) => { e.stopPropagation(); menu.classList.toggle('d-none'); });
+            menu.addEventListener('click', (e) => e.stopPropagation());
+            menu.addEventListener('change', (e) => {
+                if (!e.target || e.target.type !== 'checkbox') return;
+                sel = Array.from(menu.querySelectorAll('input:checked')).map(i => i.value);
+                window.renderLGDashboard();
+            });
+            menu.addEventListener('click', (e) => {
+                if (e.target && e.target.classList.contains('lgd-lclear')) { sel = []; window.renderLGDashboard(); menu.classList.add('d-none'); }
+            });
+            document.addEventListener('click', () => menu.classList.add('d-none'));
+            sig = '';
+        }
+        const lines = lineList();
+        sel = sel.filter(l => lines.indexOf(l) !== -1);
+        const menu = wrap.querySelector('#lgd-linemenu'), btn = wrap.querySelector('#lgd-linebtn');
+        const s = lang() + '|' + lines.join(',');
+        if (s !== sig) {
+            sig = s;
+            menu.innerHTML = `<button type="button" class="lgd-lclear">${escH(T('clear'))}</button>` + lines.map(l => `<label><input type="checkbox" value="${escH(l)}"><span>${escH(T('line'))} ${escH(l)}</span></label>`).join('');
+            btn.title = T('tip');
+        }
+        menu.querySelectorAll('input').forEach(i => { i.checked = sel.indexOf(i.value) !== -1; });
+        btn.textContent = labelOf();
+        btn.classList.toggle('on', sel.length > 0);
+        return wrap;
+    }
+
+    // ทำงานกับ db ที่ถูกกรองเฉพาะไลน์ที่เลือก "ชั่วคราว" แล้วคืนค่าเดิมทันที (ไม่แตะข้อมูลจริง)
+    function withFiltered(fn) {
+        if (!sel.length) return fn();
+        const origPlan = db.lgPlan, origScan = db.lgScanLog;
+        try {
+            const plan = (origPlan || []).filter(p => sel.indexOf(lineOf(p)) !== -1);
+            const keys = new Set(plan.map(p => String(p.WO).trim() + '|' + String(p.partNo).trim()));
+            db.lgPlan = plan;
+            db.lgScanLog = (origScan || []).filter(s => keys.has(String(s.WO).trim() + '|' + String(s.partNo).trim()));
+            return fn();
+        } finally {
+            db.lgPlan = origPlan; db.lgScanLog = origScan;
+        }
+    }
+
+    const _render = window.renderLGDashboard;
+    window.renderLGDashboard = function () {
+        ensureSelect();
+        return withFiltered(() => _render.apply(this, arguments));
+    };
+
+    // รูป/PDF: ตัวสร้างรายงานจะแปะรายงานลงหน้าแล้วถ่ายภาพทันที จึงดักตอนแปะ เพื่อเติมชื่อไลน์ในหัวรายงานก่อนถ่าย
+    function wrapExport(name) {
+        const orig = window[name];
+        if (typeof orig !== 'function') return;
+        window[name] = function () {
+            const self = this, args = arguments;
+            if (!sel.length) return orig.apply(self, args);
+            const body = document.body, realAppend = body.appendChild;
+            body.appendChild = function (node) {
+                try {
+                    const rep = node && node.querySelector ? node.querySelector('#lgd-report') : null;
+                    if (rep) {
+                        const sub = Array.from(rep.querySelectorAll('div')).find(d => d.children.length === 0 && /A-TECH/.test(d.textContent));
+                        if (sub) sub.textContent += ' · ' + T('lines') + ' ' + sel.join(', ');
+                    }
+                } catch (e) {}
+                return realAppend.call(body, node);
+            };
+            try { return withFiltered(() => orig.apply(self, args)); }
+            finally { body.appendChild = realAppend; delete body.appendChild; }
+        };
+    }
+    wrapExport('lgdSaveImage');
+    wrapExport('lgdSavePdf');
+
+    // สลับภาษา: ให้ตัวเลือกไลน์เปลี่ยนภาษาด้วย (ตัว setLanguage ถูกครอบไว้แล้วให้วาดหน้า LG ใหม่)
+    ensureSelect();
+    const v = document.getElementById('view-dash-lg');
+    if (v && !v.classList.contains('d-none')) window.renderLGDashboard();
+})();
+// ===== จบ LG-LINE-FILTER =====
 // อัปโหลดไฟล์แพลนที่กรอกแล้ว
 window.handleLGPlanFileUpload = function(event) {
     const file = event.target.files[0];
