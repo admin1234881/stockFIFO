@@ -17927,6 +17927,196 @@ renderLGTagPrintWindow = function(tags, printWin) {
 // ===== จบ LG-MATCH-SCROLL =====
 // ===== จบ LG-MATCH-LINE =====
 // ===== จบ LG-LINE-FILTER =====
+// ===== LG-REPORT-PROGRESS: ในรูป/PDF ที่บันทึก เพิ่มช่อง "ความคืบหน้ารวม" แบบวงกลม % + แถบแยกตามไลน์ (เหมือนในแดชบอร์ด) (วางต่อท้ายบล็อก LG ทั้งหมด) =====
+(function () {
+    if (window.__lgRepProg) return;
+    window.__lgRepProg = true;
+
+    const TX = {
+        th: { title: 'ความคืบหน้ารวม', pcs: 'ชิ้น', of: 'จาก', remain: 'เหลืออีก', line: 'ไลน์', delivered: 'ส่งแล้ว' },
+        en: { title: 'Overall progress', pcs: 'pcs', of: 'of', remain: 'remaining', line: 'Line', delivered: 'Delivered' }
+    };
+    const lang = () => { let l = 'th'; try { l = (typeof currentLanguage !== 'undefined') ? currentLanguage : (sessionStorage.getItem('currentLanguage') || 'th'); } catch (e) {} return TX[l] ? l : 'th'; };
+    const T = (k) => TX[lang()][k];
+    const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const n0 = (el) => { const v = parseFloat(String(el ? el.textContent : '').replace(/,/g, '')); return isNaN(v) ? 0 : v; };
+    const fmt = (n) => Number(n || 0).toLocaleString('en-US');
+
+    // อ่านตัวเลขจากตารางในรายงานเอง (ตารางถูกกรองตามไลน์ที่เลือกไว้แล้ว) แล้วสร้างช่องความคืบหน้าใหม่แทนแถบเดิม
+    function enhance(rep) {
+        const sec = rep.children[2];
+        if (!sec || sec.getAttribute('data-lgrp') || sec.tagName === 'TABLE' || !/height:14px/.test(sec.innerHTML)) return;
+        const trs = Array.from(rep.querySelectorAll('table tbody tr')).filter(tr => tr.children.length >= 8);
+        let totO = 0, totS = 0;
+        const lines = {};
+        trs.forEach(tr => {
+            const c = tr.children, ln = (c[4].textContent || '-').trim() || '-';
+            const o = n0(c[6]), s = Math.min(n0(c[7]), o);
+            totO += o; totS += s;
+            (lines[ln] = lines[ln] || { o: 0, s: 0 });
+            lines[ln].o += o; lines[ln].s += s;
+        });
+        const pc = totO > 0 ? Math.round(totS / totO * 100) : 0;
+        const C = 2 * Math.PI * 48, off = C * (1 - pc / 100);
+        const names = Object.keys(lines).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).slice(0, 8);
+        const bars = names.map(l => {
+            const x = lines[l], p = x.o > 0 ? Math.round(x.s / x.o * 100) : 0;
+            const col = p >= 90 ? '#16a34a' : p >= 50 ? '#0d6efd' : '#f59e0b';
+            return `<div><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;margin-bottom:4px;"><span>${esc(T('line'))} ${esc(l)}</span><span style="color:#6b7a90;font-weight:400;">${fmt(x.s)} / ${fmt(x.o)} ${esc(T('pcs'))} · <b style="color:#1b2a41;">${p}%</b></span></div><div style="height:9px;background:#e8edf5;border-radius:9px;overflow:hidden;"><div style="width:${p}%;height:100%;background:${col};"></div></div></div>`;
+        }).join('');
+        const html = `<div data-lgrp="1" style="margin-bottom:16px;border:1px solid #e3e8f0;border-radius:14px;padding:14px 20px;display:flex;align-items:center;gap:24px;">
+            <svg width="118" height="118" viewBox="0 0 118 118" style="flex:none;"><circle cx="59" cy="59" r="48" fill="none" stroke="#e8edf5" stroke-width="13"/><circle cx="59" cy="59" r="48" fill="none" stroke="#16a34a" stroke-width="13" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${off}" transform="rotate(-90 59 59)"/><text x="59" y="67" text-anchor="middle" font-size="25" font-weight="800" fill="#1b2a41" font-family="inherit">${pc}%</text></svg>
+            <div style="flex:none;min-width:190px;"><div style="font-size:13px;font-weight:700;color:#51627a;">${esc(T('title'))}</div><div style="font-size:32px;font-weight:800;line-height:1.1;margin:2px 0;">${fmt(totS)}</div><div style="font-size:12px;color:#6b7a90;line-height:1.5;">${esc(T('of'))} ${fmt(totO)} ${esc(T('pcs'))}<br>${esc(T('remain'))} ${fmt(totO - totS)} ${esc(T('pcs'))}</div></div>
+            <div style="flex:1;display:grid;grid-template-columns:${names.length > 1 ? '1fr 1fr' : '1fr'};gap:10px 24px;align-content:center;">${bars}</div>
+        </div>`;
+        sec.insertAdjacentHTML('afterend', html);
+        sec.style.display = 'none';
+        sec.setAttribute('data-lgrp', '0');
+    }
+
+    // รายงานถูกแปะลงหน้าแล้วถ่ายภาพทันที จึงดักตอนแปะเพื่อปรับก่อนถ่าย
+    function wrapExport(name) {
+        const orig = window[name];
+        if (typeof orig !== 'function') return;
+        window[name] = function () {
+            const self = this, args = arguments;
+            const body = document.body, realAppend = body.appendChild;
+            body.appendChild = function (node) {
+                try {
+                    const rep = node && node.querySelector ? node.querySelector('#lgd-report') : null;
+                    if (rep) enhance(rep);
+                } catch (e) { console.warn('lg report progress', e); }
+                return realAppend.call(body, node);
+            };
+            try { return orig.apply(self, args); }
+            finally { body.appendChild = realAppend; delete body.appendChild; }
+        };
+    }
+    wrapExport('lgdSaveImage');
+    wrapExport('lgdSavePdf');
+})();
+// ===== LG-SCAN-DATE-FIX: แก้เวลาสแกนที่ชีตส่งมาเป็นข้อความ (เช่น 17/10/2026 14:23:05) ให้หน้าเว็บอ่านออก "สแกนล่าสุด" จะได้ขึ้นข้อมูล (วางต่อท้ายบล็อก LG ทั้งหมด) =====
+(function () {
+    if (window.__lgScanDateFix) return;
+    window.__lgScanDateFix = true;
+
+    const ISO = /^\d{4}-\d{2}-\d{2}T/;
+    let pref = null;   // 'dmy' | 'mdy' | null  (เรียนรู้จากข้อมูลที่ไม่กำกวม เช่น 25/10/2026)
+
+    function split(s) {
+        const m = String(s).trim().match(/^(\d{1,4})[\/\-.](\d{1,2})[\/\-.](\d{1,4})(?:[ T,]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp])\.?[Mm]?\.?)?(?:[ T,]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+        if (!m) return null;
+        let hh = m[4] !== undefined ? +m[4] : (m[8] !== undefined ? +m[8] : 0);
+        const mi = m[5] !== undefined ? +m[5] : (m[9] !== undefined ? +m[9] : 0);
+        const ss = m[6] !== undefined ? +m[6] : (m[10] !== undefined ? +m[10] : 0);
+        if (m[7]) { const pm = /p/i.test(m[7]); if (pm && hh < 12) hh += 12; if (!pm && hh === 12) hh = 0; }
+        return { a: +m[1], b: +m[2], c: +m[3], first4: m[1].length === 4, hh, mi, ss };
+    }
+    const mk = (y, mo, d, p) => {
+        if (y > 2400) y -= 543;            // ปี พ.ศ.
+        if (y < 100) y += 2000;
+        if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+        const dt = new Date(y, mo - 1, d, p.hh, p.mi, p.ss);
+        return (dt.getMonth() === mo - 1 && !isNaN(dt.getTime())) ? dt : null;
+    };
+
+    function learn(list) {
+        let dmy = 0, mdy = 0;
+        list.forEach(v => {
+            if (typeof v !== 'string' || ISO.test(v)) return;
+            const p = split(v); if (!p || p.first4) return;
+            if (p.a > 12 && p.b <= 12) dmy++; else if (p.b > 12 && p.a <= 12) mdy++;
+        });
+        if (dmy > mdy) pref = 'dmy'; else if (mdy > dmy) pref = 'mdy';
+    }
+
+    function parse(v) {
+        if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+        if (typeof v !== 'string') return null;
+        const s = v.trim();
+        if (!s) return null;
+        const p = split(s);
+        if (!p) { const t = new Date(s); return isNaN(t.getTime()) ? null : t; }
+        if (p.first4) return mk(p.a, p.b, p.c, p);                 // 2026/10/17 14:23:05
+        const dmy = mk(p.c, p.b, p.a, p), mdy = mk(p.c, p.a, p.b, p);
+        if (dmy && !mdy) return dmy;
+        if (mdy && !dmy) return mdy;
+        if (!dmy && !mdy) return null;
+        if (pref === 'dmy') return dmy;
+        if (pref === 'mdy') return mdy;
+        // ไม่มีหลักฐาน: เลือกแบบที่ไม่ใช่อนาคตและใกล้ปัจจุบันที่สุด
+        const now = Date.now() + 864e5;
+        const c = [dmy, mdy].filter(d => d.getTime() <= now).sort((x, y) => y.getTime() - x.getTime());
+        return c[0] || dmy;
+    }
+
+    function normalize() {
+        try {
+            const arr = (typeof db !== 'undefined' && db && db.lgScanLog) ? db.lgScanLog : null;
+            if (!arr || !arr.length) return;
+            if (arr.some(s => typeof s.scannedAt === 'string' && !ISO.test(s.scannedAt))) learn(arr.map(s => s.scannedAt));
+            arr.forEach(s => {
+                const v = s.scannedAt;
+                if (typeof v === 'string' && ISO.test(v)) return;
+                const d = parse(v);
+                if (d) s.scannedAt = d.toISOString();
+            });
+        } catch (e) { console.warn('lg scan date fix', e); }
+    }
+
+    // ทำก่อนทุกครั้งที่วาดหน้า LG (และเช็คแท็กค้างสแกน) + กันเหนียวด้วยตัวตั้งเวลา เพราะระบบซิงค์ข้อมูลใหม่ทุก 30 วินาที
+    ['renderLGDashboard', 'renderLGMatchTable', 'showLGTagCheck'].forEach(name => {
+        const orig = window[name];
+        if (typeof orig !== 'function') return;
+        window[name] = function () { normalize(); return orig.apply(this, arguments); };
+    });
+    setInterval(normalize, 3000);
+    normalize();
+    window.lgNormalizeScanDates = normalize;
+})();
+// ===== จบ LG-SCAN-DATE-FIX =====
+// ===== จบ LG-REPORT-PROGRESS =====
+// ===== LG-MODEL-CHIPS: ช่อง "ความคืบหน้ารวม" ในแดชบอร์ด LG โชว์จำนวน WO แยกตาม Model ทุกตัวที่มีในแพลน (ไม่ใช่แค่ ANE/ANF) (วางต่อท้ายบล็อก LG ทั้งหมด) =====
+(function () {
+    if (window.__lgModelChips) return;
+    window.__lgModelChips = true;
+    if (typeof window.renderLGDashboard !== 'function') return;
+
+    const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const lineOf = (p) => String(p.line == null ? '' : p.line).trim() || '-';
+    // สีประจำ Model: ANE น้ำเงิน, ANF แดง, ตัวอื่นไล่สีอื่นให้
+    const FIXED = { ANE: ['#e0ecff', '#1d4ed8'], ANF: ['#fde7ee', '#be123c'] };
+    const OTHERS = [['#dcfce7', '#15803d'], ['#fef3c7', '#b45309'], ['#ede9fe', '#6d28d9'], ['#ccfbf1', '#0f766e'], ['#ffedd5', '#c2410c'], ['#eef1f6', '#4a5a70']];
+
+    function selectedLines() {   // ไลน์ที่ติ๊กไว้ในตัวเลือกไลน์ของแดชบอร์ด (ว่าง = ทุกไลน์)
+        return Array.from(document.querySelectorAll('#lgd-linemenu input:checked')).map(i => i.value);
+    }
+
+    function paint() {
+        const box = document.querySelector('#lgd-ring .lgd-chips');
+        if (!box || typeof computeLGMatchStatus !== 'function') return;
+        const dt = document.getElementById('lgd-date');
+        const date = (dt && dt.value) || lgTodayStr();
+        const sel = selectedLines();
+        const rows = computeLGMatchStatus().filter(r => lgPlanDateOf(r) === date && (!sel.length || sel.indexOf(lineOf(r)) !== -1));
+        const cnt = {};
+        rows.forEach(r => { const m = String(r.model == null ? '' : r.model).trim().toUpperCase() || '-'; cnt[m] = (cnt[m] || 0) + 1; });
+        let oi = 0;
+        box.innerHTML = Object.keys(cnt).sort((a, b) => (FIXED[b] ? 1 : 0) - (FIXED[a] ? 1 : 0) || a.localeCompare(b)).map(m => {
+            const c = FIXED[m] || OTHERS[oi++ % OTHERS.length];
+            return `<span class="lgd-chip" style="background:${c[0]};color:${c[1]}">${esc(m)} ${cnt[m]} WO</span>`;
+        }).join('');
+    }
+
+    const _r = window.renderLGDashboard;
+    window.renderLGDashboard = function () {
+        const x = _r.apply(this, arguments);
+        try { paint(); } catch (e) { console.warn('lg model chips', e); }
+        return x;
+    };
+    try { paint(); } catch (e) {}
+})();
+// ===== จบ LG-MODEL-CHIPS =====
 // อัปโหลดไฟล์แพลนที่กรอกแล้ว
 window.handleLGPlanFileUpload = function(event) {
     const file = event.target.files[0];
