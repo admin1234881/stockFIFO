@@ -17873,6 +17873,58 @@ renderLGTagPrintWindow = function(tags, printWin) {
     ensureUI();
     try { window.renderLGMatchTable(); } catch (e) {}
 })();
+// ===== LG-MATCH-SCROLL: จำกัดความสูงกรอบ "สถานะการแมทช์ทั้งหมด" ถ้ารายการเกินให้เลื่อนดูในกรอบ (ขนาดเท่ากับตาราง WO ในแดชบอร์ด LG Delivery) =====
+(function () {
+    if (window.__lgMatchScroll) return;
+    window.__lgMatchScroll = true;
+
+    function css() {
+        if (document.getElementById('lgm-scroll-style')) return;
+        const st = document.createElement('style');
+        st.id = 'lgm-scroll-style';
+        st.textContent = `
+        .lgm-scroll{overflow:auto;border:1px solid #e5e9f0;border-radius:12px}
+        .lgm-scroll table{margin-bottom:0}
+        .lgm-scroll thead th{position:sticky;top:0;z-index:2;background:#f8f9fa;box-shadow:inset 0 -2px 0 #dee2e6}
+        #lgm-scroll-note{margin-top:8px;font-size:.78rem;color:#6c757d}`;
+        document.head.appendChild(st);
+    }
+    const box = () => { const tb = document.getElementById('lg-match-tbody'); return tb ? tb.closest('.table-responsive') : null; };
+
+    function note() {
+        const b = box(), tb = document.getElementById('lg-match-tbody');
+        if (!b || !tb) return;
+        let el = document.getElementById('lgm-scroll-note');
+        if (!el) { el = document.createElement('div'); el.id = 'lgm-scroll-note'; b.insertAdjacentElement('afterend', el); }
+        const trs = Array.from(tb.querySelectorAll('tr'));
+        const empty = trs.length === 1 && trs[0].querySelector('td[colspan]');
+        const n = empty ? 0 : trs.length;
+        let en = false; try { en = (typeof currentLanguage !== 'undefined' ? currentLanguage : sessionStorage.getItem('currentLanguage')) === 'en'; } catch (e) {}
+        const more = b.scrollHeight > b.clientHeight + 2;
+        el.textContent = n === 0 ? '' : (en ? `Showing ${n} item(s)${more ? ' · scroll for more' : ''}` : `แสดง ${n} รายการ${more ? ' · เลื่อนดูรายการเพิ่มเติมได้' : ''}`);
+    }
+
+    function fit() {
+        const b = box();
+        if (!b) return;
+        css();
+        b.classList.add('lgm-scroll');
+        if (b.offsetParent === null) return;      // แท็บยังซ่อนอยู่
+        const absTop = b.getBoundingClientRect().top + window.scrollY;
+        b.style.maxHeight = Math.max(420, Math.floor(window.innerHeight - absTop - 80)) + 'px';
+        note();
+    }
+
+    if (typeof window.renderLGMatchTable === 'function') {
+        const _r = window.renderLGMatchTable;
+        window.renderLGMatchTable = function () { const x = _r.apply(this, arguments); fit(); return x; };
+    }
+    window.addEventListener('resize', fit);
+    document.addEventListener('shown.bs.tab', () => setTimeout(fit, 50));
+    document.addEventListener('click', (e) => { if (e.target && e.target.closest && e.target.closest('[data-bs-target="#pills-lg-matching"]')) setTimeout(fit, 400); });
+    css(); fit(); setTimeout(fit, 500);
+})();
+// ===== จบ LG-MATCH-SCROLL =====
 // ===== จบ LG-MATCH-LINE =====
 // ===== จบ LG-LINE-FILTER =====
 // อัปโหลดไฟล์แพลนที่กรอกแล้ว
