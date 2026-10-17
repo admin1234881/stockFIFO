@@ -16510,41 +16510,1012 @@ renderLGTagPrintWindow = function(tags, printWin) {
     `);
     printWin.document.close();
 };
-// ===== LG-SCAN-NOSEP: อ่านบาร์โค้ด LG ได้แม้เครื่องสแกนตัดตัวคั่น ¿ (GS) ทิ้ง =====
-(function() {
-    const _origParse = parseLGBarcode;
+// ===== LG-DELIVERY-DASH: แท็บ "LG Delivery" ในแดชบอร์ด (อิงข้อมูลจากการสแกนแมตช์แท็ก LG) =====
+(function () {
+    if (window.__lgDashInstalled) return;
+    window.__lgDashInstalled = true;
 
-    // ประกอบตัวคั่นกลับเข้าไปให้สตริงที่ไม่มีตัวคั่น (ตามโครงสร้างแท็ก LG)
-    function rebuildNoSep(raw) {
-        const s = String(raw).replace(/[\x00-\x1F\x7F-\x9F]/g, '').replace(/[¿Â\s]/g, '');
-        // เลขเอกสาร + ไลน์ + Part No (ตัวอักษร 3 + ตัวเลข 8) + จำนวนแท็ก + บริษัท + ส่วนที่เหลือ (กลุ่ม WO)
-        const m = s.match(/^([A-Z]{3,5}\d{18})([A-Z0-9]{1,6}?)([A-Z]{3}\d{8})(\d+)([A-Z]+)(\d.*)$/);
-        if (!m) return null;
-        const doc = m[1], line = m[2], part = m[3], tagQty = m[4], company = m[5];
-        let rest = m[6];
-        const fields = [doc, line, part, tagQty, company, ''];
-        const re = /^(\d+)((?:[A-Z][A-Z0-9]*\.[A-Z0-9]{7})?)([A-Z0-9]{8})/;
-        while (rest.length) {
-            const g = rest.match(re);
-            if (!g) return null;
-            fields.push(g[1], '', '', g[2], g[3]);
-            rest = rest.slice(g[0].length);
+    const esc = (s) => String(s === undefined || s === null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const pad = (n) => String(n).padStart(2, '0');
+    const MON = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+    let flt = 'all', query = '', dateChosen = false;
+
+    // แปลงเวลาที่ต้องผลิต (เช่น 24-Sep-26 09:26 / 2026-09-24 09:26 / 24/09/2026 09:26) เป็น ms
+    function parseDue(v) {
+        if (!v) return null;
+        if (v instanceof Date) return isNaN(v.getTime()) ? null : v.getTime();
+        const s = String(v).trim();
+        let m = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})(?:\s+(\d{1,2}):(\d{2}))?/);
+        if (m && MON[m[2].toLowerCase()] !== undefined) {
+            let y = parseInt(m[3], 10); if (y < 100) y += 2000;
+            return new Date(y, MON[m[2].toLowerCase()], parseInt(m[1], 10), parseInt(m[4] || '0', 10), parseInt(m[5] || '0', 10)).getTime();
         }
-        while (fields.length < 31) fields.push('');
-        return '\x02' + fields.join('¿') + '\x03';
+        m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2}))?/);
+        if (m) return new Date(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0)).getTime();
+        m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+        if (m) { let y = +m[3]; if (y > 2400) y -= 543; return new Date(y, +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0)).getTime(); }
+        const t = new Date(s).getTime();
+        return isNaN(t) ? null : t;
+    }
+    const toMs = (v) => { if (!v) return null; const t = new Date(v).getTime(); return isNaN(t) ? null : t; };
+    const dayOf = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+    const hm = (ms) => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+    const num = (n) => Number(n || 0).toLocaleString('en-US');
+
+    function injectCss() {
+        if (document.getElementById('lgd-style')) return;
+        const st = document.createElement('style');
+        st.id = 'lgd-style';
+        st.textContent = `
+        #view-dash-lg .lgd-head{display:flex;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+        #view-dash-lg .lgd-head h2{margin:0;font-size:1.45rem;font-weight:800;color:#c8102e}
+        #view-dash-lg .lgd-sub{color:#6b7a90;font-size:.8rem;margin-top:2px}
+        #view-dash-lg .lgd-sp{flex:1}
+        #view-dash-lg .lgd-live{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #d5dce8;border-radius:12px;padding:8px 14px;font-size:.8rem;color:#4a5a70}
+        #view-dash-lg .lgd-dot{width:9px;height:9px;border-radius:50%;background:#16a34a;box-shadow:0 0 0 4px rgba(22,163,74,.18);animation:lgdPulse 1.8s infinite}
+        @keyframes lgdPulse{50%{box-shadow:0 0 0 7px rgba(22,163,74,.05)}}
+        #view-dash-lg .lgd-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px}
+        #view-dash-lg .lgd-k{border-radius:14px;padding:14px 16px;color:#fff;display:flex;align-items:center;gap:12px;box-shadow:0 4px 14px rgba(0,0,0,.08)}
+        #view-dash-lg .lgd-k .ic{width:42px;height:42px;border-radius:10px;background:rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;flex:none;font-size:1.3rem}
+        #view-dash-lg .lgd-k .n{font-size:1.8rem;font-weight:800;line-height:1}
+        #view-dash-lg .lgd-k .l{font-size:.75rem;opacity:.92;font-weight:700;margin-bottom:3px}
+        #view-dash-lg .lgd-k .s{font-size:.7rem;opacity:.85;margin-top:3px}
+        #view-dash-lg .k1{background:linear-gradient(135deg,#6ea8fe,#0d6efd)}
+        #view-dash-lg .k2{background:linear-gradient(135deg,#4ade80,#16a34a)}
+        #view-dash-lg .k3{background:linear-gradient(135deg,#fcd34d,#f59e0b);color:#3b2a00}
+        #view-dash-lg .k4{background:linear-gradient(135deg,#aab4c3,#7b8798)}
+        #view-dash-lg .k5{background:linear-gradient(135deg,#fb7185,#dc2626)}
+        #view-dash-lg .lgd-grid{display:grid;grid-template-columns:350px minmax(0,1fr);gap:16px;align-items:start}
+        #view-dash-lg .lgd-col{display:flex;flex-direction:column;gap:16px}
+        #view-dash-lg .lgd-card{background:#fff;border-radius:20px;box-shadow:0 2px 12px rgba(20,40,80,.07);padding:20px}
+        #view-dash-lg .lgd-card h3{margin:0 0 14px;font-size:.95rem;font-weight:800;color:#0d6efd;display:flex;align-items:center;gap:8px}
+        #view-dash-lg .lgd-ring{display:flex;align-items:center;gap:18px}
+        #view-dash-lg .lgd-big{font-size:1.9rem;font-weight:800;line-height:1}
+        #view-dash-lg .lgd-u{font-size:.75rem;color:#6b7a90;margin-top:4px}
+        #view-dash-lg .lgd-chips{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+        #view-dash-lg .lgd-chip{border-radius:20px;padding:3px 10px;font-size:.72rem;font-weight:700}
+        #view-dash-lg .m-ane{background:#e0ecff;color:#1d4ed8}
+        #view-dash-lg .m-anf{background:#fde7ee;color:#be123c}
+        #view-dash-lg .m-oth{background:#eef1f6;color:#4a5a70}
+        #view-dash-lg .lgd-lines{margin-top:18px;display:flex;flex-direction:column;gap:12px}
+        #view-dash-lg .lgd-ln .t{display:flex;justify-content:space-between;font-size:.78rem;font-weight:700;margin-bottom:5px}
+        #view-dash-lg .lgd-ln .t span:last-child{color:#6b7a90;font-weight:400}
+        #view-dash-lg .lgd-bar{height:10px;background:#e8edf5;border-radius:10px;overflow:hidden}
+        #view-dash-lg .lgd-bar i{display:block;height:100%;border-radius:10px;transition:width .5s}
+        #view-dash-lg .lgd-f{display:flex;gap:10px;padding:9px 0;border-bottom:1px dashed #e3e8f0;font-size:.78rem;align-items:flex-start}
+        #view-dash-lg .lgd-f:last-child{border:none}
+        #view-dash-lg .lgd-f .tm{width:42px;color:#6b7a90;font-weight:700;flex:none}
+        #view-dash-lg .lgd-f .q{margin-left:auto;font-weight:800;color:#16a34a;flex:none}
+        #view-dash-lg .lgd-f.warn .q{color:#d97706}
+        #view-dash-lg .lgd-pn{font-size:.68rem;color:#7a8799}
+        #view-dash-lg .lgd-warnbox{margin-top:12px;background:#fff7e6;border:1px solid #fcd9a0;color:#92580a;border-radius:12px;padding:9px 12px;font-size:.78rem}
+        #view-dash-lg .lgd-tools{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+        #view-dash-lg .lgd-fc{border:1px solid #d5dce8;border-radius:20px;padding:5px 14px;font-weight:700;font-size:.78rem;color:#4a5a70;background:#fff;cursor:pointer}
+        #view-dash-lg .lgd-fc.on{background:#0d6efd;color:#fff;border-color:#0d6efd}
+        #view-dash-lg .lgd-fc em{font-style:normal;opacity:.75;margin-left:4px;font-weight:400}
+        #view-dash-lg .lgd-q{margin-left:auto;border:1px solid #d5dce8;border-radius:10px;padding:6px 12px;font-size:.78rem;width:200px;max-width:100%}
+        #view-dash-lg .lgd-tw{overflow:auto;max-height:600px}
+        #view-dash-lg table.lgd-t{width:100%;border-collapse:separate;border-spacing:0 6px;min-width:760px}
+        #view-dash-lg .lgd-t th{position:sticky;top:0;z-index:2;box-shadow:0 6px 0 #fff;font-size:.72rem;color:#6b7a90;text-align:left;padding:7px 10px;background:#f4f6fa;font-weight:700;white-space:nowrap}
+        #view-dash-lg .lgd-t th:first-child{border-radius:10px 0 0 10px}
+        #view-dash-lg .lgd-t th:last-child{border-radius:0 10px 10px 0}
+        #view-dash-lg .lgd-t td{padding:9px 10px;background:#fff;border-bottom:1px solid #eef1f6;font-size:.78rem;vertical-align:middle}
+        #view-dash-lg .lgd-t tr.od td{background:#fff1f2}
+        #view-dash-lg .lgd-t tr.od td:first-child{box-shadow:inset 4px 0 0 #dc2626}
+        #view-dash-lg .lgd-wo{font-weight:800}
+        #view-dash-lg .lgd-mod{font-size:.68rem;font-weight:800;border-radius:6px;padding:2px 7px}
+        #view-dash-lg .lgd-l2{font-size:.7rem;border:1px solid #d5dce8;border-radius:6px;padding:1px 7px;background:#f8fafc;font-weight:700}
+        #view-dash-lg .lgd-pr{display:flex;align-items:center;gap:8px;min-width:140px}
+        #view-dash-lg .lgd-pr .lgd-bar{flex:1;height:9px}
+        #view-dash-lg .lgd-pr b{font-size:.75rem;width:38px;text-align:right}
+        #view-dash-lg .lgd-qty{font-weight:800;white-space:nowrap}
+        #view-dash-lg .lgd-qty small{color:#7a8799;font-weight:400}
+        #view-dash-lg .lgd-st{border-radius:20px;padding:3px 10px;font-weight:800;font-size:.72rem;white-space:nowrap;display:inline-block}
+        #view-dash-lg .s-ok{background:#dcfce7;color:#15803d}
+        #view-dash-lg .s-part{background:#fef3c7;color:#b45309}
+        #view-dash-lg .s-none{background:#e8edf5;color:#5a6a80}
+        #view-dash-lg .s-od{background:#dc2626;color:#fff}
+        #view-dash-lg .s-over{background:#dbeafe;color:#1d4ed8}
+        #view-dash-lg .lgd-note{margin-top:10px;font-size:.72rem;color:#7a8799;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+        #view-dash-lg .lgd-empty{text-align:center;color:#8a97ab;padding:36px 10px}
+        @media (max-width:991px){
+            #view-dash-lg .lgd-grid{grid-template-columns:1fr}
+            #view-dash-lg .lgd-kpis{grid-template-columns:repeat(2,1fr)}
+        }`;
+        document.head.appendChild(st);
     }
 
-    parseLGBarcode = function(raw) {
-        const r = _origParse(raw);
-        if (r) return r;
-        try {
-            const rebuilt = rebuildNoSep(raw);
-            return rebuilt ? _origParse(rebuilt) : null;
-        } catch (e) { return null; }
+    function build() {
+        if (document.getElementById('view-dash-lg')) return;
+        const veh = document.getElementById('view-dash-vehicle');
+        const host = veh ? veh.parentElement : document.getElementById('pills-dashboard');
+        if (!host) return;
+        const div = document.createElement('div');
+        div.id = 'view-dash-lg';
+        div.className = 'd-none';
+        div.innerHTML = `
+        <div class="lgd-head">
+            <div><h2><i class="bi bi-upc-scan me-2"></i>LG Delivery Status</h2><div class="lgd-sub">อิงจากการสแกนแมตช์แท็ก LG เทียบกับแพลนของวันที่เลือก</div></div>
+            <div class="lgd-sp"></div>
+            <input type="date" id="lgd-date" class="form-control fw-bold" style="max-width:180px;border-radius:12px;">
+            <div class="lgd-live"><span class="lgd-dot"></span><span id="lgd-live-txt">กำลังโหลด...</span></div>
+        </div>
+        <div class="lgd-kpis" id="lgd-kpis"></div>
+        <div class="lgd-grid">
+            <div class="lgd-col">
+                <div class="lgd-card"><h3><i class="bi bi-bar-chart-fill"></i> ความคืบหน้ารวม</h3><div id="lgd-ring"></div></div>
+                <div class="lgd-card"><h3><i class="bi bi-upc-scan"></i> สแกนล่าสุด</h3><div id="lgd-feed"></div></div>
+            </div>
+            <div class="lgd-card">
+                <h3><i class="bi bi-list-check"></i> รายการ WO ตามแพลน</h3>
+                <div class="lgd-tools" id="lgd-tools"></div>
+                <div class="lgd-tw"><table class="lgd-t"><thead><tr><th>WO / Part</th><th>Model</th><th>ไลน์</th><th>กำหนด</th><th>สแกน / แพลน</th><th>ความคืบหน้า</th><th>สถานะ</th><th>สแกนล่าสุด</th></tr></thead><tbody id="lgd-tbody"></tbody></table></div>
+                <div class="lgd-note" id="lgd-note"></div>
+            </div>
+        </div>`;
+        if (veh) veh.insertAdjacentElement('afterend', div); else host.appendChild(div);
+
+        const dt = document.getElementById('lgd-date');
+        dt.value = lgTodayStr();
+        dt.addEventListener('change', () => { dateChosen = true; window.renderLGDashboard(); });
+    }
+
+    function addTab() {
+        if (document.getElementById('btn-dash-lg')) return;
+        const radioVeh = document.getElementById('btn-dash-vehicle');
+        const group = radioVeh ? radioVeh.parentElement : null;
+        if (!group) return;
+        const inp = document.createElement('input');
+        inp.type = 'radio'; inp.className = 'btn-check'; inp.name = 'dashToggle'; inp.id = 'btn-dash-lg'; inp.autocomplete = 'off';
+        inp.setAttribute('onchange', "toggleDashboardView('lg')");
+        const lab = document.createElement('label');
+        lab.className = 'btn btn-outline-primary border-0 rounded-pill px-3 fw-bold';
+        lab.htmlFor = 'btn-dash-lg';
+        lab.innerHTML = '<i class="bi bi-upc-scan me-1"></i>LG Delivery';
+        group.appendChild(inp); group.appendChild(lab);
+    }
+
+    function compute(date) {
+        const all = computeLGMatchStatus();
+        const rows = lgSortPlans(all.filter(r => lgPlanDateOf(r) === date));
+        const scans = db.lgScanLog || [];
+        const last = {};
+        scans.forEach(s => {
+            const t = toMs(s.scannedAt); if (!t) return;
+            const k = String(s.WO).trim() + '|' + String(s.partNo).trim();
+            if (!last[k] || t > last[k]) last[k] = t;
+        });
+        const now = Date.now();
+        rows.forEach(r => {
+            r.s = r.scanned; r.o = r.orderQty;
+            r.due = parseDue(r.startDateTime);
+            r.last = last[String(r.WO).trim() + '|' + String(r.partNo).trim()] || null;
+            r.pct = r.o > 0 ? Math.min(100, Math.round(r.s / r.o * 100)) : 0;
+            const incomplete = r.o > 0 && r.s < r.o;
+            r.st = (r.o > 0 && r.s > r.o) ? 'over' : (!incomplete ? 'ok' : (r.due !== null && now > r.due ? 'od' : (r.s > 0 ? 'part' : 'none')));
+        });
+        return rows;
+    }
+
+    const LAB = { ok: '✅ ครบแล้ว', part: '◐ ส่งบางส่วน', none: 'ยังไม่สแกน', od: '⏰ เลยกำหนด', over: 'เกินแพลน' };
+    const BAR = { ok: '#16a34a', part: '#f59e0b', none: '#9aa6b8', od: '#dc2626', over: '#2563eb' };
+    const ORD = { od: 0, part: 1, none: 2, ok: 3, over: 4 };
+    const modCls = (m) => { m = String(m || '').toUpperCase(); return m.indexOf('ANF') !== -1 ? 'm-anf' : m.indexOf('ANE') !== -1 ? 'm-ane' : 'm-oth'; };
+
+    window.renderLGDashboard = function () {
+        const root = document.getElementById('view-dash-lg');
+        if (!root || typeof computeLGMatchStatus !== 'function') return;
+        const dt = document.getElementById('lgd-date');
+
+        // ครั้งแรก: ถ้าวันนี้ยังไม่มีแพลน ให้กระโดดไปวันที่ล่าสุดที่มีแพลน
+        if (!dateChosen && dt) {
+            const today = lgTodayStr();
+            const has = (db.lgPlan || []).some(p => lgPlanDateOf(p) === today);
+            if (!has) {
+                const days = (db.lgPlan || []).map(lgPlanDateOf).sort();
+                if (days.length) { dt.value = days[days.length - 1]; }
+            }
+            dateChosen = true;
+        }
+        const date = (dt && dt.value) || lgTodayStr();
+        const rows = compute(date);
+
+        const cnt = (k) => rows.filter(r => r.st === k).length;
+        const totO = rows.reduce((a, r) => a + r.o, 0);
+        const totS = rows.reduce((a, r) => a + Math.min(r.s, r.o), 0);
+        const pc = totO > 0 ? Math.round(totS / totO * 100) : 0;
+        const done = cnt('ok') + cnt('over');
+
+        // สแกนของวันที่เลือก
+        const planKeys = new Set((db.lgPlan || []).map(p => String(p.WO).trim() + '|' + String(p.partNo).trim()));
+        const scansDay = (db.lgScanLog || []).map(s => ({ s, t: toMs(s.scannedAt) })).filter(x => x.t && dayOf(x.t) === date).sort((a, b) => b.t - a.t);
+        const notInPlan = scansDay.filter(x => !planKeys.has(String(x.s.WO).trim() + '|' + String(x.s.partNo).trim()));
+
+        document.getElementById('lgd-live-txt').innerHTML = scansDay.length
+            ? `อัปเดตอัตโนมัติ · สแกนล่าสุด <b>${hm(scansDay[0].t)}</b>`
+            : 'อัปเดตอัตโนมัติ · ยังไม่มีการสแกนในวันนี้';
+
+        document.getElementById('lgd-kpis').innerHTML = `
+            <div class="lgd-k k1"><div class="ic"><i class="bi bi-list-task"></i></div><div><div class="l">WO ทั้งหมด</div><div class="n">${rows.length}</div><div class="s">${num(totO)} ชิ้น</div></div></div>
+            <div class="lgd-k k2"><div class="ic"><i class="bi bi-check-lg"></i></div><div><div class="l">ส่งครบแล้ว</div><div class="n">${done}</div><div class="s">ตามแพลน 100%</div></div></div>
+            <div class="lgd-k k3"><div class="ic"><i class="bi bi-hourglass-split"></i></div><div><div class="l">ส่งบางส่วน</div><div class="n">${cnt('part')}</div><div class="s">กำลังสแกน</div></div></div>
+            <div class="lgd-k k4"><div class="ic"><i class="bi bi-box-seam"></i></div><div><div class="l">ยังไม่สแกน</div><div class="n">${cnt('none')}</div><div class="s">ยังไม่ถึงกำหนด</div></div></div>
+            <div class="lgd-k k5"><div class="ic"><i class="bi bi-exclamation-triangle-fill"></i></div><div><div class="l">เลยกำหนดยังไม่ครบ</div><div class="n">${cnt('od')}</div><div class="s">ต้องตามด่วน</div></div></div>`;
+
+        // วงกลมรวม + แยกไลน์
+        const C = 2 * Math.PI * 52, off = C * (1 - pc / 100);
+        const nAne = rows.filter(r => modCls(r.model) === 'm-ane').length, nAnf = rows.filter(r => modCls(r.model) === 'm-anf').length;
+        const lineMap = {};
+        rows.forEach(r => { const l = String(r.line || '-').trim() || '-'; (lineMap[l] = lineMap[l] || { o: 0, s: 0 }); lineMap[l].o += r.o; lineMap[l].s += Math.min(r.s, r.o); });
+        const lineHtml = Object.keys(lineMap).sort().slice(0, 8).map(l => {
+            const x = lineMap[l], p = x.o > 0 ? Math.round(x.s / x.o * 100) : 0;
+            return `<div class="lgd-ln"><div class="t"><span>ไลน์ ${esc(l)}</span><span>${num(x.s)} / ${num(x.o)} ชิ้น · ${p}%</span></div><div class="lgd-bar"><i style="width:${p}%;background:${p >= 90 ? '#16a34a' : p >= 50 ? '#0d6efd' : '#f59e0b'}"></i></div></div>`;
+        }).join('');
+        document.getElementById('lgd-ring').innerHTML = rows.length === 0
+            ? '<div class="lgd-empty">ยังไม่มีแพลนของวันที่เลือก</div>'
+            : `<div class="lgd-ring">
+                <svg width="130" height="130" viewBox="0 0 130 130"><circle cx="65" cy="65" r="52" fill="none" stroke="#e8edf5" stroke-width="14"/><circle cx="65" cy="65" r="52" fill="none" stroke="#16a34a" stroke-width="14" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${off}" transform="rotate(-90 65 65)"/><text x="65" y="72" text-anchor="middle" font-size="26" font-weight="800" fill="#1b2a41">${pc}%</text></svg>
+                <div><div class="lgd-big">${num(totS)}</div><div class="lgd-u">จาก ${num(totO)} ชิ้น<br>เหลืออีก ${num(totO - totS)} ชิ้น</div>
+                <div class="lgd-chips"><span class="lgd-chip m-ane">ANE ${nAne} WO</span><span class="lgd-chip m-anf">ANF ${nAnf} WO</span></div></div>
+            </div><div class="lgd-lines">${lineHtml}</div>`;
+
+        // สแกนล่าสุด
+        const feed = scansDay.slice(0, 6).map(x => {
+            const inPlan = planKeys.has(String(x.s.WO).trim() + '|' + String(x.s.partNo).trim());
+            return `<div class="lgd-f ${inPlan ? '' : 'warn'}"><div class="tm">${hm(x.t)}</div><div><b>${esc(x.s.WO)}</b><br><span class="lgd-pn">${esc(x.s.partNo)} · ${inPlan ? esc(x.s.scannedBy || '-') : 'ไม่อยู่ในแพลน · ' + esc(x.s.scannedBy || '-')}</span></div><div class="q">+${num(x.s.rackQty)}</div></div>`;
+        }).join('');
+        document.getElementById('lgd-feed').innerHTML = (feed || '<div class="lgd-empty">ยังไม่มีการสแกนในวันที่เลือก</div>')
+            + (notInPlan.length ? `<div class="lgd-warnbox"><i class="bi bi-exclamation-triangle me-1"></i>สแกนแท็กที่ไม่อยู่ในแพลน ${notInPlan.length} รายการ</div>` : '');
+
+        // ตาราง
+        const open = rows.filter(r => r.st !== 'ok' && r.st !== 'over');
+        const chips = [['all', 'ทั้งหมด', rows.length], ['open', 'ยังไม่ครบ', open.length], ['od', 'เลยกำหนด', cnt('od')], ['ok', 'ครบแล้ว', done]];
+        document.getElementById('lgd-tools').innerHTML = chips.map(c => `<span class="lgd-fc ${flt === c[0] ? 'on' : ''}" data-f="${c[0]}">${c[1]}<em>${c[2]}</em></span>`).join('')
+            + `<input type="search" class="lgd-q" id="lgd-q" placeholder="ค้นหา WO / Part No" value="${esc(query)}">`;
+
+        let show = rows.slice();
+        if (flt === 'open') show = open; else if (flt === 'od') show = rows.filter(r => r.st === 'od'); else if (flt === 'ok') show = rows.filter(r => r.st === 'ok' || r.st === 'over');
+        const qq = query.trim().toLowerCase();
+        if (qq) show = show.filter(r => (String(r.WO) + ' ' + String(r.partNo) + ' ' + String(r.partName || '')).toLowerCase().indexOf(qq) !== -1);
+
+        document.getElementById('lgd-tbody').innerHTML = show.length ? show.map(r => `
+            <tr class="${r.st === 'od' ? 'od' : ''}">
+                <td><div class="lgd-wo">${esc(r.WO)}</div><div class="lgd-pn">${esc(r.partNo)}${r.partName ? ' · ' + esc(r.partName) : ''}</div></td>
+                <td><span class="lgd-mod ${modCls(r.model)}">${esc(r.model || '-')}</span></td>
+                <td><span class="lgd-l2">${esc(r.line || '-')}</span></td>
+                <td class="text-nowrap">${r.due ? hm(r.due) : esc(r.startDateTime || '-')}</td>
+                <td class="lgd-qty">${num(r.s)} <small>/ ${num(r.o)}</small></td>
+                <td><div class="lgd-pr"><div class="lgd-bar"><i style="width:${r.pct}%;background:${BAR[r.st]}"></i></div><b>${r.pct}%</b></div></td>
+                <td><span class="lgd-st s-${r.st}">${LAB[r.st]}</span></td>
+                <td>${r.last ? hm(r.last) : '<span class="text-muted">-</span>'}</td>
+            </tr>`).join('') : '<tr><td colspan="8" class="lgd-empty">ไม่มีรายการ</td></tr>';
+                document.getElementById('lgd-note').innerHTML = `<span>เรียงตามลำดับแพลน LG · เลื่อนดูรายการเพิ่มเติมได้</span><span>อัปเดต ${hm(Date.now())}</span>`;
     };
+
+    function init() {
+        injectCss(); build(); addTab();
+        // คลิกปุ่มกรอง / พิมพ์ค้นหา
+        document.addEventListener('click', (e) => {
+            const c = e.target.closest && e.target.closest('#view-dash-lg .lgd-fc');
+            if (c) { flt = c.getAttribute('data-f'); window.renderLGDashboard(); }
+        });
+        document.addEventListener('input', (e) => {
+            if (e.target && e.target.id === 'lgd-q') {
+                query = e.target.value;
+                const pos = e.target.selectionStart;
+                window.renderLGDashboard();
+                const q = document.getElementById('lgd-q'); if (q) { q.focus(); try { q.setSelectionRange(pos, pos); } catch (x) {} }
+            }
+        });
+        // สลับแท็บ: โชว์/ซ่อนหน้า LG (ฟังก์ชันสลับเดิมจะซ่อนหน้าเดิมทั้ง 3 ให้อยู่แล้ว)
+        document.addEventListener('change', (e) => {
+            if (!e.target || e.target.name !== 'dashToggle') return;
+            const v = document.getElementById('view-dash-lg');
+            if (!v) return;
+            if (e.target.id === 'btn-dash-lg') { v.classList.remove('d-none'); window.renderLGDashboard(); }
+            else v.classList.add('d-none');
+        });
+        // รีเฟรชเองทุก 20 วินาทีเมื่อหน้านี้เปิดอยู่
+        setInterval(() => {
+            const v = document.getElementById('view-dash-lg');
+            if (v && !v.classList.contains('d-none') && !(document.activeElement && document.activeElement.id === 'lgd-q')) window.renderLGDashboard();
+        }, 20000);
+    }
+    init();
 })();
-// ===== จบ LG-SCAN-NOSEP =====
+// ===== จบ LG-DELIVERY-DASH =====
 // ===== จบ LG-TAG-2FORMAT =====
+// ===== LG-DELIVERY-REPORT-V2: บันทึกภาพ/PDF แบบทุก WO อยู่ในรูปเดียว (รายการเยอะจะบีบแถวให้เตี้ยลงอัตโนมัติ) =====
+(function () {
+    if (window.__lgRep2Installed) return;
+    window.__lgRep2Installed = true;
+
+    const esc = (s) => String(s === undefined || s === null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const pad = (n) => String(n).padStart(2, '0');
+    const num = (n) => Number(n || 0).toLocaleString('en-US');
+    const MON = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+
+    function parseDue(v) {
+        if (!v) return null;
+        if (v instanceof Date) return isNaN(v.getTime()) ? null : v.getTime();
+        const s = String(v).trim();
+        let m = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})(?:\s+(\d{1,2}):(\d{2}))?/);
+        if (m && MON[m[2].toLowerCase()] !== undefined) {
+            let y = parseInt(m[3], 10); if (y < 100) y += 2000;
+            return new Date(y, MON[m[2].toLowerCase()], parseInt(m[1], 10), parseInt(m[4] || '0', 10), parseInt(m[5] || '0', 10)).getTime();
+        }
+        m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2}))?/);
+        if (m) return new Date(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0)).getTime();
+        m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+        if (m) { let y = +m[3]; if (y > 2400) y -= 543; return new Date(y, +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0)).getTime(); }
+        const t = new Date(s).getTime();
+        return isNaN(t) ? null : t;
+    }
+    const hm = (ms) => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+    const dmy = (ymd) => { const p = String(ymd).split('-'); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : ymd; };
+
+    function getRows(date) {
+        const rows = lgSortPlans(computeLGMatchStatus().filter(r => lgPlanDateOf(r) === date));
+        const now = Date.now();
+        rows.forEach(r => {
+            r.s = r.scanned; r.o = r.orderQty;
+            r.due = parseDue(r.startDateTime);
+            r.pct = r.o > 0 ? Math.min(100, Math.round(r.s / r.o * 100)) : 0;
+            const incomplete = r.o > 0 && r.s < r.o;
+            r.st = (r.o > 0 && r.s > r.o) ? 'over' : (!incomplete ? 'ok' : (r.due !== null && now > r.due ? 'od' : (r.s > 0 ? 'part' : 'none')));
+        });
+        return rows;
+    }
+
+    const LAB = { ok: 'ครบแล้ว', part: 'ส่งบางส่วน', none: 'รอส่ง', od: 'เลยกำหนด', over: 'เกินแพลน' };
+    const BG = { ok: '#dcfce7', part: '#fef3c7', none: '#e8edf5', od: '#dc2626', over: '#dbeafe' };
+    const FG = { ok: '#15803d', part: '#b45309', none: '#5a6a80', od: '#ffffff', over: '#1d4ed8' };
+    const BAR = { ok: '#16a34a', part: '#f59e0b', none: '#9aa6b8', od: '#dc2626', over: '#2563eb' };
+
+    function reportHtml(date) {
+        const rows = getRows(date);
+        const cnt = (k) => rows.filter(r => r.st === k).length;
+        const totO = rows.reduce((a, r) => a + r.o, 0);
+        const totS = rows.reduce((a, r) => a + Math.min(r.s, r.o), 0);
+        const pc = totO > 0 ? Math.round(totS / totO * 100) : 0;
+        const dense = rows.length > 16;
+        const pd = dense ? 4 : 7;
+        const n = new Date();
+        const stamp = `${pad(n.getDate())}/${pad(n.getMonth() + 1)}/${n.getFullYear()} ${pad(n.getHours())}:${pad(n.getMinutes())} น.`;
+        const box = (label, val, bg, fg) => `<div style="flex:1;background:${bg};color:${fg};border-radius:12px;padding:12px 14px;"><div style="font-size:12px;font-weight:700;opacity:.9;">${label}</div><div style="font-size:28px;font-weight:800;line-height:1.15;">${val}</div></div>`;
+        const body = rows.map((r, i) => `
+            <tr style="${r.st === 'od' ? 'background:#fff1f2;' : ''}">
+                <td style="padding:${pd}px 8px;border-bottom:1px solid #e6ebf2;text-align:center;color:#7a8799;">${i + 1}</td>
+                <td style="padding:${pd}px 8px;border-bottom:1px solid #e6ebf2;font-weight:800;">${esc(r.WO)}</td>
+                <td style="padding:${pd}px 8px;border-bottom:1px solid #e6ebf2;">${esc(r.partNo)}${dense ? ` <span style="font-size:11px;color:#7a8799;">· ${esc(r.partName || '')}</span>` : `<div style="font-size:11px;color:#7a8799;">${esc(r.partName || '')}</div>`}</td>
+                <td style="padding:${pd}px 8px;border-bottom:1px solid #e6ebf2;text-align:center;">${esc(r.model || '-')}</td>
+                <td style="padding:${pd}px 8px;border-bottom:1px solid #e6ebf2;text-align:center;">${esc(r.line || '-')}</td>
+                <td style="padding:${pd}px 8px;border-bottom:1px solid #e6ebf2;text-align:center;white-space:nowrap;">${r.due ? hm(r.due) : esc(r.startDateTime || '-')}</td>
+                <td style="padding:${pd}px 8px;border-bottom:1px solid #e6ebf2;text-align:right;">${num(r.o)}</td>
+                <td style="padding:${pd}px 8px;border-bottom:1px solid #e6ebf2;text-align:right;font-weight:800;">${num(r.s)}</td>
+                <td style="padding:${pd}px 8px;border-bottom:1px solid #e6ebf2;text-align:right;">${num(Math.max(0, r.o - r.s))}</td>
+                <td style="padding:${pd}px 8px;border-bottom:1px solid #e6ebf2;width:120px;"><div style="display:flex;align-items:center;gap:6px;"><div style="flex:1;height:8px;background:#e8edf5;border-radius:8px;overflow:hidden;"><div style="width:${r.pct}%;height:100%;background:${BAR[r.st]};"></div></div><span style="font-size:11px;font-weight:700;width:34px;text-align:right;">${r.pct}%</span></div></td>
+                <td style="padding:${pd}px 8px;border-bottom:1px solid #e6ebf2;text-align:center;"><span style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:800;background:${BG[r.st]};color:${FG[r.st]};white-space:nowrap;">${LAB[r.st]}</span></td>
+            </tr>`).join('');
+        const th = (t, a) => `<th style="padding:8px;background:#f1f4f9;color:#51627a;font-size:11.5px;text-align:${a || 'center'};white-space:nowrap;">${t}</th>`;
+        return `<div id="lgd-report" style="width:1040px;background:#fff;padding:26px 28px;color:#1b2a41;font-size:13px;box-sizing:border-box;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #c8102e;padding-bottom:12px;margin-bottom:16px;">
+                <div><div style="font-size:24px;font-weight:800;color:#c8102e;">รายงานสถานะการส่งสินค้า LG</div><div style="font-size:12.5px;color:#6b7a90;margin-top:3px;">A-TECH · แพลนวันที่ ${dmy(date)}</div></div>
+                <div style="text-align:right;font-size:12.5px;color:#6b7a90;">ข้อมูล ณ <b style="color:#1b2a41;">${stamp}</b></div>
+            </div>
+            <div style="display:flex;gap:10px;margin-bottom:14px;">
+                ${box('WO ทั้งหมด', rows.length, '#e0ecff', '#1d4ed8')}
+                ${box('ครบแล้ว', cnt('ok') + cnt('over'), '#dcfce7', '#15803d')}
+                ${box('ส่งบางส่วน', cnt('part'), '#fef3c7', '#b45309')}
+                ${box('รอส่ง', cnt('none'), '#e8edf5', '#5a6a80')}
+                ${box('เลยกำหนด', cnt('od'), '#fee2e2', '#b91c1c')}
+            </div>
+            <div style="margin-bottom:16px;">
+                <div style="display:flex;justify-content:space-between;font-weight:700;margin-bottom:5px;"><span>ความคืบหน้ารวม</span><span>${num(totS)} / ${num(totO)} ชิ้น (${pc}%)</span></div>
+                <div style="height:14px;background:#e8edf5;border-radius:14px;overflow:hidden;"><div style="width:${pc}%;height:100%;background:#16a34a;"></div></div>
+            </div>
+            <table style="width:100%;border-collapse:collapse;">
+                <thead><tr>${th('#')}${th('WO', 'left')}${th('Part No / ชื่อ', 'left')}${th('Model')}${th('ไลน์')}${th('กำหนด')}${th('แพลน', 'right')}${th('ส่งแล้ว', 'right')}${th('คงเหลือ', 'right')}${th('ความคืบหน้า')}${th('สถานะ')}</tr></thead>
+                <tbody>${body || '<tr><td colspan="11" style="padding:24px;text-align:center;color:#8a97ab;">ไม่มีแพลนของวันที่เลือก</td></tr>'}</tbody>
+            </table>
+            <div style="margin-top:14px;font-size:11px;color:#98a4b6;text-align:right;">สร้างโดย ATECH STOCK IN-OUT FG SYSTEM</div>
+        </div>`;
+    }
+
+    function mount(date) {
+        const host = document.createElement('div');
+        host.style.cssText = 'position:fixed;left:-12000px;top:0;width:1040px;background:#fff;pointer-events:none;';
+        host.innerHTML = reportHtml(date);
+        document.body.appendChild(host);
+        return { host, el: host.firstElementChild };
+    }
+    const toast = (icon, title) => { try { Swal.fire({ toast: true, position: 'bottom-end', icon, title, showConfirmButton: false, timer: 3500 }); } catch (e) {} };
+    const loading = (t) => { try { Swal.fire({ title: t, allowOutsideClick: false, didOpen: () => Swal.showLoading() }); } catch (e) {} };
+    const selDate = () => { const d = document.getElementById('lgd-date'); return (d && d.value) || lgTodayStr(); };
+    const fname = (ext) => { const n = new Date(); return `LG_Delivery_${selDate()}_${pad(n.getHours())}${pad(n.getMinutes())}.${ext}`; };
+
+    window.lgdSaveImage = async function (mode) {
+        if (typeof html2canvas !== 'function') { toast('error', 'ยังโหลดตัวสร้างภาพไม่เสร็จ ลองรีเฟรชหน้าแล้วกดใหม่'); return; }
+        loading('กำลังสร้างภาพ...');
+        const m = mount(selDate());
+        try {
+            const sc = Math.max(1, Math.min(2, 14000 / (m.el.offsetHeight || 1)));
+            const canvas = await html2canvas(m.el, { scale: sc, backgroundColor: '#ffffff', useCORS: true });
+            const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+            m.host.remove();
+            try { Swal.close(); } catch (e) {}
+            const file = new File([blob], fname('png'), { type: 'image/png' });
+            if (mode === 'copy') {
+                try {
+                    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+                    toast('success', 'คัดลอกภาพแล้ว วางในไลน์ได้เลย (Ctrl+V)');
+                    return;
+                } catch (e) { toast('info', 'คัดลอกไม่ได้บนเครื่องนี้ ดาวน์โหลดไฟล์ภาพแทน'); }
+            }
+            const isPhone = /Android|iPhone|iPad/i.test(navigator.userAgent) && navigator.maxTouchPoints > 0;
+            if (mode !== 'copy' && isPhone && navigator.canShare && navigator.canShare({ files: [file] })) {
+                try { await navigator.share({ files: [file], title: 'สถานะการส่งสินค้า LG' }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
+            }
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob); a.download = file.name;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+            if (mode !== 'copy') toast('success', 'บันทึกภาพเรียบร้อยแล้ว');
+        } catch (err) {
+            m.host.remove();
+            try { Swal.close(); } catch (e) {}
+            toast('error', 'สร้างภาพไม่สำเร็จ: ' + (err && err.message ? err.message : err));
+        }
+    };
+
+    window.lgdSavePdf = async function () {
+        if (typeof html2pdf === 'undefined') { toast('error', 'ยังโหลดตัวสร้าง PDF ไม่เสร็จ ลองรีเฟรชหน้าแล้วกดใหม่'); return; }
+        loading('กำลังสร้าง PDF...');
+        const m = mount(selDate());
+        try {
+            await html2pdf().set({
+                margin: [8, 8, 8, 8], filename: fname('pdf'),
+                image: { type: 'jpeg', quality: 0.95 },
+                html2canvas: { scale: 2, backgroundColor: '#ffffff', useCORS: true, scrollY: 0 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+                pagebreak: { mode: ['css', 'legacy'], avoid: ['tr'] }
+            }).from(m.el).save();
+            m.host.remove();
+            try { Swal.close(); } catch (e) {}
+            toast('success', 'บันทึก PDF เรียบร้อยแล้ว');
+        } catch (err) {
+            m.host.remove();
+            try { Swal.close(); } catch (e) {}
+            toast('error', 'สร้าง PDF ไม่สำเร็จ: ' + (err && err.message ? err.message : err));
+        }
+    };
+
+    function addButtons() {
+        if (document.getElementById('lgd-btns')) return;
+        const live = document.querySelector('#view-dash-lg .lgd-live');
+        if (!live) return;
+        const g = document.createElement('div');
+        g.id = 'lgd-btns';
+        g.className = 'btn-group shadow-sm';
+        g.innerHTML = `
+            <button type="button" class="btn btn-danger fw-bold" onclick="window.lgdSaveImage('download')"><i class="bi bi-image me-1"></i>บันทึกภาพ</button>
+            <button type="button" class="btn btn-outline-danger fw-bold" onclick="window.lgdSaveImage('copy')" title="คัดลอกภาพไว้ แล้ววางในไลน์ด้วย Ctrl+V"><i class="bi bi-clipboard me-1"></i>คัดลอกภาพ</button>
+            <button type="button" class="btn btn-outline-danger fw-bold" onclick="window.lgdSavePdf()"><i class="bi bi-file-earmark-pdf me-1"></i>PDF</button>`;
+        live.parentElement.insertBefore(g, live);
+    }
+    addButtons();
+})();
+// ===== LG-DASH-V3: แท็บ LG Delivery แบบมีเมนูภาษา ไทย/English (ใช้ปุ่มสลับภาษาของระบบ) + บันทึกภาพรูปเดียว =====
+// วางไว้ "ท้ายสุด" ต่อจากบล็อก LG Delivery ที่วางไว้เดิม ตัวนี้จะแทนที่ของเดิมเองโดยอัตโนมัติ (ไม่ต้องลบอะไร)
+(function () {
+    if (window.__lgDashV3) return;
+    window.__lgDashV3 = true;
+
+    // ---------- เก็บกวาดของเดิม (ถ้ามี) แล้วสร้างใหม่ ----------
+    const oldView = document.getElementById('view-dash-lg');
+    const oldWasShown = !!(oldView && !oldView.classList.contains('d-none'));
+    if (oldView) oldView.remove();
+    const oldRadio = document.getElementById('btn-dash-lg');
+    const oldWasChecked = !!(oldRadio && oldRadio.checked);
+    if (oldRadio) { const ol = document.querySelector('label[for="btn-dash-lg"]'); if (ol) ol.remove(); oldRadio.remove(); }
+
+    // ---------- พจนานุกรมภาษา ----------
+    const D = {
+        th: {
+            sub: 'อิงจากการสแกนแมตช์แท็ก LG เทียบกับแพลนของวันที่เลือก',
+            live: 'อัปเดตอัตโนมัติ · สแกนล่าสุด', liveNone: 'อัปเดตอัตโนมัติ · ยังไม่มีการสแกนในวันนี้',
+            kTotal: 'WO ทั้งหมด', pcs: 'ชิ้น', kDone: 'ส่งครบแล้ว', kDoneSub: 'ตามแพลน 100%',
+            kPart: 'ส่งบางส่วน', kPartSub: 'กำลังสแกน', kNone: 'ยังไม่สแกน', kNoneSub: 'ยังไม่ถึงกำหนด',
+            kOd: 'เลยกำหนดยังไม่ครบ', kOdSub: 'ต้องตามด่วน',
+            hProg: 'ความคืบหน้ารวม', hFeed: 'สแกนล่าสุด', hList: 'รายการ WO ตามแพลน',
+            ofQty: 'จาก', remain: 'เหลืออีก', line: 'ไลน์', noPlan: 'ยังไม่มีแพลนของวันที่เลือก',
+            fAll: 'ทั้งหมด', fOpen: 'ยังไม่ครบ', fOd: 'เลยกำหนด', fOk: 'ครบแล้ว', search: 'ค้นหา WO / Part No',
+            cWo: 'WO / Part', cModel: 'Model', cLine: 'ไลน์', cDue: 'กำหนด', cQty: 'สแกน / แพลน', cProg: 'ความคืบหน้า', cSt: 'สถานะ', cLast: 'สแกนล่าสุด',
+            sOk: '✅ ครบแล้ว', sPart: '◐ ส่งบางส่วน', sNone: 'ยังไม่สแกน', sOd: '⏰ เลยกำหนด', sOver: 'เกินแพลน',
+            notInPlan: 'ไม่อยู่ในแพลน', noScan: 'ยังไม่มีการสแกนในวันที่เลือก', warnN: (n) => `สแกนแท็กที่ไม่อยู่ในแพลน ${n} รายการ`,
+            noItems: 'ไม่มีรายการ', note: 'เรียงตามลำดับแพลน LG · เลื่อนดูรายการเพิ่มเติมได้', upd: 'อัปเดต',
+            bImg: 'บันทึกภาพ', bCopy: 'คัดลอกภาพ', bCopyTip: 'คัดลอกภาพไว้ แล้ววางในไลน์ด้วย Ctrl+V',
+            rTitle: 'รายงานสถานะการส่งสินค้า LG', rPlanDate: 'แพลนวันที่', rAsOf: 'ข้อมูล ณ', rSuffix: ' น.',
+            rTotal: 'WO ทั้งหมด', rDone: 'ครบแล้ว', rPart: 'ส่งบางส่วน', rPend: 'รอส่ง', rOd: 'เลยกำหนด', rProg: 'ความคืบหน้ารวม',
+            rName: 'Part No / ชื่อ', rPlan: 'แพลน', rDel: 'ส่งแล้ว', rRem: 'คงเหลือ', rEmpty: 'ไม่มีแพลนของวันที่เลือก', rGen: 'สร้างโดย',
+            rsOk: 'ครบแล้ว', rsPart: 'ส่งบางส่วน', rsNone: 'รอส่ง', rsOd: 'เลยกำหนด', rsOver: 'เกินแพลน',
+            mImg: 'กำลังสร้างภาพ...', mPdf: 'กำลังสร้าง PDF...', copied: 'คัดลอกภาพแล้ว วางในไลน์ได้เลย (Ctrl+V)',
+            copyFail: 'คัดลอกไม่ได้บนเครื่องนี้ ดาวน์โหลดไฟล์ภาพแทน', saved: 'บันทึกภาพเรียบร้อยแล้ว', pdfSaved: 'บันทึก PDF เรียบร้อยแล้ว',
+            libImg: 'ยังโหลดตัวสร้างภาพไม่เสร็จ ลองรีเฟรชหน้าแล้วกดใหม่', libPdf: 'ยังโหลดตัวสร้าง PDF ไม่เสร็จ ลองรีเฟรชหน้าแล้วกดใหม่',
+            failImg: 'สร้างภาพไม่สำเร็จ: ', failPdf: 'สร้าง PDF ไม่สำเร็จ: '
+        },
+        en: {
+            sub: 'Based on LG tag-matching scans vs. the selected day\'s plan',
+            live: 'Auto-refresh · Last scan', liveNone: 'Auto-refresh · No scans yet today',
+            kTotal: 'Total WO', pcs: 'pcs', kDone: 'Completed', kDoneSub: 'Matches plan 100%',
+            kPart: 'Partial', kPartSub: 'Scanning', kNone: 'Not scanned', kNoneSub: 'Not yet due',
+            kOd: 'Overdue & incomplete', kOdSub: 'Needs follow-up',
+            hProg: 'Overall progress', hFeed: 'Latest scans', hList: 'WO list (plan order)',
+            ofQty: 'of', remain: 'remaining', line: 'Line', noPlan: 'No plan for the selected date',
+            fAll: 'All', fOpen: 'Open', fOd: 'Overdue', fOk: 'Done', search: 'Search WO / Part No',
+            cWo: 'WO / Part', cModel: 'Model', cLine: 'Line', cDue: 'Due', cQty: 'Scanned / Plan', cProg: 'Progress', cSt: 'Status', cLast: 'Last scan',
+            sOk: '✅ Complete', sPart: '◐ Partial', sNone: 'Not scanned', sOd: '⏰ Overdue', sOver: 'Over plan',
+            notInPlan: 'Not in plan', noScan: 'No scans on the selected date', warnN: (n) => `${n} scan(s) not in plan`,
+            noItems: 'No items', note: 'Sorted by LG plan order · scroll for more', upd: 'Updated',
+            bImg: 'Save image', bCopy: 'Copy image', bCopyTip: 'Copy the image, then paste into LINE with Ctrl+V',
+            rTitle: 'LG Delivery Status Report', rPlanDate: 'Plan date', rAsOf: 'As of', rSuffix: '',
+            rTotal: 'Total WO', rDone: 'Completed', rPart: 'Partial', rPend: 'Pending', rOd: 'Overdue', rProg: 'Overall progress',
+            rName: 'Part No / Name', rPlan: 'Plan', rDel: 'Delivered', rRem: 'Remaining', rEmpty: 'No plan for the selected date', rGen: 'Generated by',
+            rsOk: 'Completed', rsPart: 'Partial', rsNone: 'Pending', rsOd: 'Overdue', rsOver: 'Over plan',
+            mImg: 'Creating image...', mPdf: 'Creating PDF...', copied: 'Image copied. Paste it into LINE (Ctrl+V)',
+            copyFail: 'Copy is not available on this device. Downloading the image instead', saved: 'Image saved', pdfSaved: 'PDF saved',
+            libImg: 'Image library is still loading. Please refresh and try again', libPdf: 'PDF library is still loading. Please refresh and try again',
+            failImg: 'Could not create image: ', failPdf: 'Could not create PDF: '
+        }
+    };
+    const curLang = () => (typeof currentLanguage !== 'undefined' && D[currentLanguage]) ? currentLanguage : ((D[sessionStorage.getItem('currentLanguage')] ? sessionStorage.getItem('currentLanguage') : 'th'));
+    const T = (k) => { const v = D[curLang()][k]; return v === undefined ? D.th[k] : v; };
+
+    const esc = (s) => String(s === undefined || s === null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const pad = (n) => String(n).padStart(2, '0');
+    const num = (n) => Number(n || 0).toLocaleString('en-US');
+    const MON = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+    let flt = 'all', query = '', dateChosen = false;
+
+    function parseDue(v) {
+        if (!v) return null;
+        if (v instanceof Date) return isNaN(v.getTime()) ? null : v.getTime();
+        const s = String(v).trim();
+        let m = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})(?:\s+(\d{1,2}):(\d{2}))?/);
+        if (m && MON[m[2].toLowerCase()] !== undefined) {
+            let y = parseInt(m[3], 10); if (y < 100) y += 2000;
+            return new Date(y, MON[m[2].toLowerCase()], parseInt(m[1], 10), parseInt(m[4] || '0', 10), parseInt(m[5] || '0', 10)).getTime();
+        }
+        m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2}))?/);
+        if (m) return new Date(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0)).getTime();
+        m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+        if (m) { let y = +m[3]; if (y > 2400) y -= 543; return new Date(y, +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0)).getTime(); }
+        const t = new Date(s).getTime();
+        return isNaN(t) ? null : t;
+    }
+    const toMs = (v) => { if (!v) return null; const t = new Date(v).getTime(); return isNaN(t) ? null : t; };
+    const dayOf = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+    const hm = (ms) => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+    const dmy = (ymd) => { const p = String(ymd).split('-'); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : ymd; };
+
+    function injectCss() {
+        if (document.getElementById('lgd-style3')) return;
+        const st = document.createElement('style');
+        st.id = 'lgd-style3';
+        st.textContent = `
+        #view-dash-lg .lgd-head{display:flex;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+        #view-dash-lg .lgd-head h2{margin:0;font-size:1.45rem;font-weight:800;color:#c8102e}
+        #view-dash-lg .lgd-sub{color:#6b7a90;font-size:.8rem;margin-top:2px}
+        #view-dash-lg .lgd-sp{flex:1}
+        #view-dash-lg .lgd-live{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #d5dce8;border-radius:12px;padding:8px 14px;font-size:.8rem;color:#4a5a70}
+        #view-dash-lg .lgd-dot{width:9px;height:9px;border-radius:50%;background:#16a34a;box-shadow:0 0 0 4px rgba(22,163,74,.18);animation:lgdPulse 1.8s infinite}
+        @keyframes lgdPulse{50%{box-shadow:0 0 0 7px rgba(22,163,74,.05)}}
+        #view-dash-lg .lgd-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px}
+        #view-dash-lg .lgd-k{border-radius:14px;padding:14px 16px;color:#fff;display:flex;align-items:center;gap:12px;box-shadow:0 4px 14px rgba(0,0,0,.08)}
+        #view-dash-lg .lgd-k .ic{width:42px;height:42px;border-radius:10px;background:rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;flex:none;font-size:1.3rem}
+        #view-dash-lg .lgd-k .n{font-size:1.8rem;font-weight:800;line-height:1}
+        #view-dash-lg .lgd-k .l{font-size:.75rem;opacity:.92;font-weight:700;margin-bottom:3px}
+        #view-dash-lg .lgd-k .s{font-size:.7rem;opacity:.85;margin-top:3px}
+        #view-dash-lg .k1{background:linear-gradient(135deg,#6ea8fe,#0d6efd)}
+        #view-dash-lg .k2{background:linear-gradient(135deg,#4ade80,#16a34a)}
+        #view-dash-lg .k3{background:linear-gradient(135deg,#fcd34d,#f59e0b);color:#3b2a00}
+        #view-dash-lg .k4{background:linear-gradient(135deg,#aab4c3,#7b8798)}
+        #view-dash-lg .k5{background:linear-gradient(135deg,#fb7185,#dc2626)}
+        #view-dash-lg .lgd-grid{display:grid;grid-template-columns:350px minmax(0,1fr);gap:16px;align-items:start}
+        #view-dash-lg .lgd-col{display:flex;flex-direction:column;gap:16px}
+        #view-dash-lg .lgd-card{background:#fff;border-radius:20px;box-shadow:0 2px 12px rgba(20,40,80,.07);padding:20px}
+        #view-dash-lg .lgd-card h3{margin:0 0 14px;font-size:.95rem;font-weight:800;color:#0d6efd;display:flex;align-items:center;gap:8px}
+        #view-dash-lg .lgd-ring{display:flex;align-items:center;gap:18px}
+        #view-dash-lg .lgd-big{font-size:1.9rem;font-weight:800;line-height:1}
+        #view-dash-lg .lgd-u{font-size:.75rem;color:#6b7a90;margin-top:4px}
+        #view-dash-lg .lgd-chips{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+        #view-dash-lg .lgd-chip{border-radius:20px;padding:3px 10px;font-size:.72rem;font-weight:700}
+        #view-dash-lg .m-ane{background:#e0ecff;color:#1d4ed8}
+        #view-dash-lg .m-anf{background:#fde7ee;color:#be123c}
+        #view-dash-lg .m-oth{background:#eef1f6;color:#4a5a70}
+        #view-dash-lg .lgd-lines{margin-top:18px;display:flex;flex-direction:column;gap:12px}
+        #view-dash-lg .lgd-ln .t{display:flex;justify-content:space-between;font-size:.78rem;font-weight:700;margin-bottom:5px}
+        #view-dash-lg .lgd-ln .t span:last-child{color:#6b7a90;font-weight:400}
+        #view-dash-lg .lgd-bar{height:10px;background:#e8edf5;border-radius:10px;overflow:hidden}
+        #view-dash-lg .lgd-bar i{display:block;height:100%;border-radius:10px;transition:width .5s}
+        #view-dash-lg .lgd-f{display:flex;gap:10px;padding:9px 0;border-bottom:1px dashed #e3e8f0;font-size:.78rem;align-items:flex-start}
+        #view-dash-lg .lgd-f:last-child{border:none}
+        #view-dash-lg .lgd-f .tm{width:42px;color:#6b7a90;font-weight:700;flex:none}
+        #view-dash-lg .lgd-f .q{margin-left:auto;font-weight:800;color:#16a34a;flex:none}
+        #view-dash-lg .lgd-f.warn .q{color:#d97706}
+        #view-dash-lg .lgd-pn{font-size:.68rem;color:#7a8799}
+        #view-dash-lg .lgd-warnbox{margin-top:12px;background:#fff7e6;border:1px solid #fcd9a0;color:#92580a;border-radius:12px;padding:9px 12px;font-size:.78rem}
+        #view-dash-lg .lgd-tools{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+        #view-dash-lg .lgd-fc{border:1px solid #d5dce8;border-radius:20px;padding:5px 14px;font-weight:700;font-size:.78rem;color:#4a5a70;background:#fff;cursor:pointer}
+        #view-dash-lg .lgd-fc.on{background:#0d6efd;color:#fff;border-color:#0d6efd}
+        #view-dash-lg .lgd-fc em{font-style:normal;opacity:.75;margin-left:4px;font-weight:400}
+        #view-dash-lg .lgd-q{margin-left:auto;border:1px solid #d5dce8;border-radius:10px;padding:6px 12px;font-size:.78rem;width:200px;max-width:100%}
+        #view-dash-lg .lgd-tw{overflow:auto;max-height:600px}
+        #view-dash-lg table.lgd-t{width:100%;border-collapse:separate;border-spacing:0 6px;min-width:760px}
+        #view-dash-lg .lgd-t th{position:sticky;top:0;z-index:2;box-shadow:0 6px 0 #fff;font-size:.72rem;color:#6b7a90;text-align:left;padding:7px 10px;background:#f4f6fa;font-weight:700;white-space:nowrap}
+        #view-dash-lg .lgd-t th:first-child{border-radius:10px 0 0 10px}
+        #view-dash-lg .lgd-t th:last-child{border-radius:0 10px 10px 0}
+        #view-dash-lg .lgd-t td{padding:9px 10px;background:#fff;border-bottom:1px solid #eef1f6;font-size:.78rem;vertical-align:middle}
+        #view-dash-lg .lgd-t tr.od td{background:#fff1f2}
+        #view-dash-lg .lgd-t tr.od td:first-child{box-shadow:inset 4px 0 0 #dc2626}
+        #view-dash-lg .lgd-wo{font-weight:800}
+        #view-dash-lg .lgd-mod{font-size:.68rem;font-weight:800;border-radius:6px;padding:2px 7px}
+        #view-dash-lg .lgd-l2{font-size:.7rem;border:1px solid #d5dce8;border-radius:6px;padding:1px 7px;background:#f8fafc;font-weight:700}
+        #view-dash-lg .lgd-pr{display:flex;align-items:center;gap:8px;min-width:140px}
+        #view-dash-lg .lgd-pr .lgd-bar{flex:1;height:9px}
+        #view-dash-lg .lgd-pr b{font-size:.75rem;width:38px;text-align:right}
+        #view-dash-lg .lgd-qty{font-weight:800;white-space:nowrap}
+        #view-dash-lg .lgd-qty small{color:#7a8799;font-weight:400}
+        #view-dash-lg .lgd-st{border-radius:20px;padding:3px 10px;font-weight:800;font-size:.72rem;white-space:nowrap;display:inline-block}
+        #view-dash-lg .s-ok{background:#dcfce7;color:#15803d}
+        #view-dash-lg .s-part{background:#fef3c7;color:#b45309}
+        #view-dash-lg .s-none{background:#e8edf5;color:#5a6a80}
+        #view-dash-lg .s-od{background:#dc2626;color:#fff}
+        #view-dash-lg .s-over{background:#dbeafe;color:#1d4ed8}
+        #view-dash-lg .lgd-note{margin-top:10px;font-size:.72rem;color:#7a8799;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+        #view-dash-lg .lgd-empty{text-align:center;color:#8a97ab;padding:36px 10px}
+        @media (max-width:991px){
+            #view-dash-lg .lgd-grid{grid-template-columns:1fr}
+            #view-dash-lg .lgd-kpis{grid-template-columns:repeat(2,1fr)}
+        }`;
+        document.head.appendChild(st);
+    }
+
+    // ข้อความคงที่ของหน้า (หัวข้อ/ปุ่ม/หัวตาราง) อัปเดตตามภาษา
+    function retext() {
+        const set = (sel, html) => { const e = document.querySelector(sel); if (e) e.innerHTML = html; };
+        set('#view-dash-lg [data-k="sub"]', esc(T('sub')));
+        set('#view-dash-lg [data-k="hProg"]', `<i class="bi bi-bar-chart-fill"></i> ${esc(T('hProg'))}`);
+        set('#view-dash-lg [data-k="hFeed"]', `<i class="bi bi-upc-scan"></i> ${esc(T('hFeed'))}`);
+        set('#view-dash-lg [data-k="hList"]', `<i class="bi bi-list-check"></i> ${esc(T('hList'))}`);
+        const heads = ['cWo', 'cModel', 'cLine', 'cDue', 'cQty', 'cProg', 'cSt', 'cLast'];
+        document.querySelectorAll('#view-dash-lg .lgd-t thead th').forEach((th, i) => { if (heads[i]) th.textContent = T(heads[i]); });
+        const b = document.querySelectorAll('#lgd-btns button');
+        if (b[0]) b[0].innerHTML = `<i class="bi bi-image me-1"></i>${esc(T('bImg'))}`;
+        if (b[1]) { b[1].innerHTML = `<i class="bi bi-clipboard me-1"></i>${esc(T('bCopy'))}`; b[1].title = T('bCopyTip'); }
+    }
+
+    function build() {
+        if (document.getElementById('view-dash-lg')) return;
+        const veh = document.getElementById('view-dash-vehicle');
+        const host = veh ? veh.parentElement : document.getElementById('pills-dashboard');
+        if (!host) return;
+        const div = document.createElement('div');
+        div.id = 'view-dash-lg';
+        div.className = oldWasShown ? '' : 'd-none';
+        div.innerHTML = `
+        <div class="lgd-head">
+            <div><h2><i class="bi bi-upc-scan me-2"></i>LG Delivery Status</h2><div class="lgd-sub" data-k="sub"></div></div>
+            <div class="lgd-sp"></div>
+            <input type="date" id="lgd-date" class="form-control fw-bold" style="max-width:180px;border-radius:12px;">
+            <div id="lgd-btns" class="btn-group shadow-sm">
+                <button type="button" class="btn btn-danger fw-bold" onclick="window.lgdSaveImage('download')"></button>
+                <button type="button" class="btn btn-outline-danger fw-bold" onclick="window.lgdSaveImage('copy')"></button>
+                <button type="button" class="btn btn-outline-danger fw-bold" onclick="window.lgdSavePdf()"><i class="bi bi-file-earmark-pdf me-1"></i>PDF</button>
+            </div>
+            <div class="lgd-live"><span class="lgd-dot"></span><span id="lgd-live-txt"></span></div>
+        </div>
+        <div class="lgd-kpis" id="lgd-kpis"></div>
+        <div class="lgd-grid">
+            <div class="lgd-col">
+                <div class="lgd-card"><h3 data-k="hProg"></h3><div id="lgd-ring"></div></div>
+                <div class="lgd-card"><h3 data-k="hFeed"></h3><div id="lgd-feed"></div></div>
+            </div>
+            <div class="lgd-card">
+                <h3 data-k="hList"></h3>
+                <div class="lgd-tools" id="lgd-tools"></div>
+                <div class="lgd-tw"><table class="lgd-t"><thead><tr><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th></tr></thead><tbody id="lgd-tbody"></tbody></table></div>
+                <div class="lgd-note" id="lgd-note"></div>
+            </div>
+        </div>`;
+        if (veh) veh.insertAdjacentElement('afterend', div); else host.appendChild(div);
+        const dt = document.getElementById('lgd-date');
+        dt.value = lgTodayStr();
+        dt.addEventListener('change', () => { dateChosen = true; window.renderLGDashboard(); });
+        retext();
+    }
+
+    function addTab() {
+        if (document.getElementById('btn-dash-lg')) return;
+        const radioVeh = document.getElementById('btn-dash-vehicle');
+        const group = radioVeh ? radioVeh.parentElement : null;
+        if (!group) return;
+        const inp = document.createElement('input');
+        inp.type = 'radio'; inp.className = 'btn-check'; inp.name = 'dashToggle'; inp.id = 'btn-dash-lg'; inp.autocomplete = 'off';
+        inp.setAttribute('onchange', "toggleDashboardView('lg')");
+        inp.checked = oldWasChecked;
+        const lab = document.createElement('label');
+        lab.className = 'btn btn-outline-primary border-0 rounded-pill px-3 fw-bold';
+        lab.htmlFor = 'btn-dash-lg';
+        lab.innerHTML = '<i class="bi bi-upc-scan me-1"></i>LG Delivery';
+        group.appendChild(inp); group.appendChild(lab);
+    }
+
+    function compute(date) {
+        const rows = lgSortPlans(computeLGMatchStatus().filter(r => lgPlanDateOf(r) === date));
+        const last = {};
+        (db.lgScanLog || []).forEach(s => {
+            const t = toMs(s.scannedAt); if (!t) return;
+            const k = String(s.WO).trim() + '|' + String(s.partNo).trim();
+            if (!last[k] || t > last[k]) last[k] = t;
+        });
+        const now = Date.now();
+        rows.forEach(r => {
+            r.s = r.scanned; r.o = r.orderQty;
+            r.due = parseDue(r.startDateTime);
+            r.last = last[String(r.WO).trim() + '|' + String(r.partNo).trim()] || null;
+            r.pct = r.o > 0 ? Math.min(100, Math.round(r.s / r.o * 100)) : 0;
+            const incomplete = r.o > 0 && r.s < r.o;
+            r.st = (r.o > 0 && r.s > r.o) ? 'over' : (!incomplete ? 'ok' : (r.due !== null && now > r.due ? 'od' : (r.s > 0 ? 'part' : 'none')));
+        });
+        return rows;
+    }
+
+    const LABK = { ok: 'sOk', part: 'sPart', none: 'sNone', od: 'sOd', over: 'sOver' };
+    const BAR = { ok: '#16a34a', part: '#f59e0b', none: '#9aa6b8', od: '#dc2626', over: '#2563eb' };
+    const modCls = (m) => { m = String(m || '').toUpperCase(); return m.indexOf('ANF') !== -1 ? 'm-anf' : m.indexOf('ANE') !== -1 ? 'm-ane' : 'm-oth'; };
+
+    window.renderLGDashboard = function () {
+        const root = document.getElementById('view-dash-lg');
+        if (!root || typeof computeLGMatchStatus !== 'function') return;
+        retext();
+        const dt = document.getElementById('lgd-date');
+        if (!dateChosen && dt) {
+            const today = lgTodayStr();
+            if (!(db.lgPlan || []).some(p => lgPlanDateOf(p) === today)) {
+                const days = (db.lgPlan || []).map(lgPlanDateOf).sort();
+                if (days.length) dt.value = days[days.length - 1];
+            }
+            dateChosen = true;
+        }
+        const date = (dt && dt.value) || lgTodayStr();
+        const rows = compute(date);
+        const cnt = (k) => rows.filter(r => r.st === k).length;
+        const totO = rows.reduce((a, r) => a + r.o, 0);
+        const totS = rows.reduce((a, r) => a + Math.min(r.s, r.o), 0);
+        const pc = totO > 0 ? Math.round(totS / totO * 100) : 0;
+        const done = cnt('ok') + cnt('over');
+
+        const planKeys = new Set((db.lgPlan || []).map(p => String(p.WO).trim() + '|' + String(p.partNo).trim()));
+        const scansDay = (db.lgScanLog || []).map(s => ({ s, t: toMs(s.scannedAt) })).filter(x => x.t && dayOf(x.t) === date).sort((a, b) => b.t - a.t);
+        const notInPlan = scansDay.filter(x => !planKeys.has(String(x.s.WO).trim() + '|' + String(x.s.partNo).trim()));
+
+        document.getElementById('lgd-live-txt').innerHTML = scansDay.length ? `${esc(T('live'))} <b>${hm(scansDay[0].t)}</b>` : esc(T('liveNone'));
+
+        document.getElementById('lgd-kpis').innerHTML = `
+            <div class="lgd-k k1"><div class="ic"><i class="bi bi-list-task"></i></div><div><div class="l">${esc(T('kTotal'))}</div><div class="n">${rows.length}</div><div class="s">${num(totO)} ${esc(T('pcs'))}</div></div></div>
+            <div class="lgd-k k2"><div class="ic"><i class="bi bi-check-lg"></i></div><div><div class="l">${esc(T('kDone'))}</div><div class="n">${done}</div><div class="s">${esc(T('kDoneSub'))}</div></div></div>
+            <div class="lgd-k k3"><div class="ic"><i class="bi bi-hourglass-split"></i></div><div><div class="l">${esc(T('kPart'))}</div><div class="n">${cnt('part')}</div><div class="s">${esc(T('kPartSub'))}</div></div></div>
+            <div class="lgd-k k4"><div class="ic"><i class="bi bi-box-seam"></i></div><div><div class="l">${esc(T('kNone'))}</div><div class="n">${cnt('none')}</div><div class="s">${esc(T('kNoneSub'))}</div></div></div>
+            <div class="lgd-k k5"><div class="ic"><i class="bi bi-exclamation-triangle-fill"></i></div><div><div class="l">${esc(T('kOd'))}</div><div class="n">${cnt('od')}</div><div class="s">${esc(T('kOdSub'))}</div></div></div>`;
+
+        const C = 2 * Math.PI * 52, off = C * (1 - pc / 100);
+        const nAne = rows.filter(r => modCls(r.model) === 'm-ane').length, nAnf = rows.filter(r => modCls(r.model) === 'm-anf').length;
+        const lineMap = {};
+        rows.forEach(r => { const l = String(r.line || '-').trim() || '-'; (lineMap[l] = lineMap[l] || { o: 0, s: 0 }); lineMap[l].o += r.o; lineMap[l].s += Math.min(r.s, r.o); });
+        const lineHtml = Object.keys(lineMap).sort().slice(0, 8).map(l => {
+            const x = lineMap[l], p = x.o > 0 ? Math.round(x.s / x.o * 100) : 0;
+            return `<div class="lgd-ln"><div class="t"><span>${esc(T('line'))} ${esc(l)}</span><span>${num(x.s)} / ${num(x.o)} ${esc(T('pcs'))} · ${p}%</span></div><div class="lgd-bar"><i style="width:${p}%;background:${p >= 90 ? '#16a34a' : p >= 50 ? '#0d6efd' : '#f59e0b'}"></i></div></div>`;
+        }).join('');
+        document.getElementById('lgd-ring').innerHTML = rows.length === 0
+            ? `<div class="lgd-empty">${esc(T('noPlan'))}</div>`
+            : `<div class="lgd-ring">
+                <svg width="130" height="130" viewBox="0 0 130 130"><circle cx="65" cy="65" r="52" fill="none" stroke="#e8edf5" stroke-width="14"/><circle cx="65" cy="65" r="52" fill="none" stroke="#16a34a" stroke-width="14" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${off}" transform="rotate(-90 65 65)"/><text x="65" y="72" text-anchor="middle" font-size="26" font-weight="800" fill="#1b2a41">${pc}%</text></svg>
+                <div><div class="lgd-big">${num(totS)}</div><div class="lgd-u">${esc(T('ofQty'))} ${num(totO)} ${esc(T('pcs'))}<br>${esc(T('remain'))} ${num(totO - totS)} ${esc(T('pcs'))}</div>
+                <div class="lgd-chips"><span class="lgd-chip m-ane">ANE ${nAne} WO</span><span class="lgd-chip m-anf">ANF ${nAnf} WO</span></div></div>
+            </div><div class="lgd-lines">${lineHtml}</div>`;
+
+        const feed = scansDay.slice(0, 6).map(x => {
+            const inPlan = planKeys.has(String(x.s.WO).trim() + '|' + String(x.s.partNo).trim());
+            return `<div class="lgd-f ${inPlan ? '' : 'warn'}"><div class="tm">${hm(x.t)}</div><div><b>${esc(x.s.WO)}</b><br><span class="lgd-pn">${esc(x.s.partNo)} · ${inPlan ? esc(x.s.scannedBy || '-') : esc(T('notInPlan')) + ' · ' + esc(x.s.scannedBy || '-')}</span></div><div class="q">+${num(x.s.rackQty)}</div></div>`;
+        }).join('');
+        document.getElementById('lgd-feed').innerHTML = (feed || `<div class="lgd-empty">${esc(T('noScan'))}</div>`)
+            + (notInPlan.length ? `<div class="lgd-warnbox"><i class="bi bi-exclamation-triangle me-1"></i>${esc(T('warnN')(notInPlan.length))}</div>` : '');
+
+        const open = rows.filter(r => r.st !== 'ok' && r.st !== 'over');
+        const chips = [['all', T('fAll'), rows.length], ['open', T('fOpen'), open.length], ['od', T('fOd'), cnt('od')], ['ok', T('fOk'), done]];
+        document.getElementById('lgd-tools').innerHTML = chips.map(c => `<span class="lgd-fc ${flt === c[0] ? 'on' : ''}" data-f="${c[0]}">${esc(c[1])}<em>${c[2]}</em></span>`).join('')
+            + `<input type="search" class="lgd-q" id="lgd-q" placeholder="${esc(T('search'))}" value="${esc(query)}">`;
+
+        let show = rows.slice();
+        if (flt === 'open') show = open; else if (flt === 'od') show = rows.filter(r => r.st === 'od'); else if (flt === 'ok') show = rows.filter(r => r.st === 'ok' || r.st === 'over');
+        const qq = query.trim().toLowerCase();
+        if (qq) show = show.filter(r => (String(r.WO) + ' ' + String(r.partNo) + ' ' + String(r.partName || '')).toLowerCase().indexOf(qq) !== -1);
+
+        document.getElementById('lgd-tbody').innerHTML = show.length ? show.map(r => `
+            <tr class="${r.st === 'od' ? 'od' : ''}">
+                <td><div class="lgd-wo">${esc(r.WO)}</div><div class="lgd-pn">${esc(r.partNo)}${r.partName ? ' · ' + esc(r.partName) : ''}</div></td>
+                <td><span class="lgd-mod ${modCls(r.model)}">${esc(r.model || '-')}</span></td>
+                <td><span class="lgd-l2">${esc(r.line || '-')}</span></td>
+                <td class="text-nowrap">${r.due ? hm(r.due) : esc(r.startDateTime || '-')}</td>
+                <td class="lgd-qty">${num(r.s)} <small>/ ${num(r.o)}</small></td>
+                <td><div class="lgd-pr"><div class="lgd-bar"><i style="width:${r.pct}%;background:${BAR[r.st]}"></i></div><b>${r.pct}%</b></div></td>
+                <td><span class="lgd-st s-${r.st}">${esc(T(LABK[r.st]))}</span></td>
+                <td>${r.last ? hm(r.last) : '<span class="text-muted">-</span>'}</td>
+            </tr>`).join('') : `<tr><td colspan="8" class="lgd-empty">${esc(T('noItems'))}</td></tr>`;
+        document.getElementById('lgd-note').innerHTML = `<span>${esc(T('note'))}</span><span>${esc(T('upd'))} ${hm(Date.now())}</span>`;
+    };
+
+    // ---------- รายงานภาพ / PDF (รูปเดียว ทุก WO) ----------
+    const RB = { ok: '#dcfce7', part: '#fef3c7', none: '#e8edf5', od: '#dc2626', over: '#dbeafe' };
+    const RF = { ok: '#15803d', part: '#b45309', none: '#5a6a80', od: '#ffffff', over: '#1d4ed8' };
+    const RLK = { ok: 'rsOk', part: 'rsPart', none: 'rsNone', od: 'rsOd', over: 'rsOver' };
+
+    function reportHtml(date) {
+        const rows = compute(date);
+        const cnt = (k) => rows.filter(r => r.st === k).length;
+        const totO = rows.reduce((a, r) => a + r.o, 0);
+        const totS = rows.reduce((a, r) => a + Math.min(r.s, r.o), 0);
+        const pc = totO > 0 ? Math.round(totS / totO * 100) : 0;
+        const dense = rows.length > 16, pd = dense ? 4 : 7;
+        const n = new Date();
+        const stamp = `${pad(n.getDate())}/${pad(n.getMonth() + 1)}/${n.getFullYear()} ${pad(n.getHours())}:${pad(n.getMinutes())}${T('rSuffix')}`;
+        const box = (label, val, bg, fg) => `<div style="flex:1;background:${bg};color:${fg};border-radius:12px;padding:12px 14px;"><div style="font-size:12px;font-weight:700;opacity:.9;">${esc(label)}</div><div style="font-size:28px;font-weight:800;line-height:1.15;">${val}</div></div>`;
+        const td = 'padding:' + pd + 'px 8px;border-bottom:1px solid #e6ebf2;';
+        const body = rows.map((r, i) => `
+            <tr style="${r.st === 'od' ? 'background:#fff1f2;' : ''}">
+                <td style="${td}text-align:center;color:#7a8799;">${i + 1}</td>
+                <td style="${td}font-weight:800;">${esc(r.WO)}</td>
+                <td style="${td}">${esc(r.partNo)}${dense ? ` <span style="font-size:11px;color:#7a8799;">· ${esc(r.partName || '')}</span>` : `<div style="font-size:11px;color:#7a8799;">${esc(r.partName || '')}</div>`}</td>
+                <td style="${td}text-align:center;">${esc(r.model || '-')}</td>
+                <td style="${td}text-align:center;">${esc(r.line || '-')}</td>
+                <td style="${td}text-align:center;white-space:nowrap;">${r.due ? hm(r.due) : esc(r.startDateTime || '-')}</td>
+                <td style="${td}text-align:right;">${num(r.o)}</td>
+                <td style="${td}text-align:right;font-weight:800;">${num(r.s)}</td>
+                <td style="${td}text-align:right;">${num(Math.max(0, r.o - r.s))}</td>
+                <td style="${td}width:120px;"><div style="display:flex;align-items:center;gap:6px;"><div style="flex:1;height:8px;background:#e8edf5;border-radius:8px;overflow:hidden;"><div style="width:${r.pct}%;height:100%;background:${BAR[r.st]};"></div></div><span style="font-size:11px;font-weight:700;width:34px;text-align:right;">${r.pct}%</span></div></td>
+                <td style="${td}text-align:center;"><span style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:800;background:${RB[r.st]};color:${RF[r.st]};white-space:nowrap;">${esc(T(RLK[r.st]))}</span></td>
+            </tr>`).join('');
+        const th = (t, a) => `<th style="padding:8px;background:#f1f4f9;color:#51627a;font-size:11.5px;text-align:${a || 'center'};white-space:nowrap;">${esc(t)}</th>`;
+        return `<div id="lgd-report" style="width:1040px;background:#fff;padding:26px 28px;color:#1b2a41;font-size:13px;box-sizing:border-box;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #c8102e;padding-bottom:12px;margin-bottom:16px;">
+                <div><div style="font-size:24px;font-weight:800;color:#c8102e;">${esc(T('rTitle'))}</div><div style="font-size:12.5px;color:#6b7a90;margin-top:3px;">A-TECH · ${esc(T('rPlanDate'))} ${dmy(date)}</div></div>
+                <div style="text-align:right;font-size:12.5px;color:#6b7a90;">${esc(T('rAsOf'))} <b style="color:#1b2a41;">${stamp}</b></div>
+            </div>
+            <div style="display:flex;gap:10px;margin-bottom:14px;">
+                ${box(T('rTotal'), rows.length, '#e0ecff', '#1d4ed8')}${box(T('rDone'), cnt('ok') + cnt('over'), '#dcfce7', '#15803d')}${box(T('rPart'), cnt('part'), '#fef3c7', '#b45309')}${box(T('rPend'), cnt('none'), '#e8edf5', '#5a6a80')}${box(T('rOd'), cnt('od'), '#fee2e2', '#b91c1c')}
+            </div>
+            <div style="margin-bottom:16px;">
+                <div style="display:flex;justify-content:space-between;font-weight:700;margin-bottom:5px;"><span>${esc(T('rProg'))}</span><span>${num(totS)} / ${num(totO)} ${esc(T('pcs'))} (${pc}%)</span></div>
+                <div style="height:14px;background:#e8edf5;border-radius:14px;overflow:hidden;"><div style="width:${pc}%;height:100%;background:#16a34a;"></div></div>
+            </div>
+            <table style="width:100%;border-collapse:collapse;">
+                <thead><tr>${th('#')}${th('WO', 'left')}${th(T('rName'), 'left')}${th('Model')}${th(T('cLine'))}${th(T('cDue'))}${th(T('rPlan'), 'right')}${th(T('rDel'), 'right')}${th(T('rRem'), 'right')}${th(T('cProg'))}${th(T('cSt'))}</tr></thead>
+                <tbody>${body || `<tr><td colspan="11" style="padding:24px;text-align:center;color:#8a97ab;">${esc(T('rEmpty'))}</td></tr>`}</tbody>
+            </table>
+            <div style="margin-top:14px;font-size:11px;color:#98a4b6;text-align:right;">${esc(T('rGen'))} ATECH STOCK IN-OUT FG SYSTEM</div>
+        </div>`;
+    }
+
+    function mount(date) {
+        const host = document.createElement('div');
+        host.style.cssText = 'position:fixed;left:-12000px;top:0;width:1040px;background:#fff;pointer-events:none;';
+        host.innerHTML = reportHtml(date);
+        document.body.appendChild(host);
+        return { host, el: host.firstElementChild };
+    }
+    const toast = (icon, title) => { try { Swal.fire({ toast: true, position: 'bottom-end', icon, title, showConfirmButton: false, timer: 3500 }); } catch (e) {} };
+    const loading = (t) => { try { Swal.fire({ title: t, allowOutsideClick: false, didOpen: () => Swal.showLoading() }); } catch (e) {} };
+    const selDate = () => { const d = document.getElementById('lgd-date'); return (d && d.value) || lgTodayStr(); };
+    const fname = (ext) => { const n = new Date(); return `LG_Delivery_${selDate()}_${pad(n.getHours())}${pad(n.getMinutes())}.${ext}`; };
+
+    window.lgdSaveImage = async function (mode) {
+        if (typeof html2canvas !== 'function') { toast('error', T('libImg')); return; }
+        loading(T('mImg'));
+        const m = mount(selDate());
+        try {
+            const sc = Math.max(1, Math.min(2, 14000 / (m.el.offsetHeight || 1)));
+            const canvas = await html2canvas(m.el, { scale: sc, backgroundColor: '#ffffff', useCORS: true });
+            const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+            m.host.remove();
+            try { Swal.close(); } catch (e) {}
+            const file = new File([blob], fname('png'), { type: 'image/png' });
+            if (mode === 'copy') {
+                try {
+                    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+                    toast('success', T('copied'));
+                    return;
+                } catch (e) { toast('info', T('copyFail')); }
+            }
+            const isPhone = /Android|iPhone|iPad/i.test(navigator.userAgent) && navigator.maxTouchPoints > 0;
+            if (mode !== 'copy' && isPhone && navigator.canShare && navigator.canShare({ files: [file] })) {
+                try { await navigator.share({ files: [file], title: T('rTitle') }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
+            }
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob); a.download = file.name;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+            if (mode !== 'copy') toast('success', T('saved'));
+        } catch (err) {
+            m.host.remove();
+            try { Swal.close(); } catch (e) {}
+            toast('error', T('failImg') + (err && err.message ? err.message : err));
+        }
+    };
+
+    window.lgdSavePdf = async function () {
+        if (typeof html2pdf === 'undefined') { toast('error', T('libPdf')); return; }
+        loading(T('mPdf'));
+        const m = mount(selDate());
+        try {
+            await html2pdf().set({
+                margin: [8, 8, 8, 8], filename: fname('pdf'),
+                image: { type: 'jpeg', quality: 0.95 },
+                html2canvas: { scale: 2, backgroundColor: '#ffffff', useCORS: true, scrollY: 0 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+                pagebreak: { mode: ['css', 'legacy'], avoid: ['tr'] }
+            }).from(m.el).save();
+            m.host.remove();
+            try { Swal.close(); } catch (e) {}
+            toast('success', T('pdfSaved'));
+        } catch (err) {
+            m.host.remove();
+            try { Swal.close(); } catch (e) {}
+            toast('error', T('failPdf') + (err && err.message ? err.message : err));
+        }
+    };
+
+    // ---------- เริ่มทำงาน ----------
+    injectCss(); build(); addTab();
+    if (oldWasShown) window.renderLGDashboard();
+
+    // ใช้ capture + stopPropagation เพื่อให้ตัวนี้ทำงานก่อน และกันตัวเก่าที่ยังค้างอยู่ทำงานซ้ำ
+    document.addEventListener('click', (e) => {
+        const c = e.target.closest && e.target.closest('#view-dash-lg .lgd-fc');
+        if (c) { e.stopPropagation(); flt = c.getAttribute('data-f'); window.renderLGDashboard(); }
+    }, true);
+    document.addEventListener('input', (e) => {
+        if (e.target && e.target.id === 'lgd-q') {
+            e.stopPropagation();
+            query = e.target.value;
+            const pos = e.target.selectionStart;
+            window.renderLGDashboard();
+            const q = document.getElementById('lgd-q'); if (q) { q.focus(); try { q.setSelectionRange(pos, pos); } catch (x) {} }
+        }
+   }, true);
+    document.addEventListener('change', (e) => {
+        if (!e.target || e.target.name !== 'dashToggle') return;
+        const v = document.getElementById('view-dash-lg');
+        if (!v) return;
+        if (e.target.id === 'btn-dash-lg') { v.classList.remove('d-none'); window.renderLGDashboard(); } else v.classList.add('d-none');
+    });
+    setInterval(() => {
+        const v = document.getElementById('view-dash-lg');
+        if (v && !v.classList.contains('d-none') && !(document.activeElement && document.activeElement.id === 'lgd-q')) window.renderLGDashboard();
+    }, 20000);
+
+    // สลับภาษา: เรียกของเดิมก่อน แล้วค่อยวาดหน้า LG ใหม่ตามภาษา
+    if (typeof window.setLanguage === 'function') {
+        const _setLang = window.setLanguage;
+        window.setLanguage = function () {
+            const r = _setLang.apply(this, arguments);
+            try { window.renderLGDashboard(); } catch (e) { console.warn('LG dash lang refresh', e); }
+            return r;
+        };
+    }
+})();
+// ===== จบ LG-DASH-V3 =====
+// ===== จบ LG-DELIVERY-REPORT-V2 =====
 // อัปโหลดไฟล์แพลนที่กรอกแล้ว
 window.handleLGPlanFileUpload = function(event) {
     const file = event.target.files[0];
