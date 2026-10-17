@@ -17677,6 +17677,203 @@ renderLGTagPrintWindow = function(tags, printWin) {
     const v = document.getElementById('view-dash-lg');
     if (v && !v.classList.contains('d-none')) window.renderLGDashboard();
 })();
+// ===== LG-MATCH-LINE: เลือกไลน์ที่จะ "โชว์แพลน" และไลน์ที่จะ "ปริ้นแท็ก" ในหน้า LG Matching (วางต่อท้ายบล็อก LG ทั้งหมด) =====
+(function () {
+    if (window.__lgMatchLine) return;
+    window.__lgMatchLine = true;
+
+    const TX = {
+        th: { all: 'ทุกไลน์', line: 'ไลน์', lines: 'ไลน์', clear: 'ล้าง / ดูทุกไลน์', lbl: 'ไลน์ที่แสดง:', tip: 'เลือกไลน์ที่ต้องการแสดงในแพลน (เลือกได้หลายไลน์)', pickLbl: 'เลือกไลน์:', pickAll: 'ทุกไลน์' },
+        en: { all: 'All lines', line: 'Line', lines: 'Lines', clear: 'Clear / all lines', lbl: 'Lines shown:', tip: 'Choose which lines to show (multiple allowed)', pickLbl: 'Lines:', pickAll: 'All lines' }
+    };
+    const lang = () => { let l = 'th'; try { if (typeof currentLanguage !== 'undefined') l = currentLanguage; else l = sessionStorage.getItem('currentLanguage') || 'th'; } catch (e) {} return TX[l] ? l : 'th'; };
+    const T = (k) => TX[lang()][k];
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const lineOf = (p) => String(p.line === undefined || p.line === null ? '' : p.line).trim() || '-';
+    let sel = [];      // ไลน์ที่เลือกโชว์ในหน้าแพลน ([] = ทุกไลน์)
+    let sig = '';
+
+    function dayLines() {
+        const date = getLGSelectedDate(), set = {};
+        (db.lgPlan || []).forEach(p => { if (lgPlanDateOf(p) === date) set[lineOf(p)] = 1; });
+        return Object.keys(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    }
+    const labelOf = () => sel.length === 0 ? T('all') : (sel.length <= 3 ? T('lines') + ' ' + sel.join(', ') : sel.length + ' ' + T('lines'));
+
+    function css() {
+        if (document.getElementById('lgm-line-style')) return;
+        const st = document.createElement('style');
+        st.id = 'lgm-line-style';
+        st.textContent = `
+        #lgm-linewrap{position:relative;display:inline-flex;align-items:center;gap:8px}
+        #lgm-linebtn{border:1px solid #ced4da;background:#fff;border-radius:8px;padding:6px 12px;font-weight:700;font-size:.9rem;min-width:130px;max-width:240px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;color:#1b2a41}
+        #lgm-linebtn.on{border-color:#c8102e;color:#c8102e;background:#fff1f3}
+        #lgm-linebtn:after{content:"▾";margin-left:8px;opacity:.6}
+        #lgm-linemenu{position:fixed;top:0;left:0;z-index:2000;background:#fff;border:1px solid #d5dce8;border-radius:12px;box-shadow:0 8px 24px rgba(20,40,80,.18);padding:8px;min-width:190px;max-height:320px;overflow:auto}
+        #lgm-linemenu.d-none{display:none}
+        #lgm-linemenu label{display:flex;align-items:center;gap:9px;padding:6px 10px;border-radius:8px;cursor:pointer;font-size:.85rem;font-weight:700;margin:0;color:#1b2a41}
+        #lgm-linemenu label:hover{background:#f1f5fb}
+        #lgm-linemenu input{width:16px;height:16px;cursor:pointer}
+        #lgm-linemenu .lgm-clear{display:block;width:100%;border:0;background:#f4f6fa;border-radius:8px;padding:6px;margin-bottom:6px;font-size:.78rem;font-weight:700;color:#4a5a70;cursor:pointer}
+        #lgp-lines{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;text-align:left;margin-bottom:8px}
+        #lgp-lines label{margin:0;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px}`;
+        document.head.appendChild(st);
+    }
+
+    function ensureUI() {
+        css();
+        const dt = document.getElementById('lg-plan-date');
+        if (!dt) return;
+        let wrap = document.getElementById('lgm-linewrap');
+        if (!wrap) {
+            wrap = document.createElement('span');
+            wrap.id = 'lgm-linewrap';
+            wrap.innerHTML = '<label class="fw-bold mb-0 ms-2" id="lgm-linelbl"></label><button type="button" id="lgm-linebtn"></button>';
+            dt.insertAdjacentElement('afterend', wrap);
+            // เมนูวางไว้ที่ body + ตำแหน่งแบบ fixed เพื่อไม่ให้ถูกกรอบการ์ดตัดขอบ
+            const menu = document.createElement('div');
+            menu.id = 'lgm-linemenu'; menu.className = 'd-none';
+            document.body.appendChild(menu);
+            const btn = wrap.querySelector('#lgm-linebtn');
+            const place = () => {
+                const r = btn.getBoundingClientRect();
+                menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 210)) + 'px';
+                menu.style.top = (r.bottom + 6) + 'px';
+                menu.style.maxHeight = Math.max(160, Math.min(320, window.innerHeight - r.bottom - 18)) + 'px';
+            };
+            btn.addEventListener('click', (e) => { e.stopPropagation(); if (menu.classList.contains('d-none')) { place(); menu.classList.remove('d-none'); } else menu.classList.add('d-none'); });
+            window.addEventListener('resize', () => menu.classList.add('d-none'));
+            window.addEventListener('scroll', (e) => { if (!menu.contains(e.target)) menu.classList.add('d-none'); }, true);
+            menu.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (e.target && e.target.classList.contains('lgm-clear')) { sel = []; menu.classList.add('d-none'); window.renderLGMatchTable(); }
+            });
+            menu.addEventListener('change', (e) => {
+                if (!e.target || e.target.type !== 'checkbox') return;
+                sel = Array.from(menu.querySelectorAll('input:checked')).map(i => i.value);
+                window.renderLGMatchTable();
+            });
+            document.addEventListener('click', () => menu.classList.add('d-none'));
+            sig = '';
+        }
+        const lines = dayLines();
+        sel = sel.filter(l => lines.indexOf(l) !== -1);
+        const menu = document.getElementById('lgm-linemenu'), btn = wrap.querySelector('#lgm-linebtn');
+        const s = lang() + '|' + lines.join(',');
+        if (s !== sig) {
+            sig = s;
+            menu.innerHTML = `<button type="button" class="lgm-clear">${esc(T('clear'))}</button>` + lines.map(l => `<label><input type="checkbox" value="${esc(l)}"><span>${esc(T('line'))} ${esc(l)}</span></label>`).join('');
+            btn.title = T('tip');
+            wrap.querySelector('#lgm-linelbl').textContent = T('lbl');
+        }
+        menu.querySelectorAll('input').forEach(i => { i.checked = sel.indexOf(i.value) !== -1; });
+        btn.textContent = labelOf();
+        btn.classList.toggle('on', sel.length > 0);
+    }
+
+    // ทำงานกับแพลนที่กรองเฉพาะไลน์ที่เลือก "ชั่วคราว" (ช่วงที่วาดตาราง/ปริ้นแพลน) แล้วคืนค่าเดิมทันที ไม่แตะข้อมูลจริง
+    function withFiltered(fn) {
+        if (!sel.length) return fn();
+        const orig = db.lgPlan;
+        try {
+            db.lgPlan = (orig || []).filter(p => sel.indexOf(lineOf(p)) !== -1);
+            return fn();
+        } finally { db.lgPlan = orig; }
+    }
+
+    // 1) ตารางแพลน: โชว์เฉพาะไลน์ที่เลือก
+    if (typeof window.renderLGMatchTable === 'function') {
+        const _render = window.renderLGMatchTable;
+        window.renderLGMatchTable = function () {
+            ensureUI();
+            return withFiltered(() => _render.apply(this, arguments));
+        };
+    }
+
+    // 2) ปุ่ม ▲▼: เลื่อนภายในไลน์ที่เลือก (สลับกับแถวที่เห็นอยู่ ไม่ใช่แถวที่ซ่อน)
+    if (typeof window.moveLGPlan === 'function') {
+        const _move = window.moveLGPlan;
+        window.moveLGPlan = async function (id, dir) {
+            if (!sel.length) return _move.apply(this, arguments);
+            const full = getLGPlanForDate(getLGSelectedDate());
+            const pos = [];
+            full.forEach((p, i) => { if (sel.indexOf(lineOf(p)) !== -1) pos.push(i); });
+            const k = pos.findIndex(i => String(full[i].id) === String(id)), k2 = k + dir;
+            if (k < 0 || k2 < 0 || k2 >= pos.length) return;
+            const a = pos[k], b = pos[k2];
+            [full[a], full[b]] = [full[b], full[a]];
+            const changes = [];
+            full.forEach((p, i) => { const so = i + 1; if (parseFloat(p.sortOrder) !== so) { p.sortOrder = so; changes.push({ id: p.id, sortOrder: so }); } });
+            window.renderLGMatchTable();
+            try { if (changes.length) await callAppsScript('reorderLGPlan', changes); }
+            catch (e) { Swal.fire('บันทึกลำดับไม่สำเร็จ', e.message, 'error'); }
+        };
+    }
+
+    // 3) ปุ่ม "ปริ้นแพลน": ปริ้นเฉพาะไลน์ที่เลือกโชว์
+    if (typeof window.printLGPlanSheet === 'function') {
+        const _sheet = window.printLGPlanSheet;
+        window.printLGPlanSheet = function () {
+            const self = this, args = arguments;
+            return withFiltered(() => _sheet.apply(self, args));
+        };
+    }
+
+    // 4) หน้าต่าง "เลือกล็อตที่จะปริ้นแท็ก": เพิ่มแถบเลือกไลน์ + คอลัมน์ไลน์
+    function enhancePicker(pop) {
+        if (pop.querySelector('#lgp-lines')) return;
+        const boxes = Array.from(pop.querySelectorAll('.lg-pick'));
+        if (!boxes.length) return;
+        const day = getLGPlanForDate(getLGSelectedDate());
+        const lineAt = (b) => { const p = day[parseInt(b.dataset.i, 10)]; return p ? lineOf(p) : '-'; };
+        const lines = Array.from(new Set(boxes.map(lineAt))).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+        // คอลัมน์ไลน์ (ต่อท้าย Part No)
+        const table = pop.querySelector('table');
+        if (table) {
+            const ths = table.querySelectorAll('thead th');
+            if (ths[3]) ths[3].insertAdjacentHTML('afterend', `<th>${esc(T('line'))}</th>`);
+            boxes.forEach(b => {
+                const tr = b.closest('tr'); if (!tr) return;
+                const tds = tr.querySelectorAll('td');
+                if (tds[3]) tds[3].insertAdjacentHTML('afterend', `<td class="text-center"><span class="badge bg-light text-dark border">${esc(lineAt(b))}</span></td>`);
+            });
+        }
+
+        // ถ้าเลือกโชว์เฉพาะบางไลน์ไว้ในหน้าแพลน ให้ติ๊กไว้เฉพาะไลน์เหล่านั้นก่อน
+        if (sel.length) boxes.forEach(b => { b.checked = sel.indexOf(lineAt(b)) !== -1; });
+
+        const bar = document.createElement('div');
+        bar.id = 'lgp-lines';
+        bar.innerHTML = `<span class="fw-bold">${esc(T('pickLbl'))}</span>` + lines.map(l => `<label><input type="checkbox" class="form-check-input lgp-l" value="${esc(l)}"> ${esc(T('line'))} ${esc(l)}</label>`).join('');
+        const anchor = pop.querySelector('div[style*="max-height"]') || (table && table.parentElement);
+        if (anchor) anchor.parentElement.insertBefore(bar, anchor);
+
+        const chips = () => Array.from(bar.querySelectorAll('.lgp-l'));
+        const sync = () => chips().forEach(c => {
+            const mine = boxes.filter(b => lineAt(b) === c.value), on = mine.filter(b => b.checked).length;
+            c.checked = on === mine.length && mine.length > 0;
+            c.indeterminate = on > 0 && on < mine.length;
+        });
+        bar.addEventListener('change', (e) => {
+            if (!e.target || !e.target.classList.contains('lgp-l')) return;
+            boxes.forEach(b => { if (lineAt(b) === e.target.value) b.checked = e.target.checked; });
+            sync();
+        });
+        pop.addEventListener('change', (e) => { if (e.target && e.target.classList && e.target.classList.contains('lg-pick')) sync(); });
+        pop.addEventListener('click', () => setTimeout(sync, 0));   // ปุ่ม เลือกทั้งหมด / เฉพาะที่ยังไม่ปริ้น / ไม่เลือก
+        sync();
+    }
+    new MutationObserver(() => {
+        const pop = document.querySelector('.swal2-popup');
+        if (pop && pop.querySelector('.lg-pick') && !pop.querySelector('#lgp-lines')) { try { enhancePicker(pop); } catch (e) { console.warn('lg line picker', e); } }
+    }).observe(document.body, { childList: true, subtree: true });
+
+    // เปลี่ยนภาษา/ข้อมูลซิงค์ใหม่: ตัวเลือกไลน์อัปเดตเมื่อวาดตารางครั้งถัดไป
+    ensureUI();
+    try { window.renderLGMatchTable(); } catch (e) {}
+})();
+// ===== จบ LG-MATCH-LINE =====
 // ===== จบ LG-LINE-FILTER =====
 // อัปโหลดไฟล์แพลนที่กรอกแล้ว
 window.handleLGPlanFileUpload = function(event) {
