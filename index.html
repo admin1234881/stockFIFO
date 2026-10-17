@@ -17516,6 +17516,26 @@ renderLGTagPrintWindow = function(tags, printWin) {
 })();
 // ===== จบ LG-DASH-V3 =====
 // ===== จบ LG-DELIVERY-REPORT-V2 =====
+// ===== LG-FIT-HEIGHT: ขยายกล่องตาราง WO ให้เต็มความสูงหน้าจอ (วางต่อท้ายบล็อก LG ทั้งหมด) =====
+(function () {
+    if (window.__lgFitH) return;
+    window.__lgFitH = true;
+    function fit() {
+        const box = document.querySelector('#view-dash-lg .lgd-tw');
+        if (!box || box.offsetParent === null) return;
+        const absTop = box.getBoundingClientRect().top + window.scrollY;
+        const h = Math.max(420, Math.floor(window.innerHeight - absTop - 80));
+        box.style.maxHeight = h + 'px';
+    }
+    if (typeof window.renderLGDashboard === 'function') {
+        const _r = window.renderLGDashboard;
+        window.renderLGDashboard = function () { const x = _r.apply(this, arguments); fit(); return x; };
+    }
+    window.addEventListener('resize', fit);
+    document.addEventListener('change', (e) => { if (e.target && e.target.name === 'dashToggle') setTimeout(fit, 60); });
+    setTimeout(fit, 300);
+})();
+// ===== จบ LG-FIT-HEIGHT =====
 // อัปโหลดไฟล์แพลนที่กรอกแล้ว
 window.handleLGPlanFileUpload = function(event) {
     const file = event.target.files[0];
