@@ -18116,6 +18116,61 @@ renderLGTagPrintWindow = function(tags, printWin) {
     };
     try { paint(); } catch (e) {}
 })();
+// ===== LG-TAG-GAP-FIT: แท็ก LG แบบ A4L เว้นระยะห่างระหว่างแท็ก 0.7 ซม. (ด้านข้าง+ล่าง) สำหรับตัดกระดาษ และกัน Model.Suffix หลายรายการดันข้อมูลล่างล้นเส้น โดยไม่เปลี่ยนขนาดแท็ก (วางต่อท้ายบล็อก LG-TAG ทั้งหมด) =====
+(function () {
+    const GAP_MM = 7;   // 🔧 ระยะห่างระหว่างแท็ก (มม.) 7 = 0.7 ซม. แก้ตัวเลขนี้ได้
+
+    const EXTRA_CSS = `
+    <style id="lg-gap-fit">
+        /* ระยะห่างแท็ก: แนวนอนและแนวตั้ง */
+        .lg-page { gap: ${GAP_MM}mm ${GAP_MM}mm; }
+        /* ช่องประทับตรายืดหดได้ — ถ้าข้อมูลด้านบนสูงขึ้น ช่องนี้จะหดแทน ข้อมูลล่างไม่โดนดันล้นเส้น */
+        .lg-stamps { flex: 1 1 0 !important; height: auto !important; min-height: 6mm; max-height: 17mm; margin: auto 0 1mm !important; }
+        .lg-tag-table2 .brk { line-height: 1.1; }
+    </style>`;
+
+    // ย่อตัวอักษร W/O และ Model.Suffix อัตโนมัติ เฉพาะแท็กที่เนื้อหายังล้น (แท็กปกติไม่โดนแตะ)
+    const FIT_JS = `<script>
+    (function () {
+        function fit() {
+            document.querySelectorAll('.lg-tag').forEach(function (tag) {
+                var cells = tag.querySelectorAll('.lg-tag-table2 .brk');
+                var size = 0;
+                if (cells.length) size = parseFloat(getComputedStyle(cells[0]).fontSize) || 10;
+                var guard = 0;
+                while (tag.scrollHeight > tag.clientHeight + 1 && size > 5.5 && guard++ < 20) {
+                    size -= 0.5;
+                    cells.forEach(function (c) { c.style.fontSize = size + 'px'; });
+                }
+            });
+        }
+        window.addEventListener('load', fit);
+    })();
+    <\/script>`;
+
+    const _prev = renderLGTagPrintWindow;
+    renderLGTagPrintWindow = function (tags, printWin) {
+        if (!printWin) return _prev(tags, printWin);
+        const doc = printWin.document;
+        // ส่งหน้าต่างตัวกลางให้ฟังก์ชันเดิม เพื่อแทรก CSS/สคริปต์เพิ่มก่อนเขียนลงหน้าต่างจริง
+        const proxy = {
+            document: {
+                open: function () { return doc.open.apply(doc, arguments); },
+                close: function () { return doc.close.apply(doc, arguments); },
+                write: function (html) {
+                    try {
+                        if (typeof html === 'string' && html.indexOf('(A4L)</title>') !== -1) {
+                            html = html.replace('</head>', EXTRA_CSS + '</head>').replace('</body>', FIT_JS + '</body>');
+                        }
+                    } catch (e) {}
+                    return doc.write(html);
+                }
+            }
+        };
+        return _prev(tags, proxy);
+    };
+})();
+// ===== จบ LG-TAG-GAP-FIT =====
 // ===== จบ LG-MODEL-CHIPS =====
 // อัปโหลดไฟล์แพลนที่กรอกแล้ว
 window.handleLGPlanFileUpload = function(event) {
