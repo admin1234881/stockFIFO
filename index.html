@@ -18172,6 +18172,322 @@ renderLGTagPrintWindow = function(tags, printWin) {
 })();
 // ===== จบ LG-TAG-GAP-FIT =====
 // ===== จบ LG-MODEL-CHIPS =====
+// ===== LG-SCAN-SAFE: สแกนแท็ก LG — ถ้าบันทึกลงชีตไม่สำเร็จ จะไม่นับว่า "สแกนแล้ว" (แก้ปัญหาไม่บันทึกแต่ขึ้นสแกนซ้ำ) + ลองใหม่เองเมื่อระบบยุ่ง + แจ้งสาเหตุเป็นภาษาไทย (วางต่อท้ายบล็อก LG ทั้งหมด) =====
+(function () {
+    const inflight = new Set();   // แท็ก+WO ที่กำลังส่งอยู่ กันเครื่องสแกนยิงซ้ำรัวๆ
+
+    const LOCKMSG = /หมดเวลาการล็อก|ล็อกไว้นาน|lock timeout|obtain lock|holding the lock/i;   // ข้อความตอน Google รอคิวบันทึกไม่ได้ (ยังไม่ได้เขียนอะไรลงชีต ลองซ้ำได้ปลอดภัย)
+    function why(err) {
+        const m = String((err && err.message) || err || '');
+        if (LOCKMSG.test(m)) return 'ระบบกำลังยุ่ง (มีงานอื่นใช้ชีตอยู่นาน) ยังไม่ได้บันทึก';
+        if (/failed to fetch|networkerror|load failed|network request failed/i.test(m)) return 'เน็ตหลุด หรือต่อเซิร์ฟเวอร์ไม่ได้';
+        if (/too many|simultaneous|exceeded|quota/i.test(m)) return 'ส่งข้อมูลถี่เกินไป';
+        if (/timeout|timed out/i.test(m)) return 'เซิร์ฟเวอร์ตอบช้าเกินไป';
+        if (/server error|invalid response/i.test(m)) return 'เซิร์ฟเวอร์ตอบผิดปกติ';
+        return 'ไม่ทราบสาเหตุ';
+    }
+    const retryable = (err) => { const m = String((err && err.message) || err || ''); return LOCKMSG.test(m) || /too many|simultaneous/i.test(m); };
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+    processLGScanRaw = async function (raw, feedbackEl) {
+        if (!raw || !raw.trim()) return;
+
+        const parsed = parseLGBarcode(raw);
+        if (!parsed || !parsed.partNo || !parsed.groups || parsed.groups.length === 0) {
+            if (feedbackEl) feedbackEl.innerHTML = `<div class="alert alert-danger mb-0"><i class="bi bi-x-circle-fill me-1"></i>ไม่สามารถอ่านบาร์โค้ดนี้ได้ ลองสแกนใหม่อีกครั้ง</div>`;
+            return;
+        }
+        if (!db.lgScanLog) db.lgScanLog = [];
+
+        const docNo = String(parsed.docNumber || '').trim();
+        const getDoc = (s) => { const p = parseLGBarcode(s); return p ? String(p.docNumber).trim() : ''; };
+
+        // แยกว่าแต่ละ WO ของแท็กนี้ "บันทึกสำเร็จแล้ว" หรือยัง (นับจากข้อมูลที่ยืนยันแล้วเท่านั้น)
+        const doneLogs = {};
+        if (docNo) {
+            db.lgScanLog.forEach(l => {
+                if (getDoc(l.rawBarcode) === docNo) { const k = String(l.WO).trim(); if (!doneLogs[k]) doneLogs[k] = l; }
+            });
+        }
+        const todo = parsed.groups.filter(g => !doneLogs[String(g.WO).trim()]);
+
+        if (docNo && todo.length === 0) {
+            const dup = doneLogs[String(parsed.groups[0].WO).trim()];
+            const when = dup && dup.scannedAt ? new Date(dup.scannedAt).toLocaleString('th-TH') : '-';
+            const by = (dup && dup.scannedBy) || '-';
+            if (feedbackEl) feedbackEl.innerHTML = `<div class="alert alert-danger mb-0"><i class="bi bi-slash-circle-fill me-1"></i><b>สแกนซ้ำ!</b> แท็ก ${docNo} ถูกสแกนไปแล้วเมื่อ ${when} โดย ${by} — ไม่ได้บันทึก</div>`;
+            if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+            Swal.fire({ icon: 'error', title: 'สแกนซ้ำ! ไม่บันทึก', html: `แท็กใบนี้ <b>${docNo}</b><br>ถูกสแกนไปแล้วเมื่อ <b>${when}</b><br>โดย <b>${by}</b>`, confirmButtonText: 'รับทราบ', confirmButtonColor: '#d33' });
+            return;
+        }
+
+        const resultLines = [];
+        const failed = [];
+        for (const group of todo) {
+            const key = docNo + '|' + String(group.WO).trim();
+            if (docNo && inflight.has(key)) { resultLines.push(`⚠️ WO <b>${group.WO}</b> กำลังบันทึกอยู่ (ไม่ต้องสแกนซ้ำ)`); continue; }
+            if (docNo) inflight.add(key);
+
+            const matchInPlan = (db.lgPlan || []).find(p => String(p.WO).trim() === group.WO && String(p.partNo).trim() === parsed.partNo);
+            const body = { WO: group.WO, partNo: parsed.partNo, rackQty: group.qty, rawBarcode: raw, scannedBy: currentUser.username };
+
+            let ok = false, lastErr = null;
+            for (let attempt = 0; attempt < 3 && !ok; attempt++) {
+                try {
+                    await callAppsScript('submitLGScan', body);
+                    ok = true;
+                } catch (e) {
+                    lastErr = e;
+                    if (!retryable(e)) break;           // ผิดแบบที่ลองซ้ำไม่ช่วย (เช่น เน็ตหลุด) ไม่ลองซ้ำ กันบันทึกซ้อน
+                    await sleep(1500 * (attempt + 1));
+                }
+            }
+            if (docNo) inflight.delete(key);
+
+            if (!ok) {
+                console.error('submitLGScan failed', lastErr);
+                failed.push(group.WO);
+                resultLines.push(`❌ WO <b>${group.WO}</b>: <b>ยังไม่ได้บันทึกลงชีต</b> — ${why(lastErr)} <span class="small text-muted">(${String((lastErr && lastErr.message) || '').slice(0, 120)})</span>`);
+                continue;
+            }
+
+            // บันทึกสำเร็จแล้วจึงนับเป็น "สแกนแล้ว"
+            db.lgScanLog.push({ WO: group.WO, partNo: parsed.partNo, rackQty: group.qty, rawBarcode: raw, scannedBy: currentUser.username, scannedAt: new Date().toISOString() });
+
+            if (!matchInPlan) {
+                resultLines.push(`⚠️ ไม่พบ WO <b>${group.WO}</b> / ${parsed.partNo} ในแพลน (บันทึกไว้แล้ว)`);
+            } else {
+                const updated = computeLGMatchStatus().find(r => String(r.WO).trim() === group.WO && String(r.partNo).trim() === parsed.partNo);
+                if (updated && updated.isComplete) resultLines.push(`✅ ครบแล้ว! WO <b>${group.WO}</b> (+${group.qty} ชิ้น) → ${updated.scanned}/${updated.orderQty}`);
+                else if (updated) resultLines.push(`➕ WO <b>${group.WO}</b> +${group.qty} ชิ้น → ${updated.scanned}/${updated.orderQty} (เหลืออีก ${updated.remaining})`);
+            }
+        }
+
+        window.renderLGMatchTable();
+
+        const alertClass = failed.length ? 'alert-danger' : resultLines.some(m => m.startsWith('⚠️')) ? 'alert-warning' : 'alert-success';
+        if (feedbackEl) feedbackEl.innerHTML = `<div class="alert ${alertClass} mb-0">${resultLines.join('<br>')}${failed.length ? '<br><b>แท็กนี้ยังไม่ถูกนับ — สแกนใหม่ได้เลย</b>' : ''}</div>`;
+        if (failed.length) {
+            if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+            Swal.fire({ icon: 'error', title: 'บันทึกไม่สำเร็จ!', html: `WO ${failed.join(', ')} <b>ยังไม่ได้บันทึกลงชีต</b><br>กรุณาสแกนแท็กนี้ใหม่อีกครั้ง`, confirmButtonText: 'รับทราบ', confirmButtonColor: '#d33' });
+        }
+    };
+})();
+// ===== LG-UNPLANNED-CHECK: กดที่กล่อง "สแกนแท็กที่ไม่อยู่ในแพลน" ในแดชบอร์ด LG Delivery เพื่อดูว่าเป็นแท็กใบไหน และ WO/Part นี้ไปอยู่ในแพลนวันไหน (วางต่อท้ายบล็อก LG Delivery ทั้งหมด) =====
+(function () {
+    if (window.__lgUnplanned) return;
+    window.__lgUnplanned = true;
+
+    const TX = {
+        th: {
+            hint: 'กดเพื่อดูรายการ', title: 'แท็กที่สแกนแล้วไม่อยู่ในแพลน', sub: (d, n) => `วันที่สแกน ${d} · ${n} รายการ`,
+            cTime: 'เวลาสแกน', cDoc: 'เลขแท็ก', cWo: 'WO', cPart: 'Part No', cQty: 'จำนวน', cBy: 'ผู้สแกน', cFound: 'ผลค้นหาในแพลน',
+            none: 'ไม่พบ WO และ Part No นี้ในแพลนของวันไหนเลย — อาจยังไม่ได้อัปโหลดแพลน หรือ WO/Part ในแพลนพิมพ์ไม่ตรง',
+            woOther: (d, p, l) => `พบ WO นี้ในแพลนวันที่ <b>${d}</b> แต่ Part No เป็น <b>${p}</b>${l ? ' (ไลน์ ' + l + ')' : ''}`,
+            partOther: (d, w, l) => `พบ Part No นี้ในแพลนวันที่ <b>${d}</b> แต่เป็น WO <b>${w}</b>${l ? ' (ไลน์ ' + l + ')' : ''}`,
+            near: (d, w, p) => `ใกล้เคียง (ต่างแค่ O/0 หรือช่องว่าง): แพลนวันที่ <b>${d}</b> WO <b>${w}</b> / <b>${p}</b>`,
+            more: (n) => `…และอีก ${n} รายการ`, close: 'ปิด', copy: 'คัดลอกเป็นข้อความ', copied: 'คัดลอกแล้ว', ok: 'ไม่พบรายการ', noDoc: '-'
+        },
+        en: {
+            hint: 'click for details', title: 'Scanned tags not in plan', sub: (d, n) => `Scan date ${d} · ${n} item(s)`,
+            cTime: 'Scan time', cDoc: 'Tag no.', cWo: 'WO', cPart: 'Part No', cQty: 'Qty', cBy: 'Scanned by', cFound: 'Plan lookup',
+            none: 'Neither this WO nor this Part No is in any plan — the plan may not be uploaded yet, or the WO/Part was typed differently in the plan',
+            woOther: (d, p, l) => `WO found in the plan of <b>${d}</b> but with Part No <b>${p}</b>${l ? ' (line ' + l + ')' : ''}`,
+            partOther: (d, w, l) => `Part No found in the plan of <b>${d}</b> but under WO <b>${w}</b>${l ? ' (line ' + l + ')' : ''}`,
+            near: (d, w, p) => `Close match (differs only by O/0 or spaces): plan of <b>${d}</b> WO <b>${w}</b> / <b>${p}</b>`,
+            more: (n) => `…and ${n} more`, close: 'Close', copy: 'Copy as text', copied: 'Copied', ok: 'No items', noDoc: '-'
+        }
+    };
+    const lang = () => {
+        let l = (typeof currentLanguage !== 'undefined') ? currentLanguage : null;
+        if (!l) { try { l = sessionStorage.getItem('currentLanguage'); } catch (e) {} }
+        return l === 'en' ? 'en' : 'th';
+    };
+    const L = (k) => TX[lang()][k];
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const pad = (n) => String(n).padStart(2, '0');
+    const dmy = (ymd) => { const p = String(ymd).split('-'); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : String(ymd); };
+    const norm = (s) => String(s == null ? '' : s).toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/O/g, '0');
+    const key = (w, p) => String(w).trim() + '|' + String(p).trim();
+
+    // แปลงเวลาสแกนเป็น ms (รองรับทั้ง ISO และข้อความแบบ 20/10/2026 09:15:03 ที่ชีตส่งมา)
+    function ms(v) {
+        if (!v) return null;
+        if (v instanceof Date) return isNaN(v) ? null : v.getTime();
+        const s = String(v).trim();
+        let t = new Date(s).getTime();
+        if (!isNaN(t) && /^\d{4}-\d{2}-\d{2}/.test(s)) return t;
+        const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ ,T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+        if (m) { let y = +m[3]; if (y > 2400) y -= 543; return new Date(y, +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0)).getTime(); }
+        return isNaN(t) ? null : t;
+    }
+    const dayOf = (t) => { const d = new Date(t); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+    const hm = (t) => { const d = new Date(t); return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+    const docOf = (raw) => { try { const p = parseLGBarcode(raw); return p && p.docNumber ? String(p.docNumber).trim() : ''; } catch (e) { return ''; } };
+
+    function currentDate() {
+        const el = document.getElementById('lgd-date');
+        return (el && el.value) || (typeof lgTodayStr === 'function' ? lgTodayStr() : dayOf(Date.now()));
+    }
+
+    function analyse(date) {
+        const plan = db.lgPlan || [];
+        const planKeys = new Set(plan.map(p => key(p.WO, p.partNo)));
+        const planDay = (p) => (typeof lgPlanDateOf === 'function') ? lgPlanDateOf(p) : String(p.planDate || '').slice(0, 10);
+        const scans = (db.lgScanLog || []).map(s => ({ s, t: ms(s.scannedAt) })).filter(x => x.t && dayOf(x.t) === date && !planKeys.has(key(x.s.WO, x.s.partNo))).sort((a, b) => b.t - a.t);
+        return scans.map(x => {
+            const w = String(x.s.WO).trim(), pn = String(x.s.partNo).trim();
+            const sameWo = plan.filter(p => String(p.WO).trim() === w);
+            const samePart = plan.filter(p => String(p.partNo).trim() === pn);
+            const near = plan.filter(p => norm(p.WO) === norm(w) && norm(p.partNo) === norm(pn));
+            const notes = [];
+            near.slice(0, 2).forEach(p => notes.push(L('near')(dmy(planDay(p)), esc(p.WO), esc(p.partNo))));
+            sameWo.slice(0, 3).forEach(p => notes.push(L('woOther')(dmy(planDay(p)), esc(p.partNo), esc(p.line || ''))));
+            if (sameWo.length > 3) notes.push(L('more')(sameWo.length - 3));
+            samePart.slice(0, 3).forEach(p => notes.push(L('partOther')(dmy(planDay(p)), esc(p.WO), esc(p.line || ''))));
+            if (samePart.length > 3) notes.push(L('more')(samePart.length - 3));
+            return { t: x.t, doc: docOf(x.s.rawBarcode), WO: w, partNo: pn, qty: x.s.rackQty, by: x.s.scannedBy || '-', notes };
+        });
+    }
+
+    function textOf(rows, date) {
+        const strip = (h) => String(h).replace(/<[^>]+>/g, '');
+        return [L('title') + ' — ' + date].concat(rows.map(r => [hm(r.t), r.doc || '-', r.WO, r.partNo, r.qty, r.by, (r.notes.length ? r.notes.map(strip).join(' | ') : strip(L('none')))].join('\t'))).join('\n');
+    }
+
+    window.lgShowUnplanned = function () {
+        const date = currentDate();
+        const rows = analyse(date);
+        const body = rows.length ? `
+            <div class="table-responsive" style="max-height:60vh;overflow:auto;">
+            <table class="table table-sm align-middle text-start" style="font-size:.82rem;">
+                <thead style="position:sticky;top:0;background:#fff;"><tr><th class="text-nowrap">${esc(L('cTime'))}</th><th class="text-nowrap">${esc(L('cDoc'))}</th><th class="text-nowrap">${esc(L('cWo'))}</th><th class="text-nowrap">${esc(L('cPart'))}</th><th class="text-end text-nowrap">${esc(L('cQty'))}</th><th class="text-nowrap">${esc(L('cBy'))}</th><th>${esc(L('cFound'))}</th></tr></thead>
+                <tbody>${rows.map(r => `<tr>
+                    <td class="text-nowrap">${esc(hm(r.t))}</td>
+                    <td class="text-nowrap" style="font-size:.72rem;">${esc(r.doc || L('noDoc'))}</td>
+                    <td class="fw-bold text-nowrap">${esc(r.WO)}</td>
+                    <td class="text-nowrap">${esc(r.partNo)}</td>
+                    <td class="text-end">${esc(r.qty)}</td>
+                    <td>${esc(r.by)}</td>
+                    <td style="min-width:230px;">${r.notes.length ? r.notes.map(n => `<div>${n}</div>`).join('') : `<span class="text-danger">${esc(L('none'))}</span>`}</td>
+                </tr>`).join('')}</tbody></table></div>` : `<div class="text-muted py-3">${esc(L('ok'))}</div>`;
+        Swal.fire({
+            title: L('title'),
+            html: `<div class="text-muted mb-2" style="font-size:.85rem;">${esc(L('sub')(dmy(date), rows.length))}</div>${body}`,
+            width: 'min(1100px, 96vw)',
+            showDenyButton: rows.length > 0, denyButtonText: L('copy'), denyButtonColor: '#0d6efd',
+            confirmButtonText: L('close'), confirmButtonColor: '#6c757d',
+            preDeny: () => {
+                const txt = textOf(rows, date);
+                const done = () => { const b = Swal.getDenyButton(); if (b) b.textContent = L('copied'); };
+                try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, done); else done(); } catch (e) { done(); }
+                return false;
+            }
+        });
+    };
+
+    // ทำให้กล่องเตือนกดได้
+    function decorate() {
+        document.querySelectorAll('#view-dash-lg .lgd-warnbox').forEach(b => {
+            b.style.cursor = 'pointer';
+            b.setAttribute('data-lg-unplanned', '1');
+            if (!b.querySelector('.lgu-hint')) {
+                const h = document.createElement('u');
+                h.className = 'lgu-hint'; h.style.cssText = 'margin-left:8px;font-weight:700;';
+                h.textContent = L('hint') + ' ›';
+                b.appendChild(h);
+            }
+        });
+    }
+    document.addEventListener('click', (e) => {
+        const b = e.target && e.target.closest && e.target.closest('[data-lg-unplanned]');
+        if (b) window.lgShowUnplanned();
+    });
+    if (typeof window.renderLGDashboard === 'function') {
+        const _r = window.renderLGDashboard;
+        window.renderLGDashboard = function () {
+            const r = _r.apply(this, arguments);
+            try { decorate(); } catch (e) {}
+            return r;
+        };
+    }
+    try { decorate(); } catch (e) {}
+})();
+// ===== LG-SCAN-CASE-FIX: เครื่องสแกนบางเครื่องส่งตัวอักษรเป็นตัวพิมพ์เล็ก (เช่น Caps Lock ค้าง) → ระบบเทียบกับแพลนไม่ตรงจึงขึ้น "ไม่อยู่ในแพลน" แก้ให้ไม่สนตัวพิมพ์เล็ก/ใหญ่ (วางต่อท้ายบล็อก LG ทั้งหมด) =====
+(function () {
+    if (window.__lgScanCaseFix) return;
+    window.__lgScanCaseFix = true;
+
+    // 1) อ่านแท็กแล้วแปลงเลขเอกสาร / Part No / WO เป็นตัวพิมพ์ใหญ่เสมอ (สแกนใหม่จะบันทึกลงชีตเป็นตัวใหญ่ถูกต้อง และเช็คสแกนซ้ำ/เช็คแท็กค้างสแกนจะเทียบได้)
+    const _parse = parseLGBarcode;
+    parseLGBarcode = function (raw) {
+        const r = _parse(raw);
+        if (!r) return r;
+        r.docNumber = String(r.docNumber || '').toUpperCase();
+        r.partNo = String(r.partNo || '').toUpperCase();
+        (r.groups || []).forEach(g => { g.WO = String(g.WO || '').toUpperCase(); });
+        return r;
+    };
+
+    // 2) ข้อมูลสแกนเก่าที่บันทึกไว้เป็นตัวเล็กแล้ว → ปรับเป็นตัวใหญ่ในหน้าจอก่อนคำนวณทุกครั้ง (ไม่แตะข้อมูลในชีต)
+    function fixScanCase() {
+        (db.lgScanLog || []).forEach(s => {
+            if (s && s.WO != null) s.WO = String(s.WO).trim().toUpperCase();
+            if (s && s.partNo != null) s.partNo = String(s.partNo).trim().toUpperCase();
+        });
+    }
+    const _compute = computeLGMatchStatus;
+    computeLGMatchStatus = function () { fixScanCase(); return _compute.apply(this, arguments); };
+
+    // เรียกซ้ำตอนวาดหน้าจอหลักๆ เผื่อมีโค้ดที่อ่าน db.lgScanLog ก่อนเรียกคำนวณ
+    ['renderLGDashboard', 'renderLGMatchTable'].forEach(name => {
+        const f = window[name];
+        if (typeof f !== 'function') return;
+        window[name] = function () { fixScanCase(); return f.apply(this, arguments); };
+    });
+    fixScanCase();
+})();
+// ===== LG-FIT-HEIGHT-V2: ยืดกล่อง "รายการ WO ตามแพลน" ลงมาชิดล่างจอ และคำนวณใหม่อัตโนมัติทุกครั้งที่ส่วนด้านบนเปลี่ยนความสูง (วางต่อท้ายบล็อก LG ทั้งหมด) =====
+(function () {
+    if (window.__lgFitH2) return;
+    window.__lgFitH2 = true;
+
+    const BOTTOM_GAP = 20;   // 🔧 ระยะเว้นจากขอบล่างจอ (พิกเซล) ยิ่งน้อยกล่องยิ่งยืดลง เดิมเว้น 80
+    const MIN_H = 360;       // ความสูงต่ำสุดของกล่อง
+
+    function fit() {
+        const box = document.querySelector('#view-dash-lg .lgd-tw');
+        if (!box || box.offsetParent === null) return;
+        const absTop = box.getBoundingClientRect().top + window.scrollY;
+        const h = Math.max(MIN_H, Math.floor(window.innerHeight - absTop - BOTTOM_GAP));
+        const v = h + 'px';
+        if (box.style.maxHeight !== v) box.style.maxHeight = v;
+    }
+    let raf = 0;
+    const soon = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(fit); };
+
+    // ทุกครั้งที่วาดแดชบอร์ดใหม่ (รวมที่ตัวอื่นแทรกกล่อง/ข้อความเพิ่มหลังวาด)
+    if (typeof window.renderLGDashboard === 'function') {
+        const _r = window.renderLGDashboard;
+        window.renderLGDashboard = function () { const x = _r.apply(this, arguments); fit(); soon(); setTimeout(fit, 120); return x; };
+    }
+    window.addEventListener('resize', soon);
+    document.addEventListener('change', (e) => { if (e.target && e.target.name === 'dashToggle') { setTimeout(fit, 60); setTimeout(fit, 400); } });
+
+    // ส่วนด้านบนของตาราง (KPI / วงกลม / สแกนล่าสุด) สูงขึ้นหรือเตี้ยลง → คำนวณใหม่เอง
+    function watch() {
+        const view = document.getElementById('view-dash-lg');
+        if (!view) return false;
+        if (typeof ResizeObserver === 'function') {
+            const ro = new ResizeObserver(soon);
+            ro.observe(view);
+            ['lgd-kpis', 'lgd-ring', 'lgd-feed'].forEach(id => { const el = document.getElementById(id); if (el) ro.observe(el); });
+        }
+        return true;
+    }
+    if (!watch()) setTimeout(watch, 800);
+    setTimeout(fit, 300);
+})();
 // อัปโหลดไฟล์แพลนที่กรอกแล้ว
 window.handleLGPlanFileUpload = function(event) {
     const file = event.target.files[0];
