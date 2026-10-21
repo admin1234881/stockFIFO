@@ -19368,6 +19368,561 @@ renderLGTagPrintWindow = function(tags, printWin) {
     if (!watch()) setTimeout(watch, 800);
     setTimeout(fit, 300);
 })();
+// ===== LG-RECEIVE-DASH-V3: แดชบอร์ด LG Delivery เพิ่มฝั่ง "LG รับเข้า" (สถานะ ออก/รับ ต่อ WO และต่อแท็ก, ระหว่างทาง, ค้างเกิน 3 ชม. เป็นสีแดง, ค้นหาแท็ก) (ถ้าเคยวางตัวก่อนหน้าไว้แล้ว ให้วาง "เหนือ" บรรทัดแรกที่ขึ้นต้น // ===== LG-RECEIVE-DASH ตัวใหม่นี้จะปิดตัวเก่าให้เอง ไม่ต้องลบอะไร) =====
+(function () {
+    if (window.__lgRecvDash3) return;
+    window.__lgRecvDash3 = true;
+    window.__lgRecvDash2 = true;
+    window.__lgRecvDash = true;   // ปิดตัวเวอร์ชันแรก (ถ้าอยู่ถัดลงไป) ไม่ให้ทำงานซ้ำ
+    if (typeof window.renderLGDashboard !== 'function') return;
+
+    const STUCK_HOURS = 3;                       // 🔧 ระหว่างทางเกินกี่ชั่วโมงให้ขึ้นสีแดง
+    const STUCK_MS = STUCK_HOURS * 3600 * 1000;
+
+    const TX = {
+        th: {
+            kRecv: 'LG รับครบแล้ว', kRecvSub: (q) => `WO · ${q} ชิ้น ที่ LG รับ`,
+            kTrans: 'ระหว่างทาง', kTransSub: (q, s) => `${q} ชิ้น` + (s ? ` · ค้าง >${STUCK_HOURS} ชม. ${s} ใบ` : ''), tags: 'ใบ',
+            rAtech: 'ATECH ส่งออก', rLg: 'LG รับเข้า', pcs: 'ชิ้น', of: 'จาก',
+            tOut: 'ATECH สแกนออก', tIn: 'LG รับเข้า', tTr: 'ระหว่างทาง',
+            fTr: '🚚 ระหว่างทาง', cLg: 'LG รับ / ออก', cLast: 'เคลื่อนไหวล่าสุด', lgIn: 'LG รับ', atOut: 'ATECH ออก',
+            bFull: '📥 LG รับครบ', bGot: (q) => `📥 LG รับแล้ว ${q}`, bTr: (q) => `🚚 ระหว่างทาง ${q}`, bStuck: (q, h) => `🚚 ระหว่างทาง ${q} · ค้าง ${h}`,
+            barTip: (a, b, c) => `LG รับ ${a} · ระหว่างทาง ${b} · ยังไม่ออก ${c}`,
+            noIn: 'ยังไม่มีการรับแท็กที่ LG ในวันที่เลือก', noTr: 'ไม่มีแท็กค้างระหว่างทาง 🎉', all: 'ดูทั้งหมด',
+            noOut: (n) => `LG รับแท็กที่ไม่พบสแกนออก ${n} ใบ`, hint: 'กดเพื่อดูรายการ',
+            btnTrack: 'ค้นหาแท็ก', trackTitle: 'ค้นหาแท็ก', trackPh: 'พิมพ์เลขแท็ก, WO หรือ Part No ...', trackHint: 'พิมพ์อย่างน้อย 3 ตัวอักษร', trackNone: 'ไม่พบแท็กที่ตรงกัน',
+            trTitle: 'แท็กที่ยังอยู่ระหว่างทาง', trSub: (n, s) => `${n} ใบ` + (s ? ` · ค้างเกิน ${STUCK_HOURS} ชม. ${s} ใบ` : ''), none: 'ไม่มีรายการ',
+            cDoc: 'เลขแท็ก', cWo: 'WO', cPart: 'Part No', cQty: 'จำนวน', cOutAt: 'สแกนออก', cOutBy: 'ผู้สแกน', cWait: 'ระหว่างทาง', cRecAt: 'LG รับ', cRecBy: 'ผู้รับ',
+            noOutTitle: 'LG รับแล้ว แต่ไม่พบการสแกนออก', close: 'ปิด',
+            stOut: 'ATECH สแกนออก', stIn: 'LG รับเข้า', by: 'โดย', transit: 'ขนส่ง', notYet: 'ยังไม่รับ', waiting: 'ผ่านมาแล้ว', warnNoOut: 'ไม่พบการสแกนออกของ ATECH',
+            nowStart: 'ระบบเริ่มนับ "ระหว่างทาง" ตั้งแต่วันที่เริ่มมีการรับแท็กที่ LG', rLgCol: 'LG รับ', rLgSum: 'LG รับเข้า', rTransSum: 'ระหว่างทาง', rStuckSum: (n) => `ค้างเกิน ${STUCK_HOURS} ชม. ${n} ใบ`,
+            h: 'ชม.', m: 'นาที',
+            rSt: 'สถานะ LG', rRingOut: 'ATECH ส่งออก', rOfQ: (a, b) => `${a} / ${b} ชิ้น`, rbFull: 'LG รับครบ', rbGot: (q) => `รับแล้ว ${q}`, rbTr: (q) => `ระหว่างทาง ${q}`, rbStuck: (q, d) => `ค้าง ${d} · ${q}`, rNoOut: (n) => `LG รับแต่ไม่พบสแกนออก ${n} ใบ`
+        },
+        en: {
+            kRecv: 'Received by LG', kRecvSub: (q) => `WO · ${q} pcs received`,
+            kTrans: 'In transit', kTransSub: (q, s) => `${q} pcs` + (s ? ` · >${STUCK_HOURS} h: ${s} tag(s)` : ''), tags: 'tags',
+            rAtech: 'ATECH shipped', rLg: 'LG received', pcs: 'pcs', of: 'of',
+            tOut: 'ATECH scan-out', tIn: 'LG received', tTr: 'In transit',
+            fTr: '🚚 In transit', cLg: 'LG in / out', cLast: 'Last activity', lgIn: 'LG in', atOut: 'ATECH out',
+            bFull: '📥 LG received all', bGot: (q) => `📥 LG received ${q}`, bTr: (q) => `🚚 In transit ${q}`, bStuck: (q, h) => `🚚 In transit ${q} · ${h}`,
+            barTip: (a, b, c) => `LG received ${a} · in transit ${b} · not shipped ${c}`,
+            noIn: 'No tags received at LG on the selected date', noTr: 'No tags in transit 🎉', all: 'View all',
+            noOut: (n) => `${n} tag(s) received at LG with no ATECH scan-out`, hint: 'click for details',
+            btnTrack: 'Find tag', trackTitle: 'Find a tag', trackPh: 'Type tag no., WO or Part No ...', trackHint: 'Type at least 3 characters', trackNone: 'No matching tag',
+            trTitle: 'Tags still in transit', trSub: (n, s) => `${n} tag(s)` + (s ? ` · over ${STUCK_HOURS} h: ${s}` : ''), none: 'No items',
+            cDoc: 'Tag no.', cWo: 'WO', cPart: 'Part No', cQty: 'Qty', cOutAt: 'Scanned out', cOutBy: 'Scanned by', cWait: 'In transit', cRecAt: 'LG received', cRecBy: 'Received by',
+            noOutTitle: 'Received at LG but no scan-out found', close: 'Close',
+            stOut: 'ATECH scanned out', stIn: 'LG received', by: 'by', transit: 'transit', notYet: 'Not received yet', waiting: 'elapsed', warnNoOut: 'No ATECH scan-out found',
+            nowStart: 'In-transit counting starts from the first day LG received a tag', rLgCol: 'LG in', rLgSum: 'LG received', rTransSum: 'In transit', rStuckSum: (n) => `over ${STUCK_HOURS} h: ${n} tag(s)`,
+            h: 'h', m: 'min',
+            rSt: 'LG status', rRingOut: 'ATECH shipped', rOfQ: (a, b) => `${a} / ${b} pcs`, rbFull: 'LG received all', rbGot: (q) => `Received ${q}`, rbTr: (q) => `In transit ${q}`, rbStuck: (q, d) => `Over ${d} · ${q}`, rNoOut: (n) => `${n} tag(s) received at LG, no scan-out`
+        }
+    };
+    const lang = () => { let l = (typeof currentLanguage !== 'undefined') ? currentLanguage : null; if (!l) { try { l = sessionStorage.getItem('currentLanguage'); } catch (e) {} } return l === 'en' ? 'en' : 'th'; };
+    const L = (k) => TX[lang()][k];
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const pad = (n) => String(n).padStart(2, '0');
+    const num = (n) => Number(n || 0).toLocaleString('en-US');
+    const up = (s) => String(s == null ? '' : s).trim().toUpperCase();
+    const key = (w, p) => up(w) + '|' + up(p);
+
+    function ms(v) {
+        if (!v) return null;
+        if (v instanceof Date) return isNaN(v) ? null : v.getTime();
+        const s = String(v).trim();
+        const t = new Date(s).getTime();
+        if (!isNaN(t) && /^\d{4}-\d{2}-\d{2}/.test(s)) return t;
+        const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ ,T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+        if (m) { let y = +m[3]; if (y > 2400) y -= 543; return new Date(y, +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0)).getTime(); }
+        return isNaN(t) ? null : t;
+    }
+    const dayOf = (t) => { const d = new Date(t); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+    const hm = (t) => { const d = new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+    const dmhm = (t) => { const d = new Date(t); return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+    const dur = (a, b) => {
+        if (!a || !b || b < a) return '';
+        const m = Math.round((b - a) / 60000);
+        return m >= 60 ? `${Math.floor(m / 60)} ${L('h')} ${m % 60} ${L('m')}` : `${m} ${L('m')}`;
+    };
+    const durShort = (a, b) => { const m = Math.max(0, Math.round((b - a) / 60000)); return m >= 60 ? `${Math.floor(m / 60)}:${pad(m % 60)} ${L('h')}` : `${m} ${L('m')}`; };
+
+    // ---------- ข้อมูล: แท็ก (docNumber) ที่ออก / ที่รับ ----------
+    const docCache = new Map();
+    function docOf(raw) {
+        raw = String(raw || '');
+        if (!raw) return '';
+        if (docCache.has(raw)) return docCache.get(raw);
+        let d = '';
+        try { const p = parseLGBarcode(raw); d = p && p.docNumber ? up(p.docNumber) : ''; } catch (e) {}
+        if (docCache.size > 20000) docCache.clear();
+        docCache.set(raw, d);
+        return d;
+    }
+
+    function buildIndex() {
+        const outDocs = new Map(), recDocs = new Map(), byKey = new Map();
+        (db.lgScanLog || []).forEach((s, i) => {
+            const doc = docOf(s.rawBarcode) || ('#' + (s.id || i));
+            const t = ms(s.scannedAt);
+            let g = outDocs.get(doc);
+            if (!g) { g = { doc, t, by: s.scannedBy, rows: [] }; outDocs.set(doc, g); }
+            if (t && (!g.t || t < g.t)) { g.t = t; g.by = s.scannedBy; }
+            g.rows.push({ k: key(s.WO, s.partNo), WO: up(s.WO), part: up(s.partNo), qty: parseFloat(s.rackQty) || 0 });
+        });
+        let firstRecv = null;
+        (db.lgReceiveLog || []).forEach(r => {
+            const doc = up(r.docNumber); if (!doc) return;
+            const t = ms(r.receivedAt);
+            if (t && (!firstRecv || t < firstRecv)) firstRecv = t;
+            let g = recDocs.get(doc);
+            if (!g) { g = { doc, t, by: r.receivedBy, rows: [] }; recDocs.set(doc, g); }
+            if (t && (!g.t || t < g.t)) { g.t = t; g.by = r.receivedBy; }
+            g.rows.push({ k: key(r.WO, r.partNo), WO: up(r.WO), part: up(r.partNo), qty: parseFloat(r.qty) || 0 });
+        });
+        // นับ "ระหว่างทาง" เฉพาะแท็กที่สแกนออกตั้งแต่วันที่ LG เริ่มรับ (แท็กเก่าก่อนเริ่มระบบจะไม่ถูกนับว่าค้าง)
+        let trackFrom = null;
+        if (firstRecv) { const d = new Date(firstRecv); trackFrom = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
+        const now = Date.now();
+        const E = (k) => { let e = byKey.get(k); if (!e) { e = { out: 0, inn: 0, transit: 0, tDocs: [], lastOut: null, lastIn: null }; byKey.set(k, e); } return e; };
+        outDocs.forEach(g => {
+            const received = recDocs.has(g.doc);
+            const counts = trackFrom !== null && (!g.t || g.t >= trackFrom);
+            g.transit = !received && counts;
+            g.stuck = g.transit && g.t && (now - g.t) > STUCK_MS;
+            g.rows.forEach(r => {
+                const e = E(r.k); e.out += r.qty;
+                if (g.t && (!e.lastOut || g.t > e.lastOut)) e.lastOut = g.t;
+                if (g.transit) { e.transit += r.qty; if (e.tDocs.indexOf(g.doc) < 0) e.tDocs.push(g.doc); }
+            });
+        });
+        recDocs.forEach(g => g.rows.forEach(r => {
+            const e = E(r.k); e.inn += r.qty;
+            if (g.t && (!e.lastIn || g.t > e.lastIn)) e.lastIn = g.t;
+        }));
+        return { outDocs, recDocs, byKey, trackFrom, now };
+    }
+    const emptyE = { out: 0, inn: 0, transit: 0, tDocs: [], lastOut: null, lastIn: null };
+    const stuckOfE = (e, idx) => e.tDocs.filter(d => idx.outDocs.get(d).stuck);
+
+    // ---------- แคปข้อมูลแพลนที่แดชบอร์ดใช้ (ตามไลน์ที่เลือก) ----------
+    let capturing = false, snap = null;
+    if (typeof computeLGMatchStatus === 'function') {
+        const _c = computeLGMatchStatus;
+        computeLGMatchStatus = function () { const r = _c.apply(this, arguments); if (capturing) snap = r; return r; };
+    }
+    const dateVal = () => { const d = document.getElementById('lgd-date'); return (d && d.value) || (typeof lgTodayStr === 'function' ? lgTodayStr() : dayOf(Date.now())); };
+
+    // ---------- สถานะภายใน ----------
+    let tab = 'out', myFlt = false;
+    const last = { idx: null, rows: [], date: '' };
+
+    // ---------- CSS ----------
+    function injectCss() {
+        if (document.getElementById('lgr-dash-style')) return;
+        const st = document.createElement('style');
+        st.id = 'lgr-dash-style';
+        st.textContent = `
+        @media (min-width:992px){#view-dash-lg .lgd-kpis{grid-template-columns:repeat(7,minmax(0,1fr))}}
+        #view-dash-lg .lgd-kpis .lgd-k{padding:12px 12px;gap:10px}
+        #view-dash-lg .lgd-kpis .lgd-k .ic{width:36px;height:36px;font-size:1.1rem}
+        #view-dash-lg .lgd-kpis .lgd-k .n{font-size:1.6rem}
+        #view-dash-lg .lgr-kc{cursor:pointer}
+        #view-dash-lg .lgr-kc:hover{filter:brightness(1.05)}
+        #view-dash-lg .lgr-kt{background:linear-gradient(135deg,#60a5fa,#2563eb)}
+        #view-dash-lg .lgr-kt.stuck{background:linear-gradient(135deg,#fb7185,#dc2626)}
+        #view-dash-lg .lgr-rl{font-size:.72rem;font-weight:800;color:#6b7a90;margin-bottom:4px}
+        #view-dash-lg .lgr-ring2{margin-top:16px;padding-top:16px;border-top:1px dashed #e3e8f0}
+        #view-dash-lg .lgr-tabs{display:flex;gap:6px;margin:-4px 0 10px;flex-wrap:wrap}
+        #view-dash-lg .lgr-tab{border:0;border-radius:20px;padding:5px 12px;font-size:.74rem;font-weight:800;background:#eef1f6;color:#4a5a70;cursor:pointer}
+        #view-dash-lg .lgr-tab.on{background:#c8102e;color:#fff}
+        #view-dash-lg .lgr-tab em{font-style:normal;opacity:.8;margin-left:4px}
+        #view-dash-lg .lgd-f.stuck .tm,#view-dash-lg .lgd-f.stuck .q{color:#dc2626}
+        #view-dash-lg .lgr-warn{margin-top:12px;background:#fff1f2;border:1px solid #fecdd3;color:#b91c1c;border-radius:12px;padding:9px 12px;font-size:.78rem;cursor:pointer}
+        #view-dash-lg .lgr-more{display:block;margin-top:8px;text-align:center;font-size:.75rem;font-weight:800;color:#0d6efd;cursor:pointer}
+        #view-dash-lg table.lgd-t{min-width:900px}
+        #view-dash-lg .lgd-t tr.lgr-stuck td{background:#fff1f2}
+        #view-dash-lg .lgd-t tr.lgr-stuck td:first-child{box-shadow:inset 4px 0 0 #dc2626}
+        #view-dash-lg .lgr-bar{display:flex}
+        #view-dash-lg .lgr-bar i{display:block;height:100%;border-radius:0;flex:none;transition:width .5s}
+        #view-dash-lg .lgr-b2{display:inline-block;margin-top:4px;border-radius:20px;padding:2px 9px;font-weight:800;font-size:.68rem;white-space:nowrap}
+        #view-dash-lg .lgr-b2.full{background:#dcfce7;color:#15803d}
+        #view-dash-lg .lgr-b2.got{background:#e0ecff;color:#1d4ed8}
+        #view-dash-lg .lgr-b2.tr{background:#fef3c7;color:#b45309}
+        #view-dash-lg .lgr-b2.stuck{background:#dc2626;color:#fff}
+        #view-dash-lg .lgr-lg small{color:#7a8799;font-weight:400}
+        #view-dash-lg .lgr-lst small{display:block;color:#7a8799;font-size:.66rem}
+        #lgr-track-btn{border-radius:12px;font-weight:800}
+        .lgr-tl{position:relative;margin:8px 0 0 10px;padding-left:18px;border-left:3px solid #e3e8f0;text-align:left}
+        .lgr-tl .st{position:relative;margin-bottom:10px;font-size:.84rem}
+        .lgr-tl .st:before{content:"";position:absolute;left:-26px;top:3px;width:13px;height:13px;border-radius:50%;background:#16a34a;border:2px solid #fff;box-shadow:0 0 0 2px #16a34a}
+        .lgr-tl .st.wait:before{background:#f59e0b;box-shadow:0 0 0 2px #f59e0b}
+        .lgr-tl .st.red:before{background:#dc2626;box-shadow:0 0 0 2px #dc2626}
+        .lgr-tl .st.grey:before{background:#cbd5e1;box-shadow:0 0 0 2px #cbd5e1}
+        .lgr-tl .st b{font-weight:800}.lgr-tl .st small{color:#6b7a90}
+        .lgr-tc{border:1px solid #e3e8f0;border-radius:14px;padding:12px 14px;margin-top:10px;text-align:left}
+        .lgr-tc h6{margin:0 0 2px;font-size:.9rem;font-weight:800}
+        .lgr-tc .meta{font-size:.76rem;color:#6b7a90}`;
+        document.head.appendChild(st);
+    }
+
+    // ---------- แต่งแดชบอร์ดหลังวาดเสร็จ ----------
+    function cleanup() {
+        document.querySelectorAll('#view-dash-lg .lgr-th').forEach(e => e.remove());
+    }
+
+    function decorate() {
+        const root = document.getElementById('view-dash-lg');
+        if (!root || !snap) return;
+        injectCss();
+        const date = dateVal();
+        const idx = buildIndex();
+        const planRows = [];
+        const seen = new Set();
+        (typeof lgSortPlans === 'function' ? lgSortPlans(snap.filter(r => lgPlanDateOf(r) === date)) : snap).forEach(r => {
+            const k = key(r.WO, r.partNo);
+            planRows.push({ k, WO: up(r.WO), part: up(r.partNo), o: parseFloat(r.orderQty) || 0, row: r });
+            seen.add(k);
+        });
+        const entry = (k) => idx.byKey.get(k) || emptyE;
+        planRows.forEach(p => { p.e = entry(p.k); p.stuckDocs = stuckOfE(p.e, idx); });
+        last.idx = idx; last.rows = planRows; last.date = date;
+
+        // เอกสารที่อยู่ระหว่างทางในแพลนที่เห็น
+        const trDocs = new Map();
+        planRows.forEach(p => p.e.tDocs.forEach(d => { if (!trDocs.has(d)) trDocs.set(d, idx.outDocs.get(d)); }));
+        const trList = Array.from(trDocs.values()).sort((a, b) => (a.t || 9e15) - (b.t || 9e15));
+        const stuckN = trList.filter(g => g.stuck).length;
+        const trQty = planRows.reduce((a, p) => a + p.e.transit, 0);
+        // แท็กที่ LG รับแต่ไม่พบสแกนออก (คำนวณสดทุกครั้ง: ถ้า ATECH มาสแกนออกภายหลัง จะหายไปเอง)
+        const noOut = Array.from(idx.recDocs.values()).filter(g => !idx.outDocs.has(g.doc) && (g.rows.some(r => seen.has(r.k)) || (g.t && dayOf(g.t) === date))).sort((a, b) => (b.t || 0) - (a.t || 0));
+
+        // KPI
+        const recvWo = planRows.filter(p => p.o > 0 && p.e.inn >= p.o);
+        const recvQty = planRows.reduce((a, p) => a + Math.min(p.e.inn, p.o || p.e.inn), 0);
+        const kp = document.getElementById('lgd-kpis');
+        const k2 = kp && kp.querySelector('.lgd-k.k2');
+        if (kp && !kp.querySelector('.lgr-kc')) {
+            const mk = (cls, ic, label, n, sub, attr) => { const d = document.createElement('div'); d.className = 'lgd-k lgr-kc ' + cls; if (attr) d.setAttribute('data-lgr', attr); d.innerHTML = `<div class="ic"><i class="bi ${ic}"></i></div><div><div class="l">${esc(label)}</div><div class="n">${n}</div><div class="s">${sub}</div></div>`; return d; };
+            const a = mk('k2', 'bi-box-arrow-in-down', L('kRecv'), recvWo.length, esc(L('kRecvSub')(num(recvQty))), 'recv');
+            const b = mk('lgr-kt' + (stuckN ? ' stuck' : ''), 'bi-truck', L('kTrans'), trList.length, esc(L('kTransSub')(num(trQty), stuckN)), 'transit');
+            if (k2) { k2.insertAdjacentElement('afterend', a); a.insertAdjacentElement('afterend', b); } else { kp.appendChild(a); kp.appendChild(b); }
+            a.style.cursor = 'default';
+        }
+
+        // วงกลมที่ 2 + ป้ายวงกลมแรก
+        const ringBox = document.getElementById('lgd-ring');
+        const ring1 = ringBox && ringBox.querySelector('.lgd-ring');
+        if (ring1 && !ringBox.querySelector('.lgr-ring2')) {
+            const totO = planRows.reduce((a, p) => a + p.o, 0);
+            const totOut = planRows.reduce((a, p) => a + Math.min(p.e.out, p.o), 0);
+            const totIn = planRows.reduce((a, p) => a + Math.min(p.e.inn, p.o), 0);
+            const pcIn = totO > 0 ? Math.round(totIn / totO * 100) : 0;
+            const C = 2 * Math.PI * 52, off = C * (1 - pcIn / 100);
+            const c1 = ring1.querySelector('circle[stroke="#16a34a"]'); if (c1) c1.setAttribute('stroke', '#2563eb');
+            const txt1 = ring1.querySelector('div'); if (txt1 && !txt1.querySelector('.lgr-rl')) txt1.insertAdjacentHTML('afterbegin', `<div class="lgr-rl">${esc(L('rAtech'))}</div>`);
+            const d = document.createElement('div');
+            d.className = 'lgd-ring lgr-ring2';
+            d.innerHTML = `<svg width="130" height="130" viewBox="0 0 130 130"><circle cx="65" cy="65" r="52" fill="none" stroke="#e8edf5" stroke-width="14"/><circle cx="65" cy="65" r="52" fill="none" stroke="#16a34a" stroke-width="14" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${off}" transform="rotate(-90 65 65)"/><text x="65" y="72" text-anchor="middle" font-size="26" font-weight="800" fill="#1b2a41">${pcIn}%</text></svg>
+                <div><div class="lgr-rl">${esc(L('rLg'))}</div><div class="lgd-big">${num(totIn)}</div><div class="lgd-u">${esc(L('of'))} ${num(totO)} ${esc(L('pcs'))}<br>${esc(L('kTrans'))} ${num(trQty)} ${esc(L('pcs'))}</div></div>`;
+            ring1.insertAdjacentElement('afterend', d);
+        }
+
+        // สแกนล่าสุด: แท็บ
+        const feed = document.getElementById('lgd-feed');
+        if (feed && !feed.querySelector('.lgr-tabs')) {
+            const inToday = Array.from(idx.recDocs.values()).filter(g => g.t && dayOf(g.t) === date).sort((a, b) => b.t - a.t);
+            const tabs = document.createElement('div');
+            tabs.className = 'lgr-tabs';
+            tabs.innerHTML = [['out', L('tOut'), null], ['in', L('tIn'), inToday.length], ['tr', L('tTr'), trList.length]]
+                .map(x => `<button type="button" class="lgr-tab ${tab === x[0] ? 'on' : ''}" data-lgr-tab="${x[0]}">${esc(x[1])}${x[2] === null ? '' : '<em>' + x[2] + '</em>'}</button>`).join('');
+            if (tab === 'in') {
+                const items = inToday.slice(0, 6).map(g => {
+                    const wos = Array.from(new Set(g.rows.map(r => r.WO))).join(', '), part = g.rows[0] ? g.rows[0].part : '';
+                    const q = g.rows.reduce((a, r) => a + r.qty, 0);
+                    return `<div class="lgd-f"><div class="tm">${hm(g.t)}</div><div><b>${esc(wos)}</b><br><span class="lgd-pn">${esc(part)} · ${esc(g.by || '-')}</span></div><div class="q">+${num(q)}</div></div>`;
+                }).join('');
+                feed.innerHTML = '';
+                feed.appendChild(tabs);
+                feed.insertAdjacentHTML('beforeend', items || `<div class="lgd-empty">${esc(L('noIn'))}</div>`);
+            } else if (tab === 'tr') {
+                const items = trList.slice(0, 6).map(g => {
+                    const wos = Array.from(new Set(g.rows.map(r => r.WO))).join(', '), part = g.rows[0] ? g.rows[0].part : '';
+                    const q = g.rows.reduce((a, r) => a + r.qty, 0);
+                    return `<div class="lgd-f ${g.stuck ? 'stuck' : ''}"><div class="tm">${g.t ? hm(g.t) : '-'}</div><div><b>${esc(wos)}</b><br><span class="lgd-pn">${esc(part)} · ${esc(g.doc)}</span></div><div class="q" style="${g.stuck ? '' : 'color:#d97706'}">${g.t ? esc(durShort(g.t, idx.now)) : ''}</div></div>`;
+                }).join('');
+                feed.innerHTML = '';
+                feed.appendChild(tabs);
+                feed.insertAdjacentHTML('beforeend', items || `<div class="lgd-empty">${esc(L('noTr'))}</div>`);
+                if (trList.length > 6) feed.insertAdjacentHTML('beforeend', `<a class="lgr-more" data-lgr="transit">${esc(L('all'))} (${trList.length}) ›</a>`);
+            } else {
+                feed.insertBefore(tabs, feed.firstChild);
+            }
+            if (noOut.length) feed.insertAdjacentHTML('beforeend', `<div class="lgr-warn" data-lgr="noout"><i class="bi bi-exclamation-octagon me-1"></i>${esc(L('noOut')(noOut.length))}<u style="margin-left:8px;font-weight:700;">${esc(L('hint'))} ›</u></div>`);
+        }
+
+        // ตาราง: เพิ่มคอลัมน์ "LG รับ / ออก", แถบ 3 สี, ป้ายสถานะ LG, ความเคลื่อนไหวล่าสุด
+        const table = root.querySelector('table.lgd-t');
+        if (table) {
+            const ths = table.querySelectorAll('thead th');
+            if (ths.length >= 5 && !table.querySelector('thead .lgr-th')) {
+                const th = document.createElement('th'); th.className = 'lgr-th'; th.textContent = L('cLg');
+                ths[4].insertAdjacentElement('afterend', th);
+                if (ths[7]) ths[7].textContent = L('cLast');
+            }
+            const byK = new Map(planRows.map(p => [p.k, p]));
+            let visible = 0;
+            table.querySelectorAll('tbody tr').forEach(tr => {
+                const wo = tr.querySelector('.lgd-wo');
+                if (!wo) return;
+                const pnEl = tr.querySelector('.lgd-pn');
+                const part = pnEl ? pnEl.textContent.split(' · ')[0] : '';
+                const p = byK.get(key(wo.textContent, part));
+                const tds = tr.children;
+                if (!p || tds.length < 8) return;
+                const e = p.e, o = p.o;
+                // คอลัมน์ใหม่
+                const td = document.createElement('td'); td.className = 'lgd-qty lgr-lg';
+                td.innerHTML = `${num(e.inn)} <small>/ ${num(e.out)}</small>`;
+                tds[4].insertAdjacentElement('afterend', td);
+                // แถบ 3 สี (index เลื่อนไป 1 หลังแทรกคอลัมน์)
+                const bar = tr.querySelector('.lgd-pr .lgd-bar');
+                if (bar) {
+                    const base = o > 0 ? o : Math.max(e.out, 1);
+                    const recv = Math.min(e.inn, base), trs = Math.min(Math.max(0, e.out - e.inn), Math.max(0, base - recv));
+                    const w1 = recv / base * 100, w2 = trs / base * 100;
+                    const stuck = p.stuckDocs.length > 0;
+                    bar.classList.add('lgr-bar');
+                    bar.innerHTML = `<i style="width:${w1}%;background:#16a34a"></i><i style="width:${w2}%;background:${stuck ? '#dc2626' : '#f59e0b'}"></i>`;
+                    bar.title = L('barTip')(num(recv), num(trs), num(Math.max(0, base - recv - trs)));
+                }
+                // ป้ายสถานะ LG
+                const stCell = tds[7];
+                let badge = '';
+                if (o > 0 && e.inn >= o) badge = `<span class="lgr-b2 full">${esc(L('bFull'))}</span>`;
+                else if (e.transit > 0) {
+                    const oldest = p.stuckDocs.length ? Math.min.apply(null, p.stuckDocs.map(d => idx.outDocs.get(d).t)) : null;
+                    badge = p.stuckDocs.length
+                        ? `<span class="lgr-b2 stuck">${esc(L('bStuck')(num(e.transit), durShort(oldest, idx.now)))}</span>`
+                        : `<span class="lgr-b2 tr">${esc(L('bTr')(num(e.transit)))}</span>`;
+                } else if (e.inn > 0) badge = `<span class="lgr-b2 got">${esc(L('bGot')(num(e.inn)))}</span>`;
+                if (stCell && badge) stCell.insertAdjacentHTML('beforeend', '<br>' + badge);
+                if (p.stuckDocs.length) tr.classList.add('lgr-stuck');
+                tr.setAttribute('data-lgr-transit', e.transit > 0 ? '1' : '0');
+                // ความเคลื่อนไหวล่าสุด
+                const lastCell = tds[tds.length - 1];
+                const lo = e.lastOut, li = e.lastIn;
+                if (lastCell && (lo || li)) {
+                    const isIn = li && (!lo || li >= lo), t = isIn ? li : lo;
+                    lastCell.className += ' lgr-lst';
+                    lastCell.innerHTML = `${hm(t)}<small>${esc(isIn ? L('lgIn') : L('atOut'))}</small>`;
+                }
+            });
+            // ตัวกรอง "ระหว่างทาง"
+            const tools = document.getElementById('lgd-tools');
+            const nTrRows = planRows.filter(p => p.e.transit > 0).length;
+            if (tools && !tools.querySelector('[data-f="transit"]')) {
+                const chip = document.createElement('span');
+                chip.className = 'lgd-fc' + (myFlt ? ' on' : '');
+                chip.setAttribute('data-f', 'transit');
+                chip.innerHTML = `${esc(L('fTr'))}<em>${nTrRows}</em>`;
+                const q = tools.querySelector('#lgd-q');
+                if (q) tools.insertBefore(chip, q); else tools.appendChild(chip);
+                if (myFlt) tools.querySelectorAll('.lgd-fc').forEach(c => { if (c !== chip) c.classList.remove('on'); });
+            }
+            if (myFlt) {
+                table.querySelectorAll('tbody tr[data-lgr-transit]').forEach(tr => { if (tr.getAttribute('data-lgr-transit') !== '1') tr.style.display = 'none'; else visible++; });
+            }
+        }
+
+        // ปุ่มค้นหาแท็ก
+        const head = root.querySelector('.lgd-head');
+        let tb = document.getElementById('lgr-track-btn');
+        if (head && !tb) {
+            tb = document.createElement('button');
+            tb.type = 'button'; tb.id = 'lgr-track-btn'; tb.className = 'btn btn-outline-primary';
+            tb.onclick = () => window.lgrTrack();
+            const btns = document.getElementById('lgd-btns');
+            if (btns) btns.parentNode.insertBefore(tb, btns); else head.appendChild(tb);
+        }
+        if (tb) tb.innerHTML = `<i class="bi bi-search me-1"></i>${esc(L('btnTrack'))}`;
+    }
+
+    // ---------- หน้าต่างรายการ ----------
+    function transitTable(list, idx) {
+        if (!list.length) return `<div class="text-muted py-3">${esc(L('none'))}</div>`;
+        return `<div class="table-responsive" style="max-height:58vh;overflow:auto;"><table class="table table-sm align-middle text-start" style="font-size:.82rem;">
+            <thead style="position:sticky;top:0;background:#fff;"><tr><th>${esc(L('cDoc'))}</th><th>${esc(L('cWo'))}</th><th>${esc(L('cPart'))}</th><th class="text-end">${esc(L('cQty'))}</th><th>${esc(L('cOutAt'))}</th><th>${esc(L('cOutBy'))}</th><th>${esc(L('cWait'))}</th></tr></thead>
+            <tbody>${list.map(g => {
+                const wos = Array.from(new Set(g.rows.map(r => r.WO))).join(', '), part = Array.from(new Set(g.rows.map(r => r.part))).join(', ');
+                const q = g.rows.reduce((a, r) => a + r.qty, 0);
+                return `<tr style="${g.stuck ? 'background:#fff1f2;' : ''}"><td style="font-size:.72rem;">${esc(g.doc)}</td><td class="fw-bold">${esc(wos)}</td><td>${esc(part)}</td><td class="text-end">${num(q)}</td><td class="text-nowrap">${g.t ? esc(dmhm(g.t)) : '-'}</td><td>${esc(g.by || '-')}</td><td class="text-nowrap fw-bold" style="color:${g.stuck ? '#dc2626' : '#b45309'}">${g.t ? esc(dur(g.t, idx.now)) : '-'}</td></tr>`;
+            }).join('')}</tbody></table></div>`;
+    }
+    function noOutTable(list) {
+        return `<div class="table-responsive" style="max-height:58vh;overflow:auto;"><table class="table table-sm align-middle text-start" style="font-size:.82rem;">
+            <thead style="position:sticky;top:0;background:#fff;"><tr><th>${esc(L('cDoc'))}</th><th>${esc(L('cWo'))}</th><th>${esc(L('cPart'))}</th><th class="text-end">${esc(L('cQty'))}</th><th>${esc(L('cRecAt'))}</th><th>${esc(L('cRecBy'))}</th></tr></thead>
+            <tbody>${list.map(g => `<tr><td style="font-size:.72rem;">${esc(g.doc)}</td><td class="fw-bold">${esc(Array.from(new Set(g.rows.map(r => r.WO))).join(', '))}</td><td>${esc(Array.from(new Set(g.rows.map(r => r.part))).join(', '))}</td><td class="text-end">${num(g.rows.reduce((a, r) => a + r.qty, 0))}</td><td class="text-nowrap">${g.t ? esc(dmhm(g.t)) : '-'}</td><td>${esc(g.by || '-')}</td></tr>`).join('')}</tbody></table></div>`;
+    }
+    function showTransit() {
+        const idx = last.idx; if (!idx) return;
+        const map = new Map(); last.rows.forEach(p => p.e.tDocs.forEach(d => { if (!map.has(d)) map.set(d, idx.outDocs.get(d)); }));
+        const list = Array.from(map.values()).sort((a, b) => (a.t || 9e15) - (b.t || 9e15));
+        const s = list.filter(g => g.stuck).length;
+        Swal.fire({ title: L('trTitle'), html: `<div class="text-muted mb-2" style="font-size:.85rem;">${esc(L('trSub')(list.length, s))}</div>${transitTable(list, idx)}<div class="text-muted mt-2" style="font-size:.72rem;">${esc(L('nowStart'))}</div>`, width: 'min(1000px,96vw)', confirmButtonText: L('close'), confirmButtonColor: '#6c757d' });
+    }
+    function showNoOut() {
+        const idx = last.idx; if (!idx) return;
+        const seen = new Set(last.rows.map(p => p.k));
+        const list = Array.from(idx.recDocs.values()).filter(g => !idx.outDocs.has(g.doc) && (g.rows.some(r => seen.has(r.k)) || (g.t && dayOf(g.t) === last.date))).sort((a, b) => (b.t || 0) - (a.t || 0));
+        Swal.fire({ title: L('noOutTitle'), html: noOutTable(list), width: 'min(900px,96vw)', confirmButtonText: L('close'), confirmButtonColor: '#6c757d' });
+    }
+
+    // ---------- ค้นหาแท็ก + ไทม์ไลน์ ----------
+    function trackHtml(q) {
+        q = up(q);
+        if (q.length < 3) return `<div class="text-muted py-2" style="font-size:.85rem;">${esc(L('trackHint'))}</div>`;
+        const idx = buildIndex();
+        const docs = new Set();
+        const hit = (g) => g.doc.indexOf(q) >= 0 || g.rows.some(r => r.WO.indexOf(q) >= 0 || r.part.indexOf(q) >= 0);
+        idx.outDocs.forEach(g => { if (hit(g)) docs.add(g.doc); });
+        idx.recDocs.forEach(g => { if (hit(g)) docs.add(g.doc); });
+        const list = Array.from(docs).map(d => ({ d, o: idx.outDocs.get(d), r: idx.recDocs.get(d) }))
+            .sort((a, b) => ((b.o && b.o.t) || (b.r && b.r.t) || 0) - ((a.o && a.o.t) || (a.r && a.r.t) || 0));
+        if (!list.length) return `<div class="text-muted py-3">${esc(L('trackNone'))}</div>`;
+        return list.slice(0, 8).map(x => {
+            const g = x.o || x.r, wos = Array.from(new Set(g.rows.map(r => r.WO))).join(', '), part = Array.from(new Set(g.rows.map(r => r.part))).join(', ');
+            const qty = g.rows.reduce((a, r) => a + r.qty, 0);
+            let tl = '';
+            if (x.o) tl += `<div class="st"><b>${esc(L('stOut'))}</b> ${x.o.t ? esc(dmhm(x.o.t)) : '-'} <small>${esc(L('by'))} ${esc(x.o.by || '-')}</small></div>`;
+            else tl += `<div class="st red"><b>${esc(L('warnNoOut'))}</b></div>`;
+            if (x.r) {
+                const d = x.o && x.o.t && x.r.t ? dur(x.o.t, x.r.t) : '';
+                tl += `<div class="st"><b>${esc(L('stIn'))}</b> ${x.r.t ? esc(dmhm(x.r.t)) : '-'} <small>${esc(L('by'))} ${esc(x.r.by || '-')}${d ? ' · ' + esc(L('transit')) + ' ' + esc(d) : ''}</small></div>`;
+            } else {
+                const age = x.o && x.o.t ? dur(x.o.t, idx.now) : '';
+                const red = x.o && x.o.stuck;
+                tl += `<div class="st ${red ? 'red' : 'wait'}"><b>${esc(L('notYet'))}</b> <small>${age ? esc(L('waiting')) + ' ' + esc(age) : ''}</small></div>`;
+            }
+            return `<div class="lgr-tc"><h6>${esc(x.d)}</h6><div class="meta">${esc(wos)} · ${esc(part)} · ${num(qty)} ${esc(L('pcs'))}</div><div class="lgr-tl">${tl}</div></div>`;
+        }).join('') + (list.length > 8 ? `<div class="text-muted mt-2" style="font-size:.75rem;">… ${list.length - 8} +</div>` : '');
+    }
+    window.lgrTrack = function (preset) {
+        Swal.fire({
+            title: L('trackTitle'),
+            html: `<input id="lgr-track-q" class="form-control" placeholder="${esc(L('trackPh'))}" autocomplete="off" style="font-weight:700;"><div id="lgr-track-out" style="max-height:55vh;overflow:auto;margin-top:6px;">${trackHtml(preset || '')}</div>`,
+            width: 'min(680px,96vw)', confirmButtonText: L('close'), confirmButtonColor: '#6c757d',
+            didOpen: () => {
+                const i = document.getElementById('lgr-track-q'), o = document.getElementById('lgr-track-out');
+                if (preset) i.value = preset;
+                i.addEventListener('input', () => { o.innerHTML = trackHtml(i.value); });
+                i.focus();
+            }
+        });
+    };
+
+    // ---------- ปุ่ม/คลิกต่าง ๆ ----------
+    document.addEventListener('click', (e) => {
+        const t = e.target && e.target.closest ? e.target.closest('[data-lgr-tab],[data-lgr]') : null;
+        if (!t || !t.closest('#view-dash-lg')) return;
+        if (t.hasAttribute('data-lgr-tab')) { tab = t.getAttribute('data-lgr-tab'); window.renderLGDashboard(); return; }
+        const a = t.getAttribute('data-lgr');
+        if (a === 'transit') showTransit(); else if (a === 'noout') showNoOut();
+    });
+    // เลือก/ยกเลิกตัวกรอง "ระหว่างทาง" (ใช้ window capture เพื่อให้ตั้งค่าก่อนตัวเดิมวาดตาราง)
+    window.addEventListener('click', (e) => {
+        const c = e.target && e.target.closest ? e.target.closest('#view-dash-lg .lgd-fc') : null;
+        if (c) myFlt = c.getAttribute('data-f') === 'transit';
+    }, true);
+
+    // ---------- รูป / PDF: เติมคอลัมน์ "LG รับ" และสรุปในรายงาน ----------
+    function augmentReport(rep) {
+        const idx = buildIndex();
+        const table = rep.querySelector('table'); if (!table) return;
+        const rows = Array.from(table.querySelectorAll('tbody tr')).filter(tr => tr.children.length >= 10);
+        let sumIn = 0, sumO = 0, sumOut = 0, trQty = 0; const trD = new Set(); let stuck = 0; const keys = new Set();
+        const hr = table.querySelector('thead tr');
+        if (hr && hr.children[7]) {
+            const th = document.createElement('th'); th.style.cssText = hr.children[7].style.cssText; th.textContent = L('rLgCol');
+            hr.children[7].insertAdjacentElement('afterend', th);
+            const th2 = document.createElement('th'); th2.style.cssText = hr.children[hr.children.length - 2].style.cssText; th2.textContent = L('rSt');
+            hr.appendChild(th2);
+        }
+        rows.forEach(tr => {
+            const c = tr.children;
+            const wo = c[1].textContent, part = (c[2].firstChild ? c[2].firstChild.textContent : c[2].textContent);
+            const k = key(wo, part); keys.add(k);
+            const e = idx.byKey.get(k) || emptyE;
+            const o = parseFloat(String(c[6].textContent).replace(/,/g, '')) || 0;
+            sumO += o; sumIn += Math.min(e.inn, o); sumOut += Math.min(parseFloat(String(c[7].textContent).replace(/,/g, '')) || 0, o);
+            trQty += e.transit; e.tDocs.forEach(d => { if (!trD.has(d)) { trD.add(d); if (idx.outDocs.get(d).stuck) stuck++; } });
+            const sd = stuckOfE(e, idx);
+            const td = document.createElement('td'); td.style.cssText = c[7].style.cssText;
+            td.textContent = num(e.inn);
+            td.style.fontWeight = '800'; td.style.color = (o > 0 && e.inn >= o) ? '#15803d' : (e.transit > 0 ? '#b45309' : '#1b2a41');
+            c[7].insertAdjacentElement('afterend', td);
+            // สถานะ LG (คอลัมน์ท้ายสุด)
+            let txt = '', bg = '', fg = '';
+            if (o > 0 && e.inn >= o) { txt = L('rbFull'); bg = '#dcfce7'; fg = '#15803d'; }
+            else if (e.transit > 0 && sd.length) { const t0 = Math.min.apply(null, sd.map(d => idx.outDocs.get(d).t)); txt = L('rbStuck')(num(e.transit), durShort(t0, idx.now)); bg = '#dc2626'; fg = '#ffffff'; }
+            else if (e.transit > 0) { txt = L('rbTr')(num(e.transit)); bg = '#fef3c7'; fg = '#b45309'; }
+            else if (e.inn > 0) { txt = L('rbGot')(num(e.inn)); bg = '#e0ecff'; fg = '#1d4ed8'; }
+            const last = document.createElement('td');
+            last.style.cssText = c[c.length - 1].style.cssText;
+            last.innerHTML = txt ? `<span style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:800;background:${bg};color:${fg};white-space:nowrap;">${esc(txt)}</span>` : '<span style="color:#98a4b6;">-</span>';
+            tr.appendChild(last);
+            if (sd.length) tr.style.background = '#fff1f2';
+        });
+        const noOut = Array.from(idx.recDocs.values()).filter(g => !idx.outDocs.has(g.doc) && g.rows.some(r => keys.has(r.k))).length;
+        const pc = sumO > 0 ? Math.round(sumIn / sumO * 100) : 0;
+        const pcOut = sumO > 0 ? Math.round(sumOut / sumO * 100) : 0;
+        const ring = (pct, color, label, sub) => {
+            const C = 2 * Math.PI * 46, off = C * (1 - Math.min(100, pct) / 100);
+            return `<div style="display:flex;align-items:center;gap:12px;background:#f7f9fc;border-radius:14px;padding:12px 16px;">
+                <svg width="104" height="104" viewBox="0 0 104 104"><circle cx="52" cy="52" r="46" fill="none" stroke="#e1e7f0" stroke-width="12"/><circle cx="52" cy="52" r="46" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${off}" transform="rotate(-90 52 52)"/><text x="52" y="60" text-anchor="middle" font-size="24" font-weight="800" fill="#1b2a41" font-family="inherit">${pct}%</text></svg>
+                <div><div style="font-size:13px;font-weight:800;color:#51627a;">${esc(label)}</div><div style="font-size:17px;font-weight:800;margin-top:3px;">${esc(sub)}</div></div></div>`;
+        };
+        const chip = (bg, fg, txt) => `<div style="background:${bg};color:${fg};border-radius:10px;padding:9px 12px;font-weight:800;font-size:13px;">${txt}</div>`;
+        const strip = document.createElement('div');
+        strip.style.cssText = 'display:flex;gap:12px;margin:0 0 14px;align-items:stretch;';
+        strip.innerHTML = ring(pcOut, '#2563eb', L('rRingOut'), L('rOfQ')(num(sumOut), num(sumO)))
+            + ring(pc, '#16a34a', L('rLgSum'), L('rOfQ')(num(sumIn), num(sumO)))
+            + `<div style="flex:1;display:flex;flex-direction:column;gap:8px;justify-content:center;">`
+            + chip(stuck ? '#fee2e2' : '#fef3c7', stuck ? '#b91c1c' : '#b45309', `${esc(L('rTransSum'))} ${trD.size} ${esc(L('tags'))} · ${num(trQty)} ${esc(L('pcs'))}${stuck ? ' · ' + esc(L('rStuckSum')(stuck)) : ''}`)
+            + (noOut ? chip('#fee2e2', '#b91c1c', esc(L('rNoOut')(noOut))) : '')
+            + `</div>`;
+        table.insertAdjacentElement('beforebegin', strip);
+    }
+    function wrapExport(name) {
+        const orig = window[name];
+        if (typeof orig !== 'function') return;
+        window[name] = function () {
+            const self = this, args = arguments, body = document.body, realAppend = body.appendChild;
+            body.appendChild = function (node) {
+                try { const rep = node && node.querySelector ? node.querySelector('#lgd-report') : null; if (rep && !rep.getAttribute('data-lgr')) { rep.setAttribute('data-lgr', '1'); augmentReport(rep); } } catch (err) { console.warn('LG recv report', err); }
+                return realAppend.call(body, node);
+            };
+            try { return orig.apply(self, args); }
+            finally { body.appendChild = realAppend; delete body.appendChild; }
+        };
+    }
+    wrapExport('lgdSaveImage');
+    wrapExport('lgdSavePdf');
+
+    // ---------- ครอบการวาดแดชบอร์ด ----------
+    const _r = window.renderLGDashboard;
+    window.renderLGDashboard = function () {
+        try { cleanup(); } catch (e) {}
+        capturing = true; snap = null;
+        let res;
+        try { res = _r.apply(this, arguments); } finally { capturing = false; }
+        try { decorate(); } catch (e) { console.warn('LG recv dash', e); }
+        return res;
+    };
+    const v = document.getElementById('view-dash-lg');
+    if (v && !v.classList.contains('d-none')) window.renderLGDashboard();
+})();
+// ===== จบ LG-RECEIVE-DASH-V3 =====
 // ===== จบ LG-FIT-HEIGHT-V3 =====
 // ===== จบ LG-RECEIVE-DASH =====
 // ===== จบ LG-RECEIVE-PAGE =====
