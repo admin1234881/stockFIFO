@@ -19926,6 +19926,145 @@ renderLGTagPrintWindow = function(tags, printWin) {
 // ===== จบ LG-FIT-HEIGHT-V3 =====
 // ===== จบ LG-RECEIVE-DASH =====
 // ===== จบ LG-RECEIVE-PAGE =====
+// ===== LG-TAGCHECK-FIX: เช็คแท็กค้างสแกน — แก้วันที่แพลนที่ชีตส่งมาผิดรูปแบบ และถ้าวันที่เลือกไม่มีข้อมูล จะบอกว่าแท็กอยู่ที่วันไหนให้กดดูได้ (วางต่อท้ายบล็อก LG ทั้งหมด) =====
+(function () {
+    if (window.__lgTagCheckFix) return;
+    window.__lgTagCheckFix = true;
+    if (typeof window.showLGTagCheck !== 'function') return;
+
+    const pad = (n) => String(n).padStart(2, '0');
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const dmy = (y) => { const p = String(y).split('-'); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : String(y); };
+
+    // แปลงวันที่แพลนทุกรูปแบบที่ชีตอาจส่งมา ให้เป็น YYYY-MM-DD (วันตามเวลาเครื่อง ไม่เลื่อนวัน)
+    function toIsoDay(v) {
+        if (v == null || v === '') return '';
+        if (v instanceof Date) return isNaN(v) ? '' : iso(v);
+        const s = String(v).trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+        if (/^\d{4}-\d{2}-\d{2}T/.test(s)) { const d = new Date(s); return isNaN(d) ? s.slice(0, 10) : iso(d); }
+        let m = s.match(/^(\d{4})[\/.](\d{1,2})[\/.](\d{1,2})/);
+        if (m) return `${m[1]}-${pad(+m[2])}-${pad(+m[3])}`;
+        m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
+        if (m) {
+            let a = +m[1], b = +m[2], y = +m[3];
+            if (y > 2400) y -= 543;
+            if (a > 12) return `${y}-${pad(b)}-${pad(a)}`;      // 25/10/2026
+            if (b > 12) return `${y}-${pad(a)}-${pad(b)}`;      // 10/25/2026
+            return `${y}-${pad(b)}-${pad(a)}`;                  // กำกวม → ถือเป็น วัน/เดือน/ปี (ไทย)
+        }
+        const d = new Date(s);
+        return isNaN(d) ? s.slice(0, 10) : iso(d);
+    }
+    function normalizeTags() {
+        try { (db.lgTagLog || []).forEach(t => { const v = toIsoDay(t.planDate); if (v) t.planDate = v; }); } catch (e) {}
+    }
+
+    // ระหว่างที่หน้าต่างเช็คแท็กกำลังโหลด ให้แก้ข้อมูลที่ดึงมาใหม่ก่อนส่งให้หน้าจอ
+    let active = 0;
+    const _fetch = window.fetch;
+    window.fetch = function (url) {
+        const p = _fetch.apply(this, arguments);
+        if (!active || !String(url).includes('action=getData')) return p;
+        return p.then(async (res) => {
+            try {
+                const j = await res.clone().json();
+                if (j && Array.isArray(j.lgTagLog)) j.lgTagLog.forEach(t => { const v = toIsoDay(t.planDate); if (v) t.planDate = v; });
+                return new Response(JSON.stringify(j), { status: res.status, statusText: res.statusText, headers: { 'Content-Type': 'application/json' } });
+            } catch (e) { return res; }
+        });
+    };
+
+    // ถ้าวันที่เลือกไม่มีแท็ก: บอกว่ามีแท็กวันไหนบ้าง กดแล้วสลับไปดูได้
+    function helper(body) {
+        if (!body || body.__lgFixed) return;
+        const run = () => {
+            const cell = body.querySelector('td[colspan]');
+            const old = body.parentNode.parentNode.parentNode.querySelector('.lgtc-help');
+            if (!cell || !/ไม่มีข้อมูลแท็ก/.test(cell.textContent)) { if (old) old.remove(); return; }
+            if (old) return;
+            const all = db.lgTagLog || [];
+            const by = {};
+            all.forEach(t => { const d = toIsoDay(t.planDate) || '(ไม่มีวันที่)'; by[d] = (by[d] || 0) + 1; });
+            const days = Object.keys(by).sort().reverse().slice(0, 10);
+            const box = document.createElement('div');
+            box.className = 'lgtc-help text-start small mt-2 p-2 border rounded bg-light';
+            box.innerHTML = all.length === 0
+                ? `<b class="text-danger">ในชีต LG_TagLog ไม่มีข้อมูลแท็กเลย</b><br>แปลว่าตอนปริ้นแท็ก ระบบบันทึกรายการไม่สำเร็จ (จะมีแถบสีเหลือง "ปริ้นแล้ว แต่บันทึกรายการแท็กไม่สำเร็จ" ขึ้นมุมขวาบนตอนปริ้น) หรือยังไม่เคยปริ้นแท็กหลังเปิดใช้ฟังก์ชันนี้`
+                : `<b>มีแท็กในระบบทั้งหมด ${all.length} ใบ</b> ตามวันที่แพลน (กดเพื่อดู): ` + days.map(d => `<button type="button" class="btn btn-sm btn-outline-primary py-0 me-1 mb-1 lgtc-jump" data-d="${esc(d)}">${esc(/^\d{4}-/.test(d) ? dmy(d) : d)} (${by[d]})</button>`).join('');
+            cell.closest('.border.rounded').insertAdjacentElement('afterend', box);
+            box.querySelectorAll('.lgtc-jump').forEach(b => b.onclick = () => {
+                const el = document.getElementById('lgtc-date');
+                if (el && /^\d{4}-/.test(b.dataset.d)) { el.value = b.dataset.d; el.dispatchEvent(new Event('change')); }
+            });
+        };
+        body.__lgFixed = true;
+        new MutationObserver(run).observe(body, { childList: true, subtree: true });
+        run();
+    }
+    new MutationObserver(() => { const b = document.getElementById('lgtc-body'); if (b) helper(b); }).observe(document.body, { childList: true, subtree: true });
+
+    const _show = window.showLGTagCheck;
+    window.showLGTagCheck = function () {
+        active++; setTimeout(() => { active = Math.max(0, active - 1); }, 20000);
+        normalizeTags();
+        return _show.apply(this, arguments);
+    };
+})();
+// ===== LG-TAGCHECK-SEARCH: เพิ่มช่องพิมพ์ค้นหาในหน้า "เช็คแท็กค้างสแกน" (ค้นจาก เลขแท็ก / Part / WO / Line / ผู้ปริ้น / สถานะ ได้หลายคำพร้อมกัน) (วางต่อท้ายบล็อก LG ทั้งหมด) =====
+(function () {
+    if (window.__lgTagCheckSearch) return;
+    window.__lgTagCheckSearch = true;
+
+    const norm = (s) => String(s == null ? '' : s).toLowerCase().replace(/\s+/g, ' ').trim();
+
+    function attach(body) {
+        if (body.__lgSearch) return;
+        body.__lgSearch = true;
+        const dateEl = document.getElementById('lgtc-date');
+        const bar = dateEl && dateEl.parentNode;
+        if (!bar || document.getElementById('lgtc-q')) return;
+
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'flex:1 1 220px;max-width:340px;position:relative;';
+        wrap.innerHTML = '<input type="search" id="lgtc-q" class="form-control form-control-sm" placeholder="🔍 ค้นหา เลขแท็ก / Part / WO" autocomplete="off" style="padding-right:70px;"><span id="lgtc-qn" class="text-muted" style="position:absolute;right:30px;top:50%;transform:translateY(-50%);font-size:.72rem;pointer-events:none;"></span>';
+        const refresh = document.getElementById('lgtc-refresh');
+        if (refresh) refresh.insertAdjacentElement('afterend', wrap); else bar.appendChild(wrap);
+        const q = wrap.querySelector('#lgtc-q'), cnt = wrap.querySelector('#lgtc-qn');
+
+        let busy = false, mo = null;
+        function apply() {
+            if (busy) return;
+            busy = true;
+            try {
+                const words = norm(q.value).split(' ').filter(Boolean);
+                const rows = Array.from(body.querySelectorAll('tr')).filter(tr => !tr.querySelector('td[colspan]'));
+                body.querySelectorAll('.lgtc-nomatch').forEach(e => e.remove());
+                let shown = 0;
+                rows.forEach(tr => {
+                    const txt = norm(Array.from(tr.querySelectorAll('td')).filter(td => !td.querySelector('button')).map(td => td.textContent).join(' '));
+                    const ok = words.every(w => txt.indexOf(w) !== -1);
+                    tr.style.display = ok ? '' : 'none';
+                    if (ok) shown++;
+                });
+                cnt.textContent = words.length && rows.length ? `${shown}/${rows.length}` : '';
+                if (words.length && rows.length && shown === 0) {
+                    body.insertAdjacentHTML('beforeend', '<tr class="lgtc-nomatch"><td colspan="10" class="text-center text-muted py-4">ไม่พบแท็กที่ตรงกับคำค้นหา</td></tr>');
+                }
+            } finally { busy = false; try { mo.takeRecords(); } catch (e) {} }
+        }
+        q.addEventListener('input', apply);
+        mo = new MutationObserver(() => { if (!busy) apply(); });
+        mo.observe(body, { childList: true });
+        apply();
+        setTimeout(() => { try { q.focus(); } catch (e) {} }, 50);
+    }
+
+    new MutationObserver(() => { const b = document.getElementById('lgtc-body'); if (b) attach(b); }).observe(document.body, { childList: true, subtree: true });
+})();
+// ===== จบ LG-TAGCHECK-SEARCH =====
+// ===== จบ LG-TAGCHECK-FIX =====
 // อัปโหลดไฟล์แพลนที่กรอกแล้ว
 window.handleLGPlanFileUpload = function(event) {
     const file = event.target.files[0];
