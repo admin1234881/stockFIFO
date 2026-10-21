@@ -20238,6 +20238,394 @@ renderLGTagPrintWindow = function(tags, printWin) {
 })();
 // ===== จบ LG-MANUAL-REASON =====
 // ===== จบ LG-TAGCHECK-FIX =====
+// ===== DASH-HOVER-MENU: ย้ายปุ่มเลือกแดชบอร์ด (งานขาย / Rack / รถขนส่ง / LG) ไปเด้งตอนชี้เมนู "แดชบอร์ด" ทางซ้าย =====
+// ปุ่มเดิมไม่ได้ถูกลบ แค่ซ่อนไว้ (ตอนกดเต็มจอจะโชว์กลับมาให้ เพราะเมนูซ้ายมองไม่เห็นในโหมดเต็มจอ)
+(function () {
+    if (window.__dashHoverMenu) return; window.__dashHoverMenu = true;
+    const $ = (id) => document.getElementById(id);
+    const tab = $('pills-dashboard-tab'), pane = $('pills-dashboard'), rail = $('pills-tab');
+    const first = $('btn-dash-sales');
+    if (!tab || !pane || !first) return;
+    const grp = first.closest('.btn-group');
+    const row = grp && grp.parentElement;
+    if (!row) return;
+
+    const st = document.createElement('style');
+    st.id = 'dhm-style';
+    st.textContent = `
+    #pills-dashboard .dhm-row{margin-bottom:.75rem !important}
+    #pills-dashboard:not(.dhm-fs) .dhm-row > .dhm-hide{display:none !important}
+    #pills-dashboard.dhm-fs #dhm-cur{display:none !important}
+    #dhm-cur{white-space:nowrap;display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:1.05rem;color:#0b1b33}
+    #dhm-cur i{color:#0d6efd}
+    #dhm-cur small{font-weight:600;font-size:.72rem;color:#8a97ab}
+    /* ให้เมนูซ้ายค้างกางไว้ตราบที่กล่องเลือกยังเปิด (กันหดตอนเมาส์ย้ายไปกล่อง) */
+    #pills-tab.icon-nav-container.dhm-open{width:264px;box-shadow:0 16px 48px rgba(11,27,51,.45)}
+    #pills-tab.dhm-open .nav-group-title span{opacity:1}
+    #pills-tab.dhm-open .nav-group-title::before{opacity:0}
+    #pills-tab.dhm-open .icon-nav-label{opacity:1;transition-delay:.06s}
+    @media (min-width:769px){#main-dashboard:has(#pills-tab.dhm-open){padding-left:292px}}
+    @media (max-width:768px){#pills-tab.icon-nav-container.dhm-open{width:240px}}
+    #dhm-fly{position:fixed;z-index:1045;width:220px;background:#fff;border-radius:16px;padding:8px;
+        box-shadow:0 14px 40px rgba(11,27,51,.28);opacity:0;transform:translateX(-6px);pointer-events:none;
+        transition:opacity .16s ease,transform .16s ease;display:none}
+    #dhm-fly.on{opacity:1;transform:none;pointer-events:auto}
+    #dhm-fly:before{content:"";position:absolute;left:-14px;top:0;bottom:0;width:14px}
+    #dhm-fly .t{font-size:.7rem;color:#8a97ab;padding:4px 10px 6px;font-weight:700}
+    #dhm-fly .o{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;font-weight:700;
+        font-size:.88rem;color:#334155;cursor:pointer;user-select:none}
+    #dhm-fly .o i{font-size:1.05rem;color:#0d6efd;width:20px;text-align:center}
+    #dhm-fly .o:hover{background:#e7f1ff;color:#0d6efd}
+    #dhm-fly .o.cur{background:#f1f6ff}
+    #dhm-fly .o.cur:after{content:"●";margin-left:auto;color:#16a34a;font-size:.6rem}
+    `;
+    document.head.appendChild(st);
+
+    // ซ่อนปุ่มเดิม + ตัวดันฝั่งซ้าย (ไม่ลบ)
+    row.classList.add('dhm-row');
+    Array.from(row.children).forEach((c) => { if (c.tagName === 'DIV') c.classList.add('dhm-hide'); });
+
+    // ป้ายบอกว่ากำลังดูแดชบอร์ดไหน (แทนที่ปุ่มที่ซ่อน)
+    const chip = document.createElement('div');
+    chip.id = 'dhm-cur';
+    row.insertBefore(chip, row.firstChild);
+
+    const IDS = ['btn-dash-sales', 'btn-dash-rack', 'btn-dash-vehicle', 'btn-dash-lg'];
+    const labelOf = (id) => document.querySelector('label[for="' + id + '"]');
+    const textOf = (l) => (l ? (l.textContent || '').replace(/\s+/g, ' ').trim() : '');
+    const iconOf = (l) => { const i = l && l.querySelector('i'); return i ? i.className.replace(/\bme-\d\b/, '').trim() : 'bi bi-speedometer2'; };
+
+    function updateChip() {
+        const r = document.querySelector('input[name="dashToggle"]:checked');
+        const l = r ? labelOf(r.id) : null;
+        const key = (l ? textOf(l) : '') + '|' + (l ? iconOf(l) : '');
+        if (chip.dataset.k === key) return;
+        chip.dataset.k = key;
+        chip.innerHTML = '';
+        const i = document.createElement('i'); i.className = iconOf(l); chip.appendChild(i);
+        const s = document.createElement('span'); s.textContent = textOf(l); chip.appendChild(s);
+        const m = document.createElement('small'); m.textContent = '← ' + textOf(tab.querySelector('.icon-nav-label') || tab); chip.appendChild(m);
+        chip.title = textOf(tab.querySelector('.icon-nav-label') || tab);
+    }
+    updateChip();
+    document.addEventListener('change', (e) => { if (e.target && e.target.name === 'dashToggle') setTimeout(updateChip, 0); });
+    setInterval(updateChip, 3000);
+
+    // โหมดเต็มจอ: โชว์ปุ่มเดิมกลับมา
+    function fsSync() {
+        const fe = document.fullscreenElement || document.webkitFullscreenElement;
+        pane.classList.toggle('dhm-fs', fe === pane);
+    }
+    ['fullscreenchange', 'webkitfullscreenchange'].forEach((ev) => document.addEventListener(ev, fsSync));
+
+    // กล่องเลือกที่เด้งออกมา
+    const fly = document.createElement('div');
+    fly.id = 'dhm-fly';
+    document.body.appendChild(fly);
+    let showT = null, hideT = null, fadeT = null;
+
+    function go(id) {
+        if (!tab.classList.contains('active')) tab.click();
+        const r = $(id);
+        if (!r) return;
+        if (!r.checked) r.click();
+        else r.dispatchEvent(new Event('change', { bubbles: true }));
+        setTimeout(updateChip, 0);
+    }
+
+    function build() {
+        fly.innerHTML = '';
+        const t = document.createElement('div'); t.className = 't';
+        t.textContent = textOf(tab.querySelector('.icon-nav-label') || tab);
+        fly.appendChild(t);
+        const active = tab.classList.contains('active');
+        IDS.forEach((id) => {
+            const l = labelOf(id), r = $(id);
+            if (!l || !r) return;
+            const o = document.createElement('div');
+            o.className = 'o' + (active && r.checked ? ' cur' : '');
+            const i = document.createElement('i'); i.className = iconOf(l); o.appendChild(i);
+            const s = document.createElement('span'); s.textContent = textOf(l); o.appendChild(s);
+            o.addEventListener('click', () => { hide(true); go(id); });
+            fly.appendChild(o);
+        });
+    }
+
+    function place() {
+        const tr = tab.getBoundingClientRect();
+        const rr = (rail || tab).getBoundingClientRect();
+        const railW = window.innerWidth > 768 ? 264 : 240;
+        fly.style.left = (rr.left + railW + 10) + 'px';
+        fly.style.display = 'block';
+        const h = fly.offsetHeight;
+        let top = tr.top - 6;
+        if (top + h > window.innerHeight - 8) top = Math.max(8, window.innerHeight - h - 8);
+        fly.style.top = top + 'px';
+    }
+
+    function show() {
+        clearTimeout(hideT); clearTimeout(fadeT);
+        if (fly.classList.contains('on')) return;
+        build(); place();
+        if (rail) rail.classList.add('dhm-open');
+        requestAnimationFrame(() => fly.classList.add('on'));
+    }
+    function hide(now) {
+        clearTimeout(showT);
+        const doHide = () => {
+            fly.classList.remove('on');
+            if (rail) rail.classList.remove('dhm-open');
+            clearTimeout(fadeT);
+            fadeT = setTimeout(() => { if (!fly.classList.contains('on')) fly.style.display = 'none'; }, 200);
+        };
+        clearTimeout(hideT);
+        if (now) doHide(); else hideT = setTimeout(doHide, 280);
+    }
+
+    tab.addEventListener('mouseenter', () => { clearTimeout(hideT); clearTimeout(showT); clearTimeout(fadeT); showT = setTimeout(show, 140); });
+    tab.addEventListener('mouseleave', () => { clearTimeout(showT); hide(false); });
+    fly.addEventListener('mouseenter', () => clearTimeout(hideT));
+    fly.addEventListener('mouseleave', () => hide(false));
+    // จอสัมผัส (ไม่มีเมาส์): แตะปุ่มแดชบอร์ดแล้วให้กล่องเด้ง แตะที่อื่นให้ปิด
+    tab.addEventListener('click', () => { if (window.matchMedia && window.matchMedia('(hover: none)').matches) show(); });
+    document.addEventListener('pointerdown', (e) => {
+        if (!fly.classList.contains('on')) return;
+        if (fly.contains(e.target) || tab.contains(e.target)) return;
+        hide(true);
+    }, true);
+    window.addEventListener('resize', () => hide(true));
+})();
+// ===== LG-RECV-PANEL: ตกแต่งกล่อง "วันนี้ที่ LG รับแล้ว" ในหน้ารับแท็ก LG (วงแหวน % + ไอคอน + กราฟรับต่อชั่วโมง + รายการล่าสุดแบบการ์ด) =====
+// ไม่แก้/ไม่ลบโค้ดเดิม: กล่องเดิมถูกซ่อน แล้วสร้างกล่องใหม่ข้างบนมันแทน (ลบแพตช์นี้ออก = กลับเป็นแบบเดิม)
+(function () {
+    if (window.__lgRecvPanel) return; window.__lgRecvPanel = true;
+
+    const PANE = 'pills-lg-receive';
+    const STUCK_MS = 3 * 3600 * 1000;
+    const pad = (n) => String(n).padStart(2, '0');
+    const up = (s) => String(s == null ? '' : s).trim().toUpperCase();
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const isTrue = (v) => v === true || String(v).toUpperCase() === 'TRUE';
+    const dayKey = (t) => { const d = new Date(t); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+    const hm = (t) => { const d = new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+    const dmy = (t) => { const d = new Date(t); return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`; };
+    function ms(v) {
+        if (!v) return null;
+        if (v instanceof Date) return isNaN(v) ? null : v.getTime();
+        const s = String(v).trim();
+        const t = new Date(s).getTime();
+        if (!isNaN(t) && /^\d{4}-\d{2}-\d{2}/.test(s)) return t;
+        const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ ,T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+        if (m) { let y = +m[3]; if (y > 2400) y -= 543; return new Date(y, +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0)).getTime(); }
+        return isNaN(t) ? null : t;
+    }
+
+    const docCache = new Map();
+    function docOf(raw) {
+        raw = String(raw || '');
+        if (!raw) return '';
+        if (docCache.has(raw)) return docCache.get(raw);
+        let d = '';
+        try { if (typeof parseLGBarcode === 'function') { const p = parseLGBarcode(raw); d = p && p.docNumber ? up(p.docNumber) : ''; } } catch (e) {}
+        if (docCache.size > 20000) docCache.clear();
+        docCache.set(raw, d);
+        return d;
+    }
+
+    // ---------- คำนวณ ----------
+    function compute() {
+        const now = Date.now(), today = dayKey(now);
+        const recDocs = new Map();
+        (db.lgReceiveLog || []).forEach(r => {
+            const d = up(r.docNumber); if (!d) return;
+            const t = ms(r.receivedAt);
+            let g = recDocs.get(d);
+            if (!g) { g = { doc: d, t, by: r.receivedBy, flag: false, part: up(r.partNo), wos: [], qty: 0 }; recDocs.set(d, g); }
+            if (t && (!g.t || t < g.t)) { g.t = t; g.by = r.receivedBy; }
+            if (r.flag) g.flag = true;
+            const w = up(r.WO); if (w && g.wos.indexOf(w) < 0) g.wos.push(w);
+            g.qty += Number(r.qty) || 0;
+        });
+        const outDocs = new Map();
+        (db.lgScanLog || []).forEach((s, i) => {
+            const d = docOf(s.rawBarcode) || ('#' + (s.id || i));
+            const t = ms(s.scannedAt);
+            let g = outDocs.get(d);
+            if (!g) { g = { doc: d, t }; outDocs.set(d, g); }
+            if (t && (!g.t || t < g.t)) g.t = t;
+        });
+        let first = null;
+        recDocs.forEach(g => { if (g.t && (!first || g.t < first)) first = g.t; });
+        let trackFrom = null;
+        if (first) { const d = new Date(first); trackFrom = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
+
+        let outToday = 0, outTodayRecv = 0, transit = 0, stuck = 0;
+        outDocs.forEach(g => {
+            const rec = recDocs.has(g.doc);
+            if (g.t && dayKey(g.t) === today) { outToday++; if (rec) outTodayRecv++; }
+            if (!rec && trackFrom !== null && (!g.t || g.t >= trackFrom)) { transit++; if (g.t && now - g.t > STUCK_MS) stuck++; }
+        });
+
+        const list = Array.from(recDocs.values()).sort((a, b) => (b.t || 0) - (a.t || 0));
+        const td = list.filter(g => g.t && dayKey(g.t) === today);
+        const wos = new Set(); td.forEach(g => g.wos.forEach(w => wos.add(w)));
+        const hours = new Array(24).fill(0);
+        td.forEach(g => { hours[new Date(g.t).getHours()]++; });
+        return {
+            now, today, list, td,
+            tags: td.length, pcs: td.reduce((a, g) => a + g.qty, 0), wos: wos.size,
+            noOut: td.filter(g => g.flag).length,
+            outToday, outTodayRecv, transit, stuck, hours
+        };
+    }
+
+    // ---------- วาด ----------
+    function ring(pct, done) {
+        const R = 38, C = 2 * Math.PI * R, off = C * (1 - Math.min(100, Math.max(0, pct)) / 100);
+        return `<svg viewBox="0 0 96 96" class="lgr2-ring"><defs><linearGradient id="lgr2g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4ade80"/><stop offset="1" stop-color="#16a34a"/></linearGradient></defs>
+            <circle cx="48" cy="48" r="${R}" fill="none" stroke="#e6ecf4" stroke-width="10"/>
+            <circle cx="48" cy="48" r="${R}" fill="none" stroke="url(#lgr2g)" stroke-width="10" stroke-linecap="round" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 48 48)" style="transition:stroke-dashoffset .8s"/>
+            ${done ? '<text x="48" y="58" text-anchor="middle" font-size="30" fill="#16a34a">✓</text>' : `<text x="48" y="55" text-anchor="middle" font-size="22" font-weight="800" fill="#0b1b33">${Math.round(pct)}<tspan font-size="12" dy="-6">%</tspan></text>`}
+        </svg>`;
+    }
+
+    function hoursHtml(c) {
+        if (!c.tags) return '';
+        const cur = new Date(c.now).getHours();
+        let lo = Math.min(7, ...c.td.map(g => new Date(g.t).getHours())), hi = Math.max(17, cur, ...c.td.map(g => new Date(g.t).getHours()));
+        lo = Math.max(0, lo); hi = Math.min(23, hi);
+        let max = 1, peak = lo; for (let h = lo; h <= hi; h++) if (c.hours[h] > max) { max = c.hours[h]; } for (let h = lo; h <= hi; h++) if (c.hours[h] === max && c.hours[h] > 0) { peak = h; break; }
+        let bars = '';
+        for (let h = lo; h <= hi; h++) {
+            const n = c.hours[h], ht = n ? Math.max(14, Math.round(n / max * 100)) : 6;
+            bars += `<div class="b ${h === cur ? 'cur' : ''} ${n ? '' : 'z'}" title="${pad(h)}:00 — ${n} แท็ก"><i style="height:${ht}%"></i><u>${(h % 2 === 0) ? h : ''}</u></div>`;
+        }
+        return `<div class="lgr2-sec"><div class="lgr2-st"><i class="bi bi-bar-chart-line-fill"></i> รับต่อชั่วโมง<span>สูงสุด ${max} แท็ก ช่วง ${pad(peak)}:00</span></div><div class="lgr2-bars">${bars}</div></div>`;
+    }
+
+    function listHtml(c, flashDoc) {
+        if (!c.list.length) return `<div class="lgr2-empty"><i class="bi bi-inbox"></i>ยังไม่มีรายการรับ<br><small>สแกนแท็กใบแรกได้เลย</small></div>`;
+        return c.list.slice(0, 8).map(g => {
+            const isToday = g.t && dayKey(g.t) === c.today;
+            const wos = g.wos.join(', ');
+            return `<div class="lgr2-row ${g.doc === flashDoc ? 'new' : ''}">
+                <div class="tm"><b>${g.t ? esc(hm(g.t)) : '-'}</b>${isToday ? '' : `<small>${esc(dmy(g.t))}</small>`}</div>
+                <div class="mid"><div class="wo">${esc(wos)}</div><div class="pn">${esc(g.part)}${g.by ? ` · <i class="bi bi-person-fill"></i> ${esc(g.by)}` : ''}</div></div>
+                <div class="rt"><span class="q">${(g.qty || 0).toLocaleString('en-US')}<small> ชิ้น</small></span>${g.flag ? '<span class="fl"><i class="bi bi-exclamation-triangle-fill"></i> ไม่มีสแกนออก</span>' : ''}</div>
+            </div>`;
+        }).join('');
+    }
+
+    let lastTop = null, lastSig = '';
+    function render() {
+        const box = document.getElementById('lgr2');
+        if (!box) return;
+        const c = compute();
+        const topDoc = c.list.length ? c.list[0].doc : null;
+        const flash = (lastTop !== null && topDoc && topDoc !== lastTop) ? topDoc : null;
+        const sig = [c.tags, c.pcs, c.wos, c.noOut, c.outToday, c.outTodayRecv, c.transit, c.stuck, c.list.length, topDoc, new Date(c.now).getHours()].join('|');
+        if (sig === lastSig) return;
+        lastSig = sig; lastTop = topDoc;
+
+        const pct = c.outToday ? c.outTodayRecv / c.outToday * 100 : 0;
+        const done = c.outToday > 0 && c.outTodayRecv >= c.outToday;
+        const chips = [];
+        if (c.transit) chips.push(`<span class="ch ch-b"><i class="bi bi-truck"></i> ระหว่างทาง ${c.transit} แท็ก</span>`);
+        if (c.stuck) chips.push(`<span class="ch ch-r"><i class="bi bi-alarm-fill"></i> ค้างเกิน 3 ชม. ${c.stuck}</span>`);
+        if (c.noOut) chips.push(`<span class="ch ch-a"><i class="bi bi-exclamation-triangle-fill"></i> ไม่มีสแกนออก ${c.noOut}</span>`);
+        if (!chips.length && c.outToday) chips.push(`<span class="ch ch-g"><i class="bi bi-check-circle-fill"></i> ไม่มีแท็กค้างทาง</span>`);
+
+        const hero = c.outToday
+            ? `<div class="big">${c.outTodayRecv}<small> / ${c.outToday} แท็ก</small></div><div class="sub">LG รับแล้ว จากที่ ATECH สแกนออกวันนี้</div>`
+            : `<div class="big">${c.tags}<small> แท็ก</small></div><div class="sub">ยังไม่มีแท็กที่ ATECH สแกนออกวันนี้ให้เทียบ %</div>`;
+
+        box.innerHTML = `
+        <div class="lgr2-head"><div class="ttl"><span class="ic"><i class="bi bi-box-arrow-in-down"></i></span>วันนี้ที่ LG รับแล้ว</div><span class="live"><i></i>อัปเดตสด</span></div>
+        <div class="lgr2-hero">${ring(pct, done)}<div class="tx">${hero}<div class="chs">${chips.join('')}</div></div></div>
+        <div class="lgr2-kp">
+            <div class="k k1"><span class="i"><i class="bi bi-tags-fill"></i></span><b>${c.tags}</b><span class="l">แท็ก</span></div>
+            <div class="k k2"><span class="i"><i class="bi bi-box-seam-fill"></i></span><b>${c.pcs.toLocaleString('en-US')}</b><span class="l">ชิ้น</span></div>
+            <div class="k k3"><span class="i"><i class="bi bi-clipboard2-check-fill"></i></span><b>${c.wos}</b><span class="l">WO</span></div>
+        </div>
+        ${hoursHtml(c)}
+        <div class="lgr2-sec"><div class="lgr2-st"><i class="bi bi-clock-history"></i> รับล่าสุด<span>${c.list.length > 8 ? 'แสดง 8 รายการล่าสุด' : ''}</span></div><div class="lgr2-list">${listHtml(c, flash)}</div></div>`;
+    }
+
+    // ---------- ติดตั้ง ----------
+    const CSS = `
+    #lgr2{font-size:.85rem}
+    #lgr2 .lgr2-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+    #lgr2 .ttl{display:flex;align-items:center;gap:10px;font-weight:800;font-size:1rem;color:#0b1b33}
+    #lgr2 .ttl .ic{width:34px;height:34px;border-radius:11px;background:linear-gradient(135deg,#4ade80,#16a34a);color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.05rem;box-shadow:0 4px 10px rgba(22,163,74,.3)}
+    #lgr2 .live{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:.7rem;color:#6b7a90;background:#f1f5fa;border-radius:20px;padding:3px 10px}
+    #lgr2 .live i{width:7px;height:7px;border-radius:50%;background:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.2);animation:lgr2p 1.8s infinite}
+    @keyframes lgr2p{50%{box-shadow:0 0 0 6px rgba(22,163,74,0)}}
+    #lgr2 .lgr2-hero{display:flex;align-items:center;gap:16px;background:linear-gradient(135deg,#f3fbf6,#eef5ff);border-radius:16px;padding:14px 16px;margin-bottom:12px}
+    #lgr2 .lgr2-ring{width:92px;height:92px;flex:none}
+    #lgr2 .lgr2-hero .big{font-size:1.9rem;font-weight:800;line-height:1;color:#0b1b33}
+    #lgr2 .lgr2-hero .big small{font-size:.8rem;font-weight:700;color:#6b7a90}
+    #lgr2 .lgr2-hero .sub{font-size:.75rem;color:#6b7a90;margin-top:4px}
+    #lgr2 .chs{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+    #lgr2 .ch{border-radius:20px;padding:3px 10px;font-size:.7rem;font-weight:700;white-space:nowrap}
+    #lgr2 .ch-b{background:#e0ecff;color:#1d4ed8}#lgr2 .ch-r{background:#fee2e2;color:#b91c1c}
+    #lgr2 .ch-a{background:#fef3c7;color:#92580a}#lgr2 .ch-g{background:#dcfce7;color:#15803d}
+    #lgr2 .lgr2-kp{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+    #lgr2 .k{border-radius:14px;padding:10px 6px 9px;text-align:center;position:relative}
+    #lgr2 .k .i{width:30px;height:30px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:.95rem;margin-bottom:5px}
+    #lgr2 .k b{display:block;font-size:1.45rem;line-height:1.1;font-weight:800;color:#0b1b33}
+    #lgr2 .k .l{font-size:.72rem;color:#6b7a90;font-weight:600}
+    #lgr2 .k1{background:#eaf2ff}#lgr2 .k1 .i{background:linear-gradient(135deg,#6ea8fe,#0d6efd)}
+    #lgr2 .k2{background:#e9f9ef}#lgr2 .k2 .i{background:linear-gradient(135deg,#4ade80,#16a34a)}
+    #lgr2 .k3{background:#fff4dc}#lgr2 .k3 .i{background:linear-gradient(135deg,#fcd34d,#f59e0b)}
+    #lgr2 .lgr2-sec{margin-top:14px}
+    #lgr2 .lgr2-st{display:flex;align-items:center;gap:6px;font-weight:800;font-size:.8rem;color:#4a5a70;margin-bottom:8px}
+    #lgr2 .lgr2-st i{color:#0d6efd}#lgr2 .lgr2-st span{margin-left:auto;font-weight:500;font-size:.7rem;color:#8a97ab}
+    #lgr2 .lgr2-bars{display:flex;align-items:flex-end;gap:4px;height:64px;padding-bottom:14px;position:relative}
+    #lgr2 .lgr2-bars .b{flex:1;height:100%;position:relative;display:flex;align-items:flex-end}
+    #lgr2 .lgr2-bars .b i{display:block;width:100%;border-radius:5px 5px 2px 2px;background:linear-gradient(180deg,#86efac,#22c55e);min-height:3px}
+    #lgr2 .lgr2-bars .b.z i{background:#e3e9f2}
+    #lgr2 .lgr2-bars .b.cur i{background:linear-gradient(180deg,#60a5fa,#0d6efd)}
+    #lgr2 .lgr2-bars .b u{position:absolute;left:0;right:0;bottom:-14px;text-align:center;font-size:.62rem;color:#8a97ab;text-decoration:none}
+    #lgr2 .lgr2-list{display:flex;flex-direction:column;gap:7px;max-height:300px;overflow-y:auto}
+    #lgr2 .lgr2-row{display:flex;align-items:center;gap:10px;background:#f7f9fc;border-radius:12px;padding:8px 10px;border-left:4px solid #22c55e}
+    #lgr2 .lgr2-row.new{animation:lgr2n 1.2s ease-out}
+    @keyframes lgr2n{0%{background:#bbf7d0;transform:scale(1.02)}100%{background:#f7f9fc;transform:none}}
+    #lgr2 .tm{width:46px;text-align:center;flex:none;line-height:1.15}
+    #lgr2 .tm b{display:block;font-size:.9rem;color:#0b1b33}#lgr2 .tm small{font-size:.62rem;color:#8a97ab}
+    #lgr2 .mid{flex:1;min-width:0}
+    #lgr2 .wo{font-weight:800;color:#0b1b33;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #lgr2 .pn{font-size:.7rem;color:#6b7a90;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #lgr2 .rt{text-align:right;flex:none}
+    #lgr2 .rt .q{display:inline-block;background:#dcfce7;color:#15803d;font-weight:800;border-radius:20px;padding:2px 10px;font-size:.85rem}
+    #lgr2 .rt .q small{font-weight:600;font-size:.65rem}
+    #lgr2 .rt .fl{display:block;margin-top:3px;font-size:.62rem;font-weight:700;color:#b91c1c}
+    #lgr2 .lgr2-row:has(.fl){border-left-color:#f59e0b}
+    #lgr2 .lgr2-empty{text-align:center;color:#8a97ab;padding:18px 0}
+    #lgr2 .lgr2-empty i{display:block;font-size:1.8rem;margin-bottom:4px}
+    .lgr2-hide{display:none !important}`;
+
+    function install() {
+        const kp = document.getElementById('lgr-kp');
+        if (!kp || document.getElementById('lgr2')) return !!document.getElementById('lgr2');
+        const pane = document.getElementById(PANE);
+        const label = kp.nextElementSibling, wrap = label && label.nextElementSibling, title = kp.previousElementSibling;
+        [kp, label, wrap, title].forEach(el => { if (el) el.classList.add('lgr2-hide'); });
+        const st = document.createElement('style'); st.id = 'lgr2-style'; st.textContent = CSS;
+        document.head.appendChild(st);
+        const box = document.createElement('div'); box.id = 'lgr2';
+        kp.parentElement.insertBefore(box, kp);
+        render();
+        // กล่องเดิมถูกวาดใหม่ทุกครั้งที่สแกน/รีเฟรช → ใช้เป็นสัญญาณให้วาดกล่องใหม่ตาม
+        const rc = document.getElementById('lgr-recent');
+        if (rc) { const mo = new MutationObserver(() => { render(); mo.takeRecords(); }); mo.observe(rc, { childList: true, subtree: true }); }
+        document.body.addEventListener('shown.bs.tab', (e) => { if (e.target && e.target.dataset && e.target.dataset.bsTarget === '#' + PANE) { lastSig = ''; render(); } });
+        setInterval(() => { if (pane && pane.classList.contains('active')) render(); }, 10000);
+        return true;
+    }
+    if (!install()) { const iv = setInterval(() => { if (install()) clearInterval(iv); }, 600); setTimeout(() => clearInterval(iv), 120000); }
+})();
+// ===== จบ LG-RECV-PANEL =====
+// ===== จบ DASH-HOVER-MENU =====
 // อัปโหลดไฟล์แพลนที่กรอกแล้ว
 window.handleLGPlanFileUpload = function(event) {
     const file = event.target.files[0];
