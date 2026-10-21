@@ -20064,6 +20064,179 @@ renderLGTagPrintWindow = function(tags, printWin) {
     new MutationObserver(() => { const b = document.getElementById('lgtc-body'); if (b) attach(b); }).observe(document.body, { childList: true, subtree: true });
 })();
 // ===== จบ LG-TAGCHECK-SEARCH =====
+// ===== LG-MANUAL-SCAN (หน้าเว็บ): ปุ่ม "บันทึกสแกนออก" ในหน้าเช็คแท็กค้างสแกน สำหรับแท็กที่ส่งไปแล้วแต่ลืมสแกน (วางต่อท้ายบล็อก LG ทั้งหมด และต้องวางแพตช์ Apps Script ตัวคู่กันก่อน) =====
+(function () {
+    if (window.__lgManualScan) return;
+    window.__lgManualScan = true;
+
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const pad = (n) => String(n).padStart(2, '0');
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    const REASONS = ['ส่งแล้วแต่ลืมสแกน', 'เครื่องสแกน/ระบบมีปัญหา', 'แท็กชำรุด สแกนไม่ติด', 'อื่นๆ (ระบุในช่องหมายเหตุ)'];
+    const LOCKMSG = /หมดเวลาการล็อก|ล็อกไว้นาน|lock timeout|obtain lock|holding the lock|too many|simultaneous|failed to fetch|networkerror|load failed/i;
+    const localInput = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+    // "WO:qty | WO:qty" -> [{WO, qty}]
+    function parseWoList(s) {
+        return String(s || '').split('|').map(x => x.trim()).filter(Boolean).map(x => {
+            const i = x.lastIndexOf(':');
+            return { WO: (i >= 0 ? x.slice(0, i) : x).trim().toUpperCase(), qty: parseFloat(i >= 0 ? x.slice(i + 1) : 0) || 0 };
+        }).filter(g => g.WO);
+    }
+
+    function addButtons(body) {
+        body.querySelectorAll('.lgtc-void[data-s="void"]').forEach(v => {
+            const td = v.parentNode;
+            if (td.querySelector('.lgtc-manual')) return;
+            const b = document.createElement('button');
+            b.type = 'button'; b.className = 'btn btn-sm btn-success lgtc-manual mb-1 d-block w-100';
+            b.setAttribute('data-d', v.getAttribute('data-d'));
+            b.innerHTML = '<i class="bi bi-upc-scan"></i> บันทึกสแกนออก';
+            td.insertBefore(b, v);
+        });
+    }
+
+    function closePanel() { const p = document.getElementById('lgtc-mpanel'); if (p) p.remove(); }
+
+    function openPanel(doc) {
+        closePanel();
+        const t = (db.lgTagLog || []).find(r => String(r.docNumber).trim() === String(doc).trim());
+        if (!t) { alert('ไม่พบแท็กเลขที่ ' + doc); return; }
+        const groups = parseWoList(t.woList);
+        if (!groups.length) { alert('แท็กใบนี้ไม่มีรายการ WO ให้บันทึก'); return; }
+        const total = groups.reduce((a, g) => a + g.qty, 0);
+        const sum = document.getElementById('lgtc-sum');
+        const panel = document.createElement('div');
+        panel.id = 'lgtc-mpanel';
+        panel.className = 'text-start border border-success border-2 rounded p-3 mb-2';
+        panel.style.background = '#f3fbf6';
+        panel.innerHTML = `
+            <div class="fw-bold mb-1"><i class="bi bi-upc-scan me-1"></i>บันทึกสแกนออกย้อนหลัง</div>
+            <div class="small mb-2">แท็ก <b style="font-family:monospace">${esc(t.docNumber)}</b> · Part <b>${esc(t.partNo)}</b> · ${esc(t.woList)} · รวม <b>${total}</b> ชิ้น</div>
+            <div class="row g-2">
+                <div class="col-md-4"><label class="form-label small mb-0">เหตุผล</label>
+                    <select id="lgm-reason" class="form-select form-select-sm">${REASONS.map(r => `<option>${esc(r)}</option>`).join('')}</select></div>
+                <div class="col-md-4"><label class="form-label small mb-0">หมายเหตุ (ถ้ามี)</label>
+                    <input id="lgm-note" class="form-control form-control-sm" maxlength="120" autocomplete="off"></div>
+                <div class="col-md-4"><label class="form-label small mb-0">เวลาที่ส่งจริง</label>
+                    <input id="lgm-at" type="datetime-local" class="form-control form-control-sm" value="${localInput(new Date())}" max="${localInput(new Date())}"></div>
+            </div>
+            <div class="small text-danger mt-2">ใช้เฉพาะแท็กที่ <b>ส่งไปแล้วจริง</b> เท่านั้น ถ้าแท็กใบนี้ไม่ได้ส่ง ให้ปิดหน้านี้แล้วกด "ยกเลิกใบนี้" แทน</div>
+            <div id="lgm-msg" class="small mt-2"></div>
+            <div class="mt-2 d-flex gap-2">
+                <button type="button" id="lgm-ok" class="btn btn-success btn-sm fw-bold">ยืนยัน บันทึกสแกนออก</button>
+                <button type="button" id="lgm-cancel" class="btn btn-outline-secondary btn-sm">ยกเลิก</button>
+            </div>`;
+        sum.insertAdjacentElement('afterend', panel);
+        panel.scrollIntoView({ block: 'nearest' });
+        panel.querySelector('#lgm-cancel').onclick = closePanel;
+        panel.querySelector('#lgm-ok').onclick = () => submit(t, groups, panel);
+    }
+
+    async function submit(t, groups, panel) {
+        const msg = panel.querySelector('#lgm-msg'), ok = panel.querySelector('#lgm-ok'), cancel = panel.querySelector('#lgm-cancel');
+        const reason0 = panel.querySelector('#lgm-reason').value, note = panel.querySelector('#lgm-note').value.trim();
+        const atVal = panel.querySelector('#lgm-at').value;
+        if (/^อื่นๆ/.test(reason0) && !note) { msg.innerHTML = '<span class="text-danger">เลือก "อื่นๆ" กรุณาระบุหมายเหตุ</span>'; return; }
+        const at = atVal ? new Date(atVal) : new Date();
+        if (isNaN(at.getTime())) { msg.innerHTML = '<span class="text-danger">เวลาไม่ถูกต้อง</span>'; return; }
+        if (at.getTime() > Date.now() + 5 * 60000) { msg.innerHTML = '<span class="text-danger">เวลาที่ส่งจริงต้องไม่เป็นอนาคต</span>'; return; }
+        const reason = reason0 + (note ? ' — ' + note : '');
+        const me = (typeof currentUser !== 'undefined' && currentUser && currentUser.username) ? currentUser.username : '';
+
+        const raw = buildLGTagBarcode({ docNumber: String(t.docNumber).trim(), line: t.line || '', partNo: t.partNo, tagQty: t.tagQty, company: 'ATECH', groups: groups.map(g => ({ qty: g.qty, modelSuffix: '', WO: g.WO })) });
+        ok.disabled = true; cancel.disabled = true;
+        let done = 0;
+        if (!db.lgScanLog) db.lgScanLog = [];
+        for (const g of groups) {
+            msg.innerHTML = `<span class="text-muted">กำลังบันทึก ${done + 1}/${groups.length} ...</span>`;
+            const body = { WO: g.WO, partNo: String(t.partNo).trim().toUpperCase(), rackQty: g.qty, rawBarcode: raw, scannedBy: me + ' (ย้อนหลัง)', manual: true, reason, scannedAtIso: at.toISOString() };
+            let res = null, err = null;
+            for (let a = 0; a < 3 && !res; a++) {
+                try { res = await callAppsScript('submitLGScan', body); err = null; }
+                catch (e) { err = e; if (a < 2 && LOCKMSG.test(String((e && e.message) || e))) await sleep(1200 * (a + 1)); else break; }
+            }
+            if (!res) {
+                msg.innerHTML = `<span class="text-danger">บันทึกไม่สำเร็จ (${esc((err && err.message) || 'ไม่ทราบสาเหตุ')}) — ${done ? 'บันทึกไปแล้ว ' + done + ' จาก ' + groups.length + ' รายการ ' : ''}กดยืนยันอีกครั้งเพื่อทำต่อ (ระบบกันบันทึกซ้ำให้)</span>`;
+                ok.disabled = false; cancel.disabled = false;
+                refresh();
+                return;
+            }
+            done++;
+            if (!res.duplicate) db.lgScanLog.push({ id: res.id, WO: g.WO, partNo: body.partNo, rackQty: g.qty, rawBarcode: raw, scannedBy: body.scannedBy, scannedAt: body.scannedAtIso, manual: 'TRUE', reason });
+        }
+        refresh();
+        closePanel();
+        // แจ้งในหน้าเดิม (ห้ามใช้ Swal.fire เพราะจะปิดหน้าเช็คแท็กทิ้ง)
+        const sum = document.getElementById('lgtc-sum');
+        if (sum) {
+            const ok = document.createElement('div');
+            ok.className = 'alert alert-success py-1 px-2 small text-start mb-1';
+            ok.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>บันทึกสแกนออกย้อนหลังแล้ว: <b>' + esc(t.docNumber) + '</b>';
+            sum.insertAdjacentElement('afterend', ok);
+            setTimeout(() => ok.remove(), 4000);
+        }
+    }
+    function refresh() {
+        const d = document.getElementById('lgtc-date');
+        if (d) d.dispatchEvent(new Event('change'));
+    }
+
+    function attach(body) {
+        if (body.__lgManual) return;
+        body.__lgManual = true;
+        const mo = new MutationObserver(() => { addButtons(body); try { mo.takeRecords(); } catch (e) {} });
+        mo.observe(body, { childList: true });
+        body.addEventListener('click', (ev) => {
+            const b = ev.target.closest && ev.target.closest('.lgtc-manual');
+            if (b) openPanel(b.getAttribute('data-d'));
+        });
+        addButtons(body);
+    }
+    new MutationObserver(() => { const b = document.getElementById('lgtc-body'); if (b) attach(b); }).observe(document.body, { childList: true, subtree: true });
+})();
+// ===== จบ LG-MANUAL-SCAN (หน้าเว็บ) =====
+// ===== LG-MANUAL-REASON: หน้า "เช็คแท็กค้างสแกน" แสดงเหตุผลของแท็กที่ถูกบันทึกสแกนย้อนหลัง ใต้คำว่า "ใช้แล้ว" (วางต่อท้ายบล็อก LG ทั้งหมด) =====
+(function () {
+    if (window.__lgManualReason) return;
+    window.__lgManualReason = true;
+
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const isTrue = (v) => v === true || String(v).toUpperCase() === 'TRUE';
+    const docOf = (raw) => { try { const p = parseLGBarcode(raw); return p && p.docNumber ? String(p.docNumber).trim().toUpperCase() : ''; } catch (e) { return ''; } };
+
+    function apply(body) {
+        const map = {};
+        (db.lgScanLog || []).forEach(s => {
+            if (!isTrue(s.manual)) return;
+            const d = docOf(s.rawBarcode); if (!d) return;
+            if (!map[d]) map[d] = String(s.reason || '').trim() || '(ไม่ได้ระบุเหตุผล)';
+        });
+        body.querySelectorAll('tr').forEach(tr => {
+            const docEl = tr.querySelector('.lgtc-doc');
+            if (!docEl) return;
+            const reason = map[docEl.textContent.trim().toUpperCase()];
+            const cell = Array.from(tr.querySelectorAll('td')).find(td => td.querySelector('.badge'));
+            if (!cell || cell.querySelector('.lgtc-reason')) return;
+            if (reason === undefined) return;
+            const div = document.createElement('div');
+            div.className = 'lgtc-reason small';
+            div.style.cssText = 'color:#b45309;max-width:230px;margin:2px auto 0;line-height:1.25;';
+            div.innerHTML = '📝 <b>บันทึกย้อนหลัง</b> — ' + esc(reason);
+            cell.appendChild(div);
+        });
+    }
+
+    function attach(body) {
+        if (body.__lgReason) return;
+        body.__lgReason = true;
+        const mo = new MutationObserver(() => { apply(body); try { mo.takeRecords(); } catch (e) {} });
+        mo.observe(body, { childList: true });
+        apply(body);
+    }
+    new MutationObserver(() => { const b = document.getElementById('lgtc-body'); if (b) attach(b); }).observe(document.body, { childList: true, subtree: true });
+})();
+// ===== จบ LG-MANUAL-REASON =====
 // ===== จบ LG-TAGCHECK-FIX =====
 // อัปโหลดไฟล์แพลนที่กรอกแล้ว
 window.handleLGPlanFileUpload = function(event) {
