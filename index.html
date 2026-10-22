@@ -20740,6 +20740,846 @@ renderLGTagPrintWindow = function(tags, printWin) {
     // ถ้าหน้าเว็บเพิ่งสั่งป้ายรถบรรทุกเดิมไปก่อนแพตช์นี้จะทำงาน (ตอนเปิดหน้าครั้งแรก) ให้เปลี่ยนมาเป็นการ์ดใหม่ทันที
     if (document.querySelector('.swal2-container .truck-no-bg-wrapper')) showLoading();
 })();
+// ===== LG-RECEIVE-BACKDATE-WEB-V2: รับแท็กย้อนหลัง (v2: แท็กเก่าไม่หาย, เลือกหลายใบรับทีเดียวเร็วขึ้น, ใช้เวลาตอน ATECH สแกนออกได้) =====
+// วางไว้ "เหนือ" บรรทัดหัวของตัว v1 (// ===== LG-RECEIVE-BACKDATE-WEB:) แล้ว v1 จะหยุดทำงานเอง — ต้องวางแพตช์ Google Script v2 แล้ว Deploy เวอร์ชันใหม่ด้วย
+(function () {
+    if (window.__lgRecvBack2) return; window.__lgRecvBack2 = true; window.__lgRecvBack = true;
+
+    const PANE = 'pills-lg-receive';
+    const STUCK_MS = 3 * 3600 * 1000;
+    const REASONS = ['พนักงานลืมสแกน แต่ของถึงแล้ว', 'แท็กเก่าก่อนเริ่มใช้ระบบรับ (เคลียร์ยอดค้าง)', 'สแกนไม่ติด / QR เสีย', 'ระบบขัดข้อง', 'อื่นๆ (ระบุ)'];
+    const CHUNK = 25;      // ส่งไป Google Script ครั้งละกี่ใบ
+    const BIG = 20;        // เลือกเกินกี่ใบถึงต้องติ๊กยืนยันอีกชั้น
+    const pad = (n) => String(n).padStart(2, '0');
+    const up = (s) => String(s == null ? '' : s).trim().toUpperCase();
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const isTrue = (v) => v === true || String(v).toUpperCase() === 'TRUE';
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    const dayKey = (t) => { const d = new Date(t); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+    const hm = (t) => { const d = new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+    const dmhm = (t) => { const d = new Date(t); return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+    const localInput = (t) => { const d = new Date(t); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+    function ms(v) {
+        if (!v) return null;
+        if (v instanceof Date) return isNaN(v) ? null : v.getTime();
+        const s = String(v).trim();
+        const t = new Date(s).getTime();
+        if (!isNaN(t) && /^\d{4}-\d{2}-\d{2}/.test(s)) return t;
+        const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ ,T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+        if (m) { let y = +m[3]; if (y > 2400) y -= 543; return new Date(y, +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0)).getTime(); }
+        return isNaN(t) ? null : t;
+    }
+    const dur = (a, b) => { const m = Math.max(0, Math.round((b - a) / 60000)); return m >= 60 ? `${Math.floor(m / 60)} ชม. ${m % 60}` : `${m} นาที`; };
+
+    // ---------- สิทธิ์ ----------
+    const me = () => (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null;
+    function canBack() {
+        const u = me();
+        if (!u) return false;
+        if (u.username === 'admin') return true;
+        return isTrue(u.canBackdateLGReceive) && isTrue(u.canReceiveLG);
+    }
+
+    // ---------- สวิตช์สิทธิ์ในหน้าจัดการผู้ใช้ ----------
+    function injectSwitch() {
+        if (document.getElementById('permission-canBackdateLGReceive')) return;
+        const ref = document.getElementById('permission-canReceiveLG') || document.getElementById('permission-canCheckLGTags');
+        if (!ref) return;
+        const uname = (document.getElementById('user-username') || {}).value;
+        const u = (db.users || []).find(x => String(x.username) === String(uname)) || {};
+        const row = document.createElement('div');
+        row.className = 'form-check form-switch';
+        row.innerHTML = `<input class="form-check-input" type="checkbox" role="switch" id="permission-canBackdateLGReceive" ${isTrue(u.canBackdateLGReceive) ? 'checked' : ''}><label class="form-check-label" for="permission-canBackdateLGReceive">รับแท็กย้อนหลัง (เช็กแท็กค้างรับ + กดรับย้อนหลังได้ — ต้องเปิด "รับแท็ก LG" ด้วย)</label>`;
+        ref.closest('.form-check').insertAdjacentElement('afterend', row);
+    }
+    function watchUserForm() {
+        const f = document.getElementById('user-form');
+        if (!f) { setTimeout(watchUserForm, 800); return; }
+        new MutationObserver(() => { try { injectSwitch(); } catch (e) {} }).observe(f, { childList: true });
+        injectSwitch();
+    }
+    watchUserForm();
+    if (typeof callAppsScript === 'function') {
+        const _call = callAppsScript;
+        callAppsScript = async function (action, payload) {
+            if ((action === 'addUser' || action === 'updateUser') && payload) {
+                const sw = document.getElementById('permission-canBackdateLGReceive');
+                if (sw) payload.canBackdateLGReceive = sw.checked;
+            }
+            return _call.apply(this, arguments);
+        };
+    }
+
+    // ---------- ข้อมูลแท็กค้างรับ ----------
+    const docCache = new Map();
+    function docOf(raw) {
+        raw = String(raw || '');
+        if (!raw) return '';
+        if (docCache.has(raw)) return docCache.get(raw);
+        let d = '';
+        try { if (typeof parseLGBarcode === 'function') { const p = parseLGBarcode(raw); d = p && p.docNumber ? up(p.docNumber) : ''; } } catch (e) {}
+        if (docCache.size > 20000) docCache.clear();
+        docCache.set(raw, d);
+        return d;
+    }
+    function compute() {
+        const now = Date.now();
+        const rec = new Set(); let first = null;
+        (db.lgReceiveLog || []).forEach(r => {
+            const d = up(r.docNumber); if (d) rec.add(d);
+            if (isTrue(r.manual)) return;   // รับย้อนหลังไม่นับเป็น "วันที่ LG เริ่มสแกนรับจริง"
+            const t = ms(r.receivedAt); if (t && (!first || t < first)) first = t;
+        });
+        let trackFrom = null;
+        if (first) { const d = new Date(first); trackFrom = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
+        const map = new Map();
+        (db.lgScanLog || []).forEach(s => {
+            const d = docOf(s.rawBarcode); if (!d || rec.has(d)) return;
+            const t = ms(s.scannedAt);
+            let g = map.get(d);
+            if (!g) { g = { doc: d, t, by: s.scannedBy, part: up(s.partNo), wos: [], qty: 0 }; map.set(d, g); }
+            if (t && (!g.t || t < g.t)) { g.t = t; g.by = s.scannedBy; }
+            const w = up(s.WO); if (w && g.wos.indexOf(w) < 0) g.wos.push(w);
+            g.qty += Number(s.rackQty) || 0;
+        });
+        const all = Array.from(map.values()).sort((a, b) => (a.t || 0) - (b.t || 0));
+        const scope = [], old = [];
+        all.forEach(g => { (trackFrom !== null && (!g.t || g.t >= trackFrom) ? scope : old).push(g); });
+        const today = dayKey(now);
+        return {
+            now, all, scope, old,
+            stuck: scope.filter(g => g.t && now - g.t > STUCK_MS),
+            today: all.filter(g => g.t && dayKey(g.t) === today)
+        };
+    }
+
+    // ---------- ปุ่มบนหน้ารับแท็ก ----------
+    function ensureButton() {
+        const camBtn = document.getElementById('lgr-cam-btn');
+        if (!camBtn) return;
+        let b = document.getElementById('lgr-back-btn');
+        if (!b) {
+            b = document.createElement('button');
+            b.type = 'button'; b.id = 'lgr-back-btn';
+            b.className = 'btn btn-sm fw-bold ms-2';
+            b.style.cssText = 'background:#fff4dc;color:#92580a;border-radius:8px;border:1px solid #fcd9a0';
+            b.addEventListener('click', openModal);
+            camBtn.insertAdjacentElement('afterend', b);
+        }
+        const ok = canBack();
+        b.style.display = ok ? '' : 'none';
+        if (ok) {
+            const c = compute();
+            b.innerHTML = `<i class="bi bi-clock-history me-1"></i> เช็กแท็กค้างรับ <span class="badge rounded-pill ${c.stuck.length ? 'bg-danger' : (c.scope.length ? 'bg-warning text-dark' : 'bg-secondary')} ms-1">${c.scope.length}</span>${c.old.length ? ` <span class="badge rounded-pill bg-light text-secondary border ms-1" title="แท็กเก่าก่อนเริ่มใช้ระบบรับ">เก่า ${c.old.length}</span>` : ''}`;
+        }
+    }
+    setInterval(() => { try { ensureButton(); } catch (e) {} }, 3000);
+
+    // ---------- หน้าต่างรายการ ----------
+    const CSS = `
+    #lgb-ov{position:fixed;inset:0;z-index:1075;background:rgba(11,27,51,.5);display:flex;align-items:flex-start;justify-content:center;padding:4vh 12px;overflow:auto}
+    #lgb-ov .md{background:#fff;border-radius:22px;width:min(860px,100%);padding:20px 22px;box-shadow:0 24px 60px rgba(11,27,51,.4);font-size:.88rem}
+    #lgb-ov .h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    #lgb-ov .h h5{margin:0;font-weight:800;color:#0b1b33}
+    #lgb-ov .ic{width:34px;height:34px;border-radius:11px;background:linear-gradient(135deg,#fcd34d,#f59e0b);color:#3b2a00;display:flex;align-items:center;justify-content:center}
+    #lgb-ov .sum{margin-left:auto;background:#e0ecff;color:#1d4ed8;border-radius:20px;padding:3px 12px;font-size:.75rem;font-weight:800}
+    #lgb-ov .x{border:0;background:#f1f5fa;border-radius:50%;width:32px;height:32px;font-weight:800;color:#4a5a70}
+    #lgb-ov .tool{display:flex;gap:8px;margin:14px 0 10px;align-items:center;flex-wrap:wrap}
+    #lgb-ov .tool input{flex:1;min-width:180px;border:1px solid #d5dce8;border-radius:20px;padding:6px 14px;font-size:.82rem}
+    #lgb-ov .fc{border:1px solid #d5dce8;border-radius:20px;padding:5px 13px;font-weight:700;font-size:.75rem;color:#4a5a70;background:#fff;cursor:pointer;white-space:nowrap}
+    #lgb-ov .fc.on{background:#0d6efd;color:#fff;border-color:#0d6efd}
+    #lgb-ov .list{max-height:48vh;overflow:auto;padding-right:2px}
+    #lgb-ov .row2{display:flex;align-items:center;gap:12px;background:#f7f9fc;border-radius:14px;padding:9px 12px;margin-bottom:7px;border-left:4px solid #3b82f6}
+    #lgb-ov .row2.st{border-left-color:#ef4444;background:#fff5f5}
+    #lgb-ov .row2 input[type=checkbox]{width:18px;height:18px;flex:none;cursor:pointer}
+    #lgb-ov .doc{font-weight:800;color:#0b1b33;font-size:.88rem;word-break:break-all}
+    #lgb-ov .sub{font-size:.7rem;color:#6b7a90}
+    #lgb-ov .el{font-size:.72rem;font-weight:800;border-radius:20px;padding:2px 10px;background:#e0ecff;color:#1d4ed8;white-space:nowrap}
+    #lgb-ov .el.r{background:#fee2e2;color:#b91c1c}
+    #lgb-ov .rb{border:0;border-radius:10px;background:linear-gradient(135deg,#34d399,#16a34a);color:#fff;font-weight:800;font-size:.75rem;padding:6px 12px;white-space:nowrap}
+    #lgb-ov .rb:disabled{opacity:.5}
+    #lgb-ov .rb.g{background:#e5e9f0;color:#4a5a70}
+    #lgb-ov .ft{display:flex;align-items:center;gap:10px;margin-top:12px;padding-top:12px;border-top:1px dashed #e3e8f0;flex-wrap:wrap}
+    #lgb-ov .pn{background:#fffbeb;border:1px solid #fcd9a0;border-radius:14px;padding:14px;margin-top:12px}
+    #lgb-ov .pn label{font-size:.72rem;font-weight:800;color:#92580a;display:block;margin-bottom:3px}
+    #lgb-ov .pn .in{width:100%;border:1px solid #e5d3a8;border-radius:10px;padding:6px 10px;font-size:.85rem;background:#fff}
+    #lgb-ov .al{border-radius:12px;padding:9px 12px;margin-top:10px;font-size:.82rem}
+    #lgb-ov .al.ok{background:#dcfce7;color:#166534}#lgb-ov .al.er{background:#fee2e2;color:#991b1b}#lgb-ov .al.wn{background:#fef3c7;color:#92580a}
+    #lgb-ov .empty{text-align:center;color:#8a97ab;padding:26px 0}`;
+
+    const S = { filter: 'all', q: '', sel: new Set(), form: false, busy: false, msg: '', fmsg: '', fv: { ri: '0', other: '', note: '', at: '', useOut: false, big: false } };
+    let ov = null;
+
+    function items(c) {
+        const base = S.filter === 'stuck' ? c.stuck : S.filter === 'today' ? c.today : S.filter === 'old' ? c.old : S.filter === 'transit' ? c.scope : c.all;
+        const words = S.q.toLowerCase().split(/\s+/).filter(Boolean);
+        return base.filter(g => {
+            if (!words.length) return true;
+            const hay = [g.doc, g.wos.join(' '), g.part, g.by].join(' ').toLowerCase();
+            return words.every(w => hay.indexOf(w) >= 0);
+        });
+    }
+
+    function openModal() {
+        if (!canBack()) return;
+        if (!document.getElementById('lgb-style')) { const st = document.createElement('style'); st.id = 'lgb-style'; st.textContent = CSS; document.head.appendChild(st); }
+        if (ov) ov.remove();
+        S.filter = 'all'; S.q = ''; S.sel = new Set(); S.form = false; S.busy = false; S.msg = ''; S.fmsg = ''; S.fv = { ri: '0', other: '', note: '', at: '', useOut: false, big: false };
+        ov = document.createElement('div'); ov.id = 'lgb-ov';
+        ov.addEventListener('mousedown', (e) => { if (e.target === ov && !S.busy) closeModal(); });
+        document.body.appendChild(ov);
+        document.addEventListener('keydown', onKey, true);
+        draw(true);
+    }
+    function onKey(e) { if (e.key === 'Escape' && ov && !S.busy) { e.stopPropagation(); closeModal(); } }
+    function closeModal() {
+        if (ov) { ov.remove(); ov = null; }
+        document.removeEventListener('keydown', onKey, true);
+        refreshPage();
+        setTimeout(ensureButton, 50);
+    }
+    function refreshPage() {
+        // ให้หน้ารับแท็กวาดรายการ "วันนี้/รับล่าสุด" ใหม่ (ใช้ตัวจับ shown.bs.tab ที่มีอยู่แล้ว)
+        const nb = document.getElementById('nav-lg-receive-item');
+        if (nb) { try { nb.dispatchEvent(new Event('shown.bs.tab', { bubbles: true })); } catch (e) {} }
+    }
+
+    function selectedDocs(c) {
+        return c.all.filter(g => S.sel.has(g.doc));
+    }
+
+    function draw(full) {
+        if (!ov) return;
+        const c = compute();
+        // ตัดแท็กที่ถูกรับไปแล้ว (ระหว่างนั้นอาจมีคนสแกนรับ) ออกจากที่เลือกไว้
+        const have = new Set(c.all.map(g => g.doc));
+        Array.from(S.sel).forEach(d => { if (!have.has(d)) S.sel.delete(d); });
+        const prevList = ov.querySelector('.list');
+        const keepScroll = prevList ? prevList.scrollTop : 0;
+        const list = items(c);
+        const selDocs = selectedDocs(c);
+        const selQty = selDocs.reduce((a, g) => a + g.qty, 0);
+
+        const chip = (k, label, n) => `<span class="fc ${S.filter === k ? 'on' : ''}" data-f="${k}">${label} ${n}</span>`;
+        const rows = list.slice(0, 200).map(g => {
+            const stuck = g.t && c.now - g.t > STUCK_MS;
+            const tOut = g.t ? (dayKey(g.t) === dayKey(c.now) ? hm(g.t) : dmhm(g.t)) : '-';
+            return `<div class="row2 ${stuck ? 'st' : ''}">
+                <input type="checkbox" data-d="${esc(g.doc)}" ${S.sel.has(g.doc) ? 'checked' : ''} ${S.busy ? 'disabled' : ''}>
+                <div style="flex:1;min-width:0"><div class="doc">${esc(g.doc)} <span class="sub">· ${esc(g.wos.join(', '))}</span></div>
+                <div class="sub">${esc(g.part)} · ${g.qty.toLocaleString('en-US')} ชิ้น · ATECH สแกนออก ${esc(tOut)}${g.by ? ' (' + esc(g.by) + ')' : ''}</div></div>
+                <span class="el ${stuck ? 'r' : ''}">${g.t ? 'ค้าง ' + esc(dur(g.t, c.now)) : 'ไม่ทราบเวลา'}</span>
+                <button type="button" class="rb" data-one="${esc(g.doc)}" ${S.busy ? 'disabled' : ''}><i class="bi bi-box-arrow-in-down"></i> รับย้อนหลัง</button></div>`;
+        }).join('') || `<div class="empty"><i class="bi bi-check2-circle" style="font-size:2rem;display:block;color:#16a34a"></i>${S.q || S.filter !== 'all' ? 'ไม่พบรายการที่ตรงกับตัวกรอง' : 'ไม่มีแท็กค้างรับ'}${S.filter !== 'old' && c.old.length && !S.q ? `<div class="mt-2"><span class="fc" data-f="old">ยังมีแท็กเก่า ${c.old.length} ใบ — กดดู</span></div>` : ''}</div>`;
+
+        const dtMin = selDocs.reduce((m, g) => (g.t && g.t > m ? g.t : m), 0);
+        const form = S.form && selDocs.length ? `
+            <div class="pn">
+              <div class="fw-bold mb-2" style="color:#0b1b33"><i class="bi bi-pencil-square text-warning me-1"></i> ยืนยันรับย้อนหลัง ${selDocs.length} ใบ (${selQty.toLocaleString('en-US')} ชิ้น)</div>
+              <div class="row g-2">
+                <div class="col-md-6"><label>เหตุผล</label><select class="in" id="lgb-reason">${REASONS.map((r, i) => `<option value="${i}" ${String(i) === S.fv.ri ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></div>
+                <div class="col-md-6"><label>เวลาที่รับจริง</label><input type="datetime-local" class="in" id="lgb-at" value="${S.fv.at || localInput(Date.now())}" ${dtMin ? `min="${localInput(dtMin)}"` : ''} max="${localInput(Date.now() + 120000)}" ${S.fv.useOut ? 'disabled' : ''}></div>
+                <div class="col-12"><label style="display:flex;gap:6px;align-items:center;cursor:pointer;text-transform:none;font-weight:700"><input type="checkbox" id="lgb-useout" ${S.fv.useOut ? 'checked' : ''}> ใช้เวลาเดียวกับที่ ATECH สแกนออก <span class="sub" style="font-weight:500">(เหมาะกับเคลียร์แท็กเก่า — ไม่ไปปนกับยอดรับของวันนี้)</span></label></div>
+                <div class="col-12 ${S.fv.ri === String(REASONS.length - 1) ? '' : 'd-none'}" id="lgb-other-w"><label>ระบุเหตุผล</label><input class="in" id="lgb-other" placeholder="พิมพ์เหตุผล" value="${esc(S.fv.other)}"></div>
+                <div class="col-12"><label>หมายเหตุ (ไม่บังคับ)</label><input class="in" id="lgb-note" placeholder="เช่น หัวหน้ากะยืนยันว่าของถึงแล้ว" value="${esc(S.fv.note)}"></div>
+              </div>
+              ${selDocs.length > BIG ? `<div class="al wn mt-2"><label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;margin:0"><input type="checkbox" id="lgb-big" ${S.fv.big ? 'checked' : ''} style="margin-top:3px"> <span>ฉันตรวจสอบแล้วว่าแท็ก <b>${selDocs.length} ใบ</b> นี้ของถึง LG แล้วจริง (การรับย้อนหลังจำนวนมากแก้กลับยาก)</span></label></div>` : ''}
+              ${S.fmsg ? `<div class="al er">${S.fmsg}</div>` : ''}
+              <div class="d-flex gap-2 mt-3 align-items-center flex-wrap">
+                <button type="button" class="rb" id="lgb-save" style="padding:8px 16px" ${S.busy ? 'disabled' : ''}><i class="bi bi-check-lg"></i> บันทึกรับย้อนหลัง</button>
+                <button type="button" class="rb g" id="lgb-cancel" ${S.busy ? 'disabled' : ''}>ยกเลิก</button>
+                <span class="sub ms-auto">บันทึกโดย ${esc((me() || {}).username || '')} (ย้อนหลัง)</span>
+              </div>
+            </div>` : '';
+
+        ov.innerHTML = `<div class="md">
+            <div class="h"><span class="ic"><i class="bi bi-clock-history"></i></span><h5>เช็กแท็กค้างรับ</h5>
+              <span class="sum">ATECH สแกนออกแล้ว LG ยังไม่ได้รับ ${c.all.length} ใบ${c.old.length ? ` (เก่า ${c.old.length})` : ''}</span><button type="button" class="x" id="lgb-x" ${S.busy ? 'disabled' : ''}>✕</button></div>
+            <div id="lgb-msg">${S.msg || ''}</div>
+            <div class="tool"><input id="lgb-q" placeholder="ค้นหา เลขแท็ก / WO / พาร์ท" value="${esc(S.q)}" autocomplete="off">
+              ${chip('all', 'ทั้งหมด', c.all.length)}${chip('transit', 'ระหว่างทาง', c.scope.length)}${chip('stuck', 'ค้างเกิน 3 ชม.', c.stuck.length)}${chip('today', 'วันนี้', c.today.length)}${c.old.length ? chip('old', 'แท็กเก่า (ก่อนเริ่มใช้ระบบรับ)', c.old.length) : ''}</div>
+            <div class="list">${rows}</div>
+            ${list.length > 200 ? `<div class="sub mt-1">แสดง 200 รายการแรก — ใช้ช่องค้นหาเพื่อกรอง</div>` : ''}
+            ${form}
+            <div class="ft"><label class="sub" style="cursor:pointer"><input type="checkbox" id="lgb-all" ${list.length && list.every(g => S.sel.has(g.doc)) ? 'checked' : ''} ${S.busy ? 'disabled' : ''}> เลือกทั้งหมดที่แสดง</label>
+              <span class="sub">เลือกไว้ ${selDocs.length} ใบ · รวม ${selQty.toLocaleString('en-US')} ชิ้น</span><span style="flex:1"></span>
+              <button type="button" class="rb" id="lgb-go" style="padding:8px 16px;font-size:.82rem" ${selDocs.length && !S.busy ? '' : 'disabled'}><i class="bi bi-check2-all"></i> รับย้อนหลังที่เลือก (${selDocs.length})</button></div>
+          </div>`;
+        bind();
+        const nl = ov.querySelector('.list'); if (nl && keepScroll) nl.scrollTop = keepScroll;
+        if (full) { const q = ov.querySelector('#lgb-q'); if (q) q.focus(); }
+    }
+
+    function bind() {
+        const $ = (s) => ov.querySelector(s);
+        $('#lgb-x').onclick = () => { if (!S.busy) closeModal(); };
+        const q = $('#lgb-q');
+        q.oninput = () => { S.q = q.value; const pos = q.selectionStart; draw(false); const q2 = ov && ov.querySelector('#lgb-q'); if (q2) { q2.focus(); try { q2.setSelectionRange(pos, pos); } catch (e) {} } };
+        ov.querySelectorAll('.fc').forEach(el => el.onclick = () => { S.filter = el.dataset.f; draw(false); });
+        ov.querySelectorAll('input[data-d]').forEach(el => el.onchange = () => { el.checked ? S.sel.add(el.dataset.d) : S.sel.delete(el.dataset.d); draw(false); });
+        ov.querySelectorAll('[data-one]').forEach(el => el.onclick = () => { S.sel = new Set([el.dataset.one]); S.form = true; S.fmsg = ''; draw(false); const r = ov && ov.querySelector('#lgb-reason'); if (r) r.focus(); });
+        $('#lgb-all').onchange = (e) => { const c = compute(); items(c).forEach(g => e.target.checked ? S.sel.add(g.doc) : S.sel.delete(g.doc)); draw(false); };
+        $('#lgb-go').onclick = () => { S.form = true; S.fmsg = ''; draw(false); const r = ov && ov.querySelector('#lgb-reason'); if (r) r.focus(); };
+        const cancel = $('#lgb-cancel'); if (cancel) cancel.onclick = () => { S.form = false; S.fmsg = ''; draw(false); };
+        const rs = $('#lgb-reason');
+        if (rs) {
+            rs.onchange = () => { S.fv.ri = rs.value; $('#lgb-other-w').classList.toggle('d-none', rs.value !== String(REASONS.length - 1)); };
+            $('#lgb-other').oninput = (e) => { S.fv.other = e.target.value; };
+            $('#lgb-note').oninput = (e) => { S.fv.note = e.target.value; };
+            $('#lgb-at').onchange = (e) => { S.fv.at = e.target.value; };
+            $('#lgb-useout').onchange = (e) => { S.fv.useOut = e.target.checked; draw(false); };
+            const bg = $('#lgb-big'); if (bg) bg.onchange = (e) => { S.fv.big = e.target.checked; };
+        }
+        const save = $('#lgb-save'); if (save) save.onclick = doSave;
+    }
+
+    function friendly(e) {
+        const m = String((e && e.message) || e || '');
+        if (/ไม่พบเลขเอกสารของแท็ก/.test(m)) return 'Google Script ยังไม่ได้อัปเดตเป็นเวอร์ชันรับย้อนหลัง (ต้องวาง lg-recv-back-gs แล้ว Deploy เวอร์ชันใหม่)';
+        return m || 'ไม่ทราบสาเหตุ';
+    }
+
+    async function doSave() {
+        if (S.busy) return;
+        const $ = (s) => ov.querySelector(s);
+        const c = compute();
+        const docs = selectedDocs(c);
+        if (!docs.length) return;
+        const ri = parseInt($('#lgb-reason').value, 10);
+        let reason = REASONS[ri] || '';
+        if (ri === REASONS.length - 1) reason = ($('#lgb-other').value || '').trim();
+        const note = ($('#lgb-note').value || '').trim();
+        const useOut = !!S.fv.useOut;
+        const at = $('#lgb-at').value ? new Date($('#lgb-at').value).getTime() : null;
+        const maxOut = docs.reduce((m, g) => (g.t && g.t > m ? g.t : m), 0);
+        let err = '';
+        if (!reason) err = 'กรุณาระบุเหตุผล';
+        else if (!useOut && !at) err = 'กรุณาระบุเวลาที่รับจริง';
+        else if (!useOut && at > Date.now() + 120000) err = 'เวลาที่รับต้องไม่เป็นเวลาในอนาคต';
+        else if (!useOut && maxOut && at < maxOut - 60000) err = 'เวลาที่รับต้องไม่ก่อนเวลาที่ ATECH สแกนออก (' + dmhm(maxOut) + ')';
+        else if (docs.length > BIG && !S.fv.big) err = 'กรุณาติ๊กยืนยันว่าตรวจสอบแล้ว (เลือกไว้ ' + docs.length + ' ใบ)';
+        if (err) { S.fmsg = err; draw(false); return; }
+
+        S.busy = true; S.fmsg = ''; S.msg = '';
+        const user = me() ? me().username : '';
+        const okDocs = [], dupDocs = [], failDocs = [];
+        const byDoc = new Map(docs.map(g => [g.doc, g]));
+        let stop = false;
+        const localRows = (g, r, reasonText, recordedAt, by) => {
+            if (!db.lgReceiveLog) db.lgReceiveLog = [];
+            const groups = (r.groups && r.groups.length) ? r.groups : g.wos.map(w => ({ WO: w, qty: 0 }));
+            groups.forEach(x => db.lgReceiveLog.push({
+                docNumber: g.doc, WO: x.WO, partNo: r.part || g.part, qty: x.qty, rawBarcode: '', receivedBy: by, receivedAt: r.receivedAt,
+                flag: '', scanOutAt: r.scanOutAt || '', scanOutBy: r.scanOutBy || '', manual: 'TRUE', reason: reasonText, recordedAt: recordedAt
+            }));
+        };
+        for (let off = 0; off < docs.length && !stop; off += CHUNK) {
+            const part = docs.slice(off, off + CHUNK);
+            S.msg = `<div class="al wn"><span class="spinner-border spinner-border-sm me-2"></span>กำลังบันทึก ${Math.min(off + part.length, docs.length)}/${docs.length} ใบ ...</div>`;
+            draw(false);
+            const by = user + ' (ย้อนหลัง)';
+            const body = { manual: true, docNumber: '', manualDoc: part[0].doc, manualDocs: part.map(g => g.doc), partNo: part[0].part, receivedBy: by,
+                receivedAtIso: new Date(at || Date.now()).toISOString(), useOutTime: useOut, reason: reason, note: note };
+            let res = null, e = null;
+            for (let a = 0; a < 3 && !res; a++) {
+                try { res = await callAppsScript('submitLGReceive', body); e = null; }
+                catch (x) {
+                    e = x;
+                    const m = String((x && x.message) || '');
+                    if (a < 2 && /Lock|ล็อก|ยุ่ง|network|Failed to fetch|Server error|Invalid response/i.test(m)) await sleep(1500 * (a + 1)); else break;
+                }
+            }
+            if (e || !res) {
+                const m = friendly(e);
+                part.forEach(g => failDocs.push({ g, m }));
+                if (/Deploy เวอร์ชันใหม่/.test(m)) stop = true;
+                continue;
+            }
+            const finalReason = res.reason || (note ? reason + ' — ' + note : reason);
+            const rec = res.recordedAt || new Date().toISOString();
+            if (res.batch && Array.isArray(res.results)) {
+                res.results.forEach(r => {
+                    const g = byDoc.get(String(r.doc).toUpperCase()); if (!g) return;
+                    if (r.status === 'ok') { localRows(g, r, finalReason, rec, by); okDocs.push(g); S.sel.delete(g.doc); }
+                    else if (r.status === 'dup') { dupDocs.push(g); S.sel.delete(g.doc); }
+                    else failDocs.push({ g, m: r.message || 'บันทึกไม่สำเร็จ' });
+                });
+            } else {
+                // Google Script ยังเป็น v1 (รับได้ทีละใบ): ใบแรกถูกบันทึกไปแล้ว ที่เหลือยังไม่ได้บันทึก
+                const g0 = part[0];
+                if (res.duplicate) { dupDocs.push(g0); S.sel.delete(g0.doc); }
+                else if (res.manual) { localRows(g0, { groups: res.groups, receivedAt: res.receivedAt, scanOutAt: res.scanOutAt, scanOutBy: res.scanOutBy }, finalReason, rec, by); okDocs.push(g0); S.sel.delete(g0.doc); }
+                else failDocs.push({ g: g0, m: 'Google Script ตอบกลับไม่ถูกรูปแบบ (ต้องวาง lg-recv-back-gs-v2 แล้ว Deploy เวอร์ชันใหม่)' });
+                part.slice(1).forEach(g => failDocs.push({ g, m: 'Google Script ยังเป็นเวอร์ชันเก่า รับได้ทีละใบ (ต้องวาง lg-recv-back-gs-v2 แล้ว Deploy เวอร์ชันใหม่)' }));
+                stop = true;
+            }
+        }
+        S.busy = false; S.form = failDocs.length > 0 && okDocs.length === 0;
+        let html = '';
+        if (okDocs.length) html += `<div class="al ok"><i class="bi bi-check-circle-fill me-1"></i> บันทึกรับย้อนหลังแล้ว ${okDocs.length} ใบ (${okDocs.reduce((a, g) => a + g.qty, 0).toLocaleString('en-US')} ชิ้น) — เหตุผล: ${esc(reason)}</div>`;
+        if (dupDocs.length) html += `<div class="al wn"><i class="bi bi-exclamation-triangle-fill me-1"></i> ${dupDocs.length} ใบถูกรับไปแล้วก่อนหน้านี้ (ไม่บันทึกซ้ำ)${dupDocs.length <= 5 ? ': ' + esc(dupDocs.map(g => g.doc).join(', ')) : ''}</div>`;
+        failDocs.slice(0, 5).forEach(f => { html += `<div class="al er"><i class="bi bi-x-octagon-fill me-1"></i> ${esc(f.g.doc)} บันทึกไม่สำเร็จ: ${esc(f.m)}</div>`; });
+        if (failDocs.length > 5) html += `<div class="al er">และบันทึกไม่สำเร็จอีก ${failDocs.length - 5} ใบ</div>`;
+        S.msg = html;
+        if (!failDocs.length) S.fv.big = false;
+        draw(false);
+        refreshPage();
+        setTimeout(() => { if (ov) { const q = ov.querySelector('#lgb-q'); if (q && !S.form) q.focus(); } }, 250);
+        ensureButton();
+    }
+
+    // ---------- ติดป้าย "รับย้อนหลัง" ในรายการรับล่าสุด (ทั้งแบบเดิมและกล่องใหม่) ----------
+    function manualMap() {
+        const m = new Map();
+        (db.lgReceiveLog || []).forEach(r => {
+            if (!isTrue(r.manual)) return;
+            const d = up(r.docNumber); if (!d) return;
+            const t = ms(r.receivedAt);
+            let g = m.get(d); if (!g) { g = { t, wos: [], reason: String(r.reason || '') }; m.set(d, g); }
+            const w = up(r.WO); if (w && g.wos.indexOf(w) < 0) g.wos.push(w);
+        });
+        const out = new Map();
+        m.forEach(g => { if (g.t) out.set(hm(g.t) + '|' + g.wos.join(', '), g.reason); });
+        return out;
+    }
+    function decorate() {
+        const mm = manualMap();
+        if (!mm.size) return;
+        document.querySelectorAll('#lgr-recent tr').forEach(tr => {
+            if (tr.dataset.lgb) return;
+            const tds = tr.querySelectorAll('td'); if (tds.length < 4) return;
+            const key = (tds[0].textContent || '').trim() + '|' + (tds[1].textContent || '').trim();
+            if (!mm.has(key)) return;
+            tr.dataset.lgb = '1';
+            const last = tds[tds.length - 1];
+            last.insertAdjacentHTML('beforeend', ` <span class="badge bg-warning text-dark" title="${esc(mm.get(key))}">รับย้อนหลัง</span>`);
+        });
+        document.querySelectorAll('#lgr2 .lgr2-row').forEach(row => {
+            if (row.dataset.lgb) return;
+            const tm = row.querySelector('.tm b'), wo = row.querySelector('.wo'), mid = row.querySelector('.mid'), rt = row.querySelector('.rt');
+            if (!tm || !wo || !mid) return;
+            const key = (tm.textContent || '').trim() + '|' + (wo.textContent || '').trim();
+            if (!mm.has(key)) return;
+            row.dataset.lgb = '1'; row.style.borderLeftColor = '#f59e0b';
+            mid.insertAdjacentHTML('beforeend', `<div style="font-size:.68rem;font-weight:700;color:#92580a;margin-top:2px">📝 ${esc(mm.get(key))}</div>`);
+            if (rt) rt.insertAdjacentHTML('beforeend', `<span style="display:block;margin-top:3px;font-size:.62rem;font-weight:800;color:#92580a;background:#fff4dc;border-radius:20px;padding:1px 8px">รับย้อนหลัง</span>`);
+        });
+    }
+    function watch(id) {
+        const el = document.getElementById(id);
+        if (!el || el.dataset.lgbW) return !!el;
+        el.dataset.lgbW = '1';
+        const mo = new MutationObserver(() => { try { decorate(); } catch (e) {} mo.takeRecords(); });
+        mo.observe(el, { childList: true, subtree: true });
+        decorate(); mo.takeRecords();
+        return true;
+    }
+    setInterval(() => { try { watch('lgr-recent'); watch('lgr2'); } catch (e) {} }, 1500);
+})();
+// ===== จบ LG-RECEIVE-BACKDATE-WEB =====
+// ===== LG-RECEIVE-BACKDATE-WEB: หน้ารับแท็ก LG — ปุ่ม "เช็กแท็กค้างรับ" + รับย้อนหลัง + สวิตช์สิทธิ์ "รับแท็กย้อนหลัง" =====
+// ต้องวางแพตช์ฝั่ง Google Script (lg-recv-back-gs) และ Deploy เวอร์ชันใหม่ก่อน ไม่งั้นจะขึ้นข้อความเตือนตอนกดบันทึก (ไม่มีการบันทึกผิดๆ)
+(function () {
+    if (window.__lgRecvBack) return; window.__lgRecvBack = true;
+
+    const PANE = 'pills-lg-receive';
+    const STUCK_MS = 3 * 3600 * 1000;
+    const REASONS = ['พนักงานลืมสแกน แต่ของถึงแล้ว', 'สแกนไม่ติด / QR เสีย', 'ระบบขัดข้อง', 'อื่นๆ (ระบุ)'];
+    const pad = (n) => String(n).padStart(2, '0');
+    const up = (s) => String(s == null ? '' : s).trim().toUpperCase();
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const isTrue = (v) => v === true || String(v).toUpperCase() === 'TRUE';
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    const dayKey = (t) => { const d = new Date(t); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+    const hm = (t) => { const d = new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+    const dmhm = (t) => { const d = new Date(t); return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+    const localInput = (t) => { const d = new Date(t); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+    function ms(v) {
+        if (!v) return null;
+        if (v instanceof Date) return isNaN(v) ? null : v.getTime();
+        const s = String(v).trim();
+        const t = new Date(s).getTime();
+        if (!isNaN(t) && /^\d{4}-\d{2}-\d{2}/.test(s)) return t;
+        const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ ,T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+        if (m) { let y = +m[3]; if (y > 2400) y -= 543; return new Date(y, +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0)).getTime(); }
+        return isNaN(t) ? null : t;
+    }
+    const dur = (a, b) => { const m = Math.max(0, Math.round((b - a) / 60000)); return m >= 60 ? `${Math.floor(m / 60)} ชม. ${m % 60}` : `${m} นาที`; };
+
+    // ---------- สิทธิ์ ----------
+    const me = () => (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null;
+    function canBack() {
+        const u = me();
+        if (!u) return false;
+        if (u.username === 'admin') return true;
+        return isTrue(u.canBackdateLGReceive) && isTrue(u.canReceiveLG);
+    }
+
+    // ---------- สวิตช์สิทธิ์ในหน้าจัดการผู้ใช้ ----------
+    function injectSwitch() {
+        if (document.getElementById('permission-canBackdateLGReceive')) return;
+        const ref = document.getElementById('permission-canReceiveLG') || document.getElementById('permission-canCheckLGTags');
+        if (!ref) return;
+        const uname = (document.getElementById('user-username') || {}).value;
+        const u = (db.users || []).find(x => String(x.username) === String(uname)) || {};
+        const row = document.createElement('div');
+        row.className = 'form-check form-switch';
+        row.innerHTML = `<input class="form-check-input" type="checkbox" role="switch" id="permission-canBackdateLGReceive" ${isTrue(u.canBackdateLGReceive) ? 'checked' : ''}><label class="form-check-label" for="permission-canBackdateLGReceive">รับแท็กย้อนหลัง (เช็กแท็กค้างรับ + กดรับย้อนหลังได้ — ต้องเปิด "รับแท็ก LG" ด้วย)</label>`;
+        ref.closest('.form-check').insertAdjacentElement('afterend', row);
+    }
+    function watchUserForm() {
+        const f = document.getElementById('user-form');
+        if (!f) { setTimeout(watchUserForm, 800); return; }
+        new MutationObserver(() => { try { injectSwitch(); } catch (e) {} }).observe(f, { childList: true });
+        injectSwitch();
+    }
+    watchUserForm();
+    if (typeof callAppsScript === 'function') {
+        const _call = callAppsScript;
+        callAppsScript = async function (action, payload) {
+            if ((action === 'addUser' || action === 'updateUser') && payload) {
+                const sw = document.getElementById('permission-canBackdateLGReceive');
+                if (sw) payload.canBackdateLGReceive = sw.checked;
+            }
+            return _call.apply(this, arguments);
+        };
+    }
+
+    // ---------- ข้อมูลแท็กค้างรับ ----------
+    const docCache = new Map();
+    function docOf(raw) {
+        raw = String(raw || '');
+        if (!raw) return '';
+        if (docCache.has(raw)) return docCache.get(raw);
+        let d = '';
+        try { if (typeof parseLGBarcode === 'function') { const p = parseLGBarcode(raw); d = p && p.docNumber ? up(p.docNumber) : ''; } } catch (e) {}
+        if (docCache.size > 20000) docCache.clear();
+        docCache.set(raw, d);
+        return d;
+    }
+    function compute() {
+        const now = Date.now();
+        const rec = new Set(); let first = null;
+        (db.lgReceiveLog || []).forEach(r => {
+            const d = up(r.docNumber); if (d) rec.add(d);
+            const t = ms(r.receivedAt); if (t && (!first || t < first)) first = t;
+        });
+        let trackFrom;
+        if (first) { const d = new Date(first); trackFrom = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
+        else { const d = new Date(); trackFrom = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 2).getTime(); }
+        const map = new Map();
+        (db.lgScanLog || []).forEach(s => {
+            const d = docOf(s.rawBarcode); if (!d || rec.has(d)) return;
+            const t = ms(s.scannedAt);
+            let g = map.get(d);
+            if (!g) { g = { doc: d, t, by: s.scannedBy, part: up(s.partNo), wos: [], qty: 0 }; map.set(d, g); }
+            if (t && (!g.t || t < g.t)) { g.t = t; g.by = s.scannedBy; }
+            const w = up(s.WO); if (w && g.wos.indexOf(w) < 0) g.wos.push(w);
+            g.qty += Number(s.rackQty) || 0;
+        });
+        const all = Array.from(map.values()).sort((a, b) => (a.t || 0) - (b.t || 0));
+        const scope = [], old = [];
+        all.forEach(g => { (!g.t || g.t >= trackFrom ? scope : old).push(g); });
+        const today = dayKey(now);
+        return {
+            now, scope, old,
+            stuck: scope.filter(g => g.t && now - g.t > STUCK_MS),
+            today: scope.filter(g => g.t && dayKey(g.t) === today)
+        };
+    }
+
+    // ---------- ปุ่มบนหน้ารับแท็ก ----------
+    function ensureButton() {
+        const camBtn = document.getElementById('lgr-cam-btn');
+        if (!camBtn) return;
+        let b = document.getElementById('lgr-back-btn');
+        if (!b) {
+            b = document.createElement('button');
+            b.type = 'button'; b.id = 'lgr-back-btn';
+            b.className = 'btn btn-sm fw-bold ms-2';
+            b.style.cssText = 'background:#fff4dc;color:#92580a;border-radius:8px;border:1px solid #fcd9a0';
+            b.addEventListener('click', openModal);
+            camBtn.insertAdjacentElement('afterend', b);
+        }
+        const ok = canBack();
+        b.style.display = ok ? '' : 'none';
+        if (ok) {
+            const c = compute();
+            b.innerHTML = `<i class="bi bi-clock-history me-1"></i> เช็กแท็กค้างรับ <span class="badge rounded-pill ${c.stuck.length ? 'bg-danger' : 'bg-warning text-dark'} ms-1">${c.scope.length}</span>`;
+        }
+    }
+    setInterval(() => { try { ensureButton(); } catch (e) {} }, 3000);
+
+    // ---------- หน้าต่างรายการ ----------
+    const CSS = `
+    #lgb-ov{position:fixed;inset:0;z-index:1075;background:rgba(11,27,51,.5);display:flex;align-items:flex-start;justify-content:center;padding:4vh 12px;overflow:auto}
+    #lgb-ov .md{background:#fff;border-radius:22px;width:min(860px,100%);padding:20px 22px;box-shadow:0 24px 60px rgba(11,27,51,.4);font-size:.88rem}
+    #lgb-ov .h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    #lgb-ov .h h5{margin:0;font-weight:800;color:#0b1b33}
+    #lgb-ov .ic{width:34px;height:34px;border-radius:11px;background:linear-gradient(135deg,#fcd34d,#f59e0b);color:#3b2a00;display:flex;align-items:center;justify-content:center}
+    #lgb-ov .sum{margin-left:auto;background:#e0ecff;color:#1d4ed8;border-radius:20px;padding:3px 12px;font-size:.75rem;font-weight:800}
+    #lgb-ov .x{border:0;background:#f1f5fa;border-radius:50%;width:32px;height:32px;font-weight:800;color:#4a5a70}
+    #lgb-ov .tool{display:flex;gap:8px;margin:14px 0 10px;align-items:center;flex-wrap:wrap}
+    #lgb-ov .tool input{flex:1;min-width:180px;border:1px solid #d5dce8;border-radius:20px;padding:6px 14px;font-size:.82rem}
+    #lgb-ov .fc{border:1px solid #d5dce8;border-radius:20px;padding:5px 13px;font-weight:700;font-size:.75rem;color:#4a5a70;background:#fff;cursor:pointer;white-space:nowrap}
+    #lgb-ov .fc.on{background:#0d6efd;color:#fff;border-color:#0d6efd}
+    #lgb-ov .list{max-height:48vh;overflow:auto;padding-right:2px}
+    #lgb-ov .row2{display:flex;align-items:center;gap:12px;background:#f7f9fc;border-radius:14px;padding:9px 12px;margin-bottom:7px;border-left:4px solid #3b82f6}
+    #lgb-ov .row2.st{border-left-color:#ef4444;background:#fff5f5}
+    #lgb-ov .row2 input[type=checkbox]{width:18px;height:18px;flex:none;cursor:pointer}
+    #lgb-ov .doc{font-weight:800;color:#0b1b33;font-size:.88rem;word-break:break-all}
+    #lgb-ov .sub{font-size:.7rem;color:#6b7a90}
+    #lgb-ov .el{font-size:.72rem;font-weight:800;border-radius:20px;padding:2px 10px;background:#e0ecff;color:#1d4ed8;white-space:nowrap}
+    #lgb-ov .el.r{background:#fee2e2;color:#b91c1c}
+    #lgb-ov .rb{border:0;border-radius:10px;background:linear-gradient(135deg,#34d399,#16a34a);color:#fff;font-weight:800;font-size:.75rem;padding:6px 12px;white-space:nowrap}
+    #lgb-ov .rb:disabled{opacity:.5}
+    #lgb-ov .rb.g{background:#e5e9f0;color:#4a5a70}
+    #lgb-ov .ft{display:flex;align-items:center;gap:10px;margin-top:12px;padding-top:12px;border-top:1px dashed #e3e8f0;flex-wrap:wrap}
+    #lgb-ov .pn{background:#fffbeb;border:1px solid #fcd9a0;border-radius:14px;padding:14px;margin-top:12px}
+    #lgb-ov .pn label{font-size:.72rem;font-weight:800;color:#92580a;display:block;margin-bottom:3px}
+    #lgb-ov .pn .in{width:100%;border:1px solid #e5d3a8;border-radius:10px;padding:6px 10px;font-size:.85rem;background:#fff}
+    #lgb-ov .al{border-radius:12px;padding:9px 12px;margin-top:10px;font-size:.82rem}
+    #lgb-ov .al.ok{background:#dcfce7;color:#166534}#lgb-ov .al.er{background:#fee2e2;color:#991b1b}#lgb-ov .al.wn{background:#fef3c7;color:#92580a}
+    #lgb-ov .empty{text-align:center;color:#8a97ab;padding:26px 0}`;
+
+    const S = { filter: 'all', q: '', sel: new Set(), form: false, busy: false, msg: '', fmsg: '', fv: { ri: '0', other: '', note: '', at: '' } };
+    let ov = null;
+
+    function items(c) {
+        const base = S.filter === 'stuck' ? c.stuck : S.filter === 'today' ? c.today : S.filter === 'old' ? c.old : c.scope;
+        const words = S.q.toLowerCase().split(/\s+/).filter(Boolean);
+        return base.filter(g => {
+            if (!words.length) return true;
+            const hay = [g.doc, g.wos.join(' '), g.part, g.by].join(' ').toLowerCase();
+            return words.every(w => hay.indexOf(w) >= 0);
+        });
+    }
+
+    function openModal() {
+        if (!canBack()) return;
+        if (!document.getElementById('lgb-style')) { const st = document.createElement('style'); st.id = 'lgb-style'; st.textContent = CSS; document.head.appendChild(st); }
+        if (ov) ov.remove();
+        S.filter = 'all'; S.q = ''; S.sel = new Set(); S.form = false; S.busy = false; S.msg = ''; S.fmsg = ''; S.fv = { ri: '0', other: '', note: '', at: '' };
+        ov = document.createElement('div'); ov.id = 'lgb-ov';
+        ov.addEventListener('mousedown', (e) => { if (e.target === ov && !S.busy) closeModal(); });
+        document.body.appendChild(ov);
+        document.addEventListener('keydown', onKey, true);
+        draw(true);
+    }
+    function onKey(e) { if (e.key === 'Escape' && ov && !S.busy) { e.stopPropagation(); closeModal(); } }
+    function closeModal() {
+        if (ov) { ov.remove(); ov = null; }
+        document.removeEventListener('keydown', onKey, true);
+        refreshPage();
+        setTimeout(ensureButton, 50);
+    }
+    function refreshPage() {
+        // ให้หน้ารับแท็กวาดรายการ "วันนี้/รับล่าสุด" ใหม่ (ใช้ตัวจับ shown.bs.tab ที่มีอยู่แล้ว)
+        const nb = document.getElementById('nav-lg-receive-item');
+        if (nb) { try { nb.dispatchEvent(new Event('shown.bs.tab', { bubbles: true })); } catch (e) {} }
+    }
+
+    function selectedDocs(c) {
+        const all = c.scope.concat(c.old);
+        return all.filter(g => S.sel.has(g.doc));
+    }
+
+    function draw(full) {
+        if (!ov) return;
+        const c = compute();
+        // ตัดแท็กที่ถูกรับไปแล้ว (ระหว่างนั้นอาจมีคนสแกนรับ) ออกจากที่เลือกไว้
+        const have = new Set(c.scope.concat(c.old).map(g => g.doc));
+        Array.from(S.sel).forEach(d => { if (!have.has(d)) S.sel.delete(d); });
+        const prevList = ov.querySelector('.list');
+        const keepScroll = prevList ? prevList.scrollTop : 0;
+        const list = items(c);
+        const selDocs = selectedDocs(c);
+        const selQty = selDocs.reduce((a, g) => a + g.qty, 0);
+
+        const chip = (k, label, n) => `<span class="fc ${S.filter === k ? 'on' : ''}" data-f="${k}">${label} ${n}</span>`;
+        const rows = list.slice(0, 200).map(g => {
+            const stuck = g.t && c.now - g.t > STUCK_MS;
+            const tOut = g.t ? (dayKey(g.t) === dayKey(c.now) ? hm(g.t) : dmhm(g.t)) : '-';
+            return `<div class="row2 ${stuck ? 'st' : ''}">
+                <input type="checkbox" data-d="${esc(g.doc)}" ${S.sel.has(g.doc) ? 'checked' : ''} ${S.busy ? 'disabled' : ''}>
+                <div style="flex:1;min-width:0"><div class="doc">${esc(g.doc)} <span class="sub">· ${esc(g.wos.join(', '))}</span></div>
+                <div class="sub">${esc(g.part)} · ${g.qty.toLocaleString('en-US')} ชิ้น · ATECH สแกนออก ${esc(tOut)}${g.by ? ' (' + esc(g.by) + ')' : ''}</div></div>
+                <span class="el ${stuck ? 'r' : ''}">${g.t ? 'ค้าง ' + esc(dur(g.t, c.now)) : 'ไม่ทราบเวลา'}</span>
+                <button type="button" class="rb" data-one="${esc(g.doc)}" ${S.busy ? 'disabled' : ''}><i class="bi bi-box-arrow-in-down"></i> รับย้อนหลัง</button></div>`;
+        }).join('') || `<div class="empty"><i class="bi bi-check2-circle" style="font-size:2rem;display:block;color:#16a34a"></i>${S.q || S.filter !== 'all' ? 'ไม่พบรายการที่ตรงกับตัวกรอง' : 'ไม่มีแท็กค้างรับ'}</div>`;
+
+        const dtMin = selDocs.reduce((m, g) => (g.t && g.t > m ? g.t : m), 0);
+        const form = S.form && selDocs.length ? `
+            <div class="pn">
+              <div class="fw-bold mb-2" style="color:#0b1b33"><i class="bi bi-pencil-square text-warning me-1"></i> ยืนยันรับย้อนหลัง ${selDocs.length} ใบ (${selQty.toLocaleString('en-US')} ชิ้น)</div>
+              <div class="row g-2">
+                <div class="col-md-6"><label>เหตุผล</label><select class="in" id="lgb-reason">${REASONS.map((r, i) => `<option value="${i}" ${String(i) === S.fv.ri ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></div>
+                <div class="col-md-6"><label>เวลาที่รับจริง</label><input type="datetime-local" class="in" id="lgb-at" value="${S.fv.at || localInput(Date.now())}" ${dtMin ? `min="${localInput(dtMin)}"` : ''} max="${localInput(Date.now() + 120000)}"></div>
+                <div class="col-12 ${S.fv.ri === String(REASONS.length - 1) ? '' : 'd-none'}" id="lgb-other-w"><label>ระบุเหตุผล</label><input class="in" id="lgb-other" placeholder="พิมพ์เหตุผล" value="${esc(S.fv.other)}"></div>
+                <div class="col-12"><label>หมายเหตุ (ไม่บังคับ)</label><input class="in" id="lgb-note" placeholder="เช่น หัวหน้ากะยืนยันว่าของถึงแล้ว" value="${esc(S.fv.note)}"></div>
+              </div>
+              ${S.fmsg ? `<div class="al er">${S.fmsg}</div>` : ''}
+              <div class="d-flex gap-2 mt-3 align-items-center flex-wrap">
+                <button type="button" class="rb" id="lgb-save" style="padding:8px 16px" ${S.busy ? 'disabled' : ''}><i class="bi bi-check-lg"></i> บันทึกรับย้อนหลัง</button>
+                <button type="button" class="rb g" id="lgb-cancel" ${S.busy ? 'disabled' : ''}>ยกเลิก</button>
+                <span class="sub ms-auto">บันทึกโดย ${esc((me() || {}).username || '')} (ย้อนหลัง)</span>
+              </div>
+            </div>` : '';
+
+        ov.innerHTML = `<div class="md">
+            <div class="h"><span class="ic"><i class="bi bi-clock-history"></i></span><h5>เช็กแท็กค้างรับ</h5>
+              <span class="sum">ATECH สแกนออกแล้ว LG ยังไม่ได้สแกนรับ ${c.scope.length} ใบ</span><button type="button" class="x" id="lgb-x" ${S.busy ? 'disabled' : ''}>✕</button></div>
+            <div id="lgb-msg">${S.msg || ''}</div>
+            <div class="tool"><input id="lgb-q" placeholder="ค้นหา เลขแท็ก / WO / พาร์ท" value="${esc(S.q)}" autocomplete="off">
+              ${chip('all', 'ทั้งหมด', c.scope.length)}${chip('stuck', 'ค้างเกิน 3 ชม.', c.stuck.length)}${chip('today', 'วันนี้', c.today.length)}${c.old.length ? chip('old', 'แท็กเก่า (ก่อนเริ่มใช้ระบบรับ)', c.old.length) : ''}</div>
+            <div class="list">${rows}</div>
+            ${list.length > 200 ? `<div class="sub mt-1">แสดง 200 รายการแรก — ใช้ช่องค้นหาเพื่อกรอง</div>` : ''}
+            ${form}
+            <div class="ft"><label class="sub" style="cursor:pointer"><input type="checkbox" id="lgb-all" ${list.length && list.every(g => S.sel.has(g.doc)) ? 'checked' : ''} ${S.busy ? 'disabled' : ''}> เลือกทั้งหมดที่แสดง</label>
+              <span class="sub">เลือกไว้ ${selDocs.length} ใบ · รวม ${selQty.toLocaleString('en-US')} ชิ้น</span><span style="flex:1"></span>
+              <button type="button" class="rb" id="lgb-go" style="padding:8px 16px;font-size:.82rem" ${selDocs.length && !S.busy ? '' : 'disabled'}><i class="bi bi-check2-all"></i> รับย้อนหลังที่เลือก (${selDocs.length})</button></div>
+          </div>`;
+        bind();
+        const nl = ov.querySelector('.list'); if (nl && keepScroll) nl.scrollTop = keepScroll;
+        if (full) { const q = ov.querySelector('#lgb-q'); if (q) q.focus(); }
+    }
+
+    function bind() {
+        const $ = (s) => ov.querySelector(s);
+        $('#lgb-x').onclick = () => { if (!S.busy) closeModal(); };
+        const q = $('#lgb-q');
+        q.oninput = () => { S.q = q.value; const pos = q.selectionStart; draw(false); const q2 = ov && ov.querySelector('#lgb-q'); if (q2) { q2.focus(); try { q2.setSelectionRange(pos, pos); } catch (e) {} } };
+        ov.querySelectorAll('.fc').forEach(el => el.onclick = () => { S.filter = el.dataset.f; draw(false); });
+        ov.querySelectorAll('input[data-d]').forEach(el => el.onchange = () => { el.checked ? S.sel.add(el.dataset.d) : S.sel.delete(el.dataset.d); draw(false); });
+        ov.querySelectorAll('[data-one]').forEach(el => el.onclick = () => { S.sel = new Set([el.dataset.one]); S.form = true; S.fmsg = ''; draw(false); const r = ov && ov.querySelector('#lgb-reason'); if (r) r.focus(); });
+        $('#lgb-all').onchange = (e) => { const c = compute(); items(c).forEach(g => e.target.checked ? S.sel.add(g.doc) : S.sel.delete(g.doc)); draw(false); };
+        $('#lgb-go').onclick = () => { S.form = true; S.fmsg = ''; draw(false); const r = ov && ov.querySelector('#lgb-reason'); if (r) r.focus(); };
+        const cancel = $('#lgb-cancel'); if (cancel) cancel.onclick = () => { S.form = false; S.fmsg = ''; draw(false); };
+        const rs = $('#lgb-reason');
+        if (rs) {
+            rs.onchange = () => { S.fv.ri = rs.value; $('#lgb-other-w').classList.toggle('d-none', rs.value !== String(REASONS.length - 1)); };
+            $('#lgb-other').oninput = (e) => { S.fv.other = e.target.value; };
+            $('#lgb-note').oninput = (e) => { S.fv.note = e.target.value; };
+            $('#lgb-at').onchange = (e) => { S.fv.at = e.target.value; };
+        }
+        const save = $('#lgb-save'); if (save) save.onclick = doSave;
+    }
+
+    function friendly(e) {
+        const m = String((e && e.message) || e || '');
+        if (/ไม่พบเลขเอกสารของแท็ก/.test(m)) return 'Google Script ยังไม่ได้อัปเดตเป็นเวอร์ชันรับย้อนหลัง (ต้องวาง lg-recv-back-gs แล้ว Deploy เวอร์ชันใหม่)';
+        return m || 'ไม่ทราบสาเหตุ';
+    }
+
+    async function doSave() {
+        if (S.busy) return;
+        const $ = (s) => ov.querySelector(s);
+        const c = compute();
+        const docs = selectedDocs(c);
+        if (!docs.length) return;
+        const ri = parseInt($('#lgb-reason').value, 10);
+        let reason = REASONS[ri] || '';
+        if (ri === REASONS.length - 1) reason = ($('#lgb-other').value || '').trim();
+        const note = ($('#lgb-note').value || '').trim();
+        const at = ms($('#lgb-at').value ? new Date($('#lgb-at').value) : null);
+        const maxOut = docs.reduce((m, g) => (g.t && g.t > m ? g.t : m), 0);
+        let err = '';
+        if (!reason) err = 'กรุณาระบุเหตุผล';
+        else if (!at) err = 'กรุณาระบุเวลาที่รับจริง';
+        else if (at > Date.now() + 120000) err = 'เวลาที่รับต้องไม่เป็นเวลาในอนาคต';
+        else if (maxOut && at < maxOut - 60000) err = 'เวลาที่รับต้องไม่ก่อนเวลาที่ ATECH สแกนออก (' + dmhm(maxOut) + ')';
+        if (err) { S.fmsg = err; draw(false); return; }
+
+        S.busy = true; S.fmsg = ''; S.msg = '';
+        const user = me() ? me().username : '';
+        const okDocs = [], dupDocs = [], failDocs = [];
+        for (let i = 0; i < docs.length; i++) {
+            const g = docs[i];
+            S.msg = `<div class="al wn"><span class="spinner-border spinner-border-sm me-2"></span>กำลังบันทึก ${i + 1}/${docs.length} ...</div>`;
+            draw(false);
+            const body = { manual: true, docNumber: '', manualDoc: g.doc, partNo: g.part, receivedBy: user + ' (ย้อนหลัง)', receivedAtIso: new Date(at).toISOString(), reason: reason, note: note };
+            let res = null, e = null;
+            for (let a = 0; a < 3 && !res; a++) {
+                try { res = await callAppsScript('submitLGReceive', body); e = null; }
+                catch (x) {
+                    e = x;
+                    const m = String((x && x.message) || '');
+                    if (a < 2 && /Lock|ล็อก|ยุ่ง|network|Failed to fetch|Server error|Invalid response/i.test(m)) await sleep(1200 * (a + 1)); else break;
+                }
+            }
+            if (e || !res) { failDocs.push({ g, m: friendly(e) }); if (e && /Deploy เวอร์ชันใหม่/.test(friendly(e))) break; continue; }
+            if (res.duplicate) { dupDocs.push(g); continue; }
+            if (!res.manual) { failDocs.push({ g, m: 'Google Script ตอบกลับไม่ถูกรูปแบบ (อาจยังไม่ได้ Deploy เวอร์ชันใหม่)' }); continue; }
+            if (!db.lgReceiveLog) db.lgReceiveLog = [];
+            const raw = '';
+            (res.groups && res.groups.length ? res.groups : g.wos.map(w => ({ WO: w, qty: 0 }))).forEach(x => db.lgReceiveLog.push({
+                docNumber: g.doc, WO: x.WO, partNo: g.part, qty: x.qty, rawBarcode: raw, receivedBy: body.receivedBy, receivedAt: res.receivedAt || body.receivedAtIso,
+                flag: '', scanOutAt: res.scanOutAt || '', scanOutBy: res.scanOutBy || '', manual: 'TRUE', reason: res.reason || reason, recordedAt: new Date().toISOString()
+            }));
+            okDocs.push(g);
+            S.sel.delete(g.doc);
+        }
+        S.busy = false; S.form = failDocs.length > 0 && okDocs.length === 0 ? true : false;
+        let html = '';
+        if (okDocs.length) html += `<div class="al ok"><i class="bi bi-check-circle-fill me-1"></i> บันทึกรับย้อนหลังแล้ว ${okDocs.length} ใบ (${okDocs.reduce((a, g) => a + g.qty, 0).toLocaleString('en-US')} ชิ้น) — เหตุผล: ${esc(reason)}</div>`;
+        if (dupDocs.length) html += `<div class="al wn"><i class="bi bi-exclamation-triangle-fill me-1"></i> ${dupDocs.length} ใบถูกรับไปแล้วก่อนหน้านี้ (ไม่บันทึกซ้ำ): ${esc(dupDocs.map(g => g.doc).join(', '))}</div>`;
+        failDocs.forEach(f => { html += `<div class="al er"><i class="bi bi-x-octagon-fill me-1"></i> ${esc(f.g.doc)} บันทึกไม่สำเร็จ: ${esc(f.m)}</div>`; });
+        S.msg = html;
+        draw(false);
+        refreshPage();
+        setTimeout(() => { if (ov) { const q = ov.querySelector('#lgb-q'); if (q && !S.form) q.focus(); } }, 250);
+        ensureButton();
+    }
+
+    // ---------- ติดป้าย "รับย้อนหลัง" ในรายการรับล่าสุด (ทั้งแบบเดิมและกล่องใหม่) ----------
+    function manualMap() {
+        const m = new Map();
+        (db.lgReceiveLog || []).forEach(r => {
+            if (!isTrue(r.manual)) return;
+            const d = up(r.docNumber); if (!d) return;
+            const t = ms(r.receivedAt);
+            let g = m.get(d); if (!g) { g = { t, wos: [], reason: String(r.reason || '') }; m.set(d, g); }
+            const w = up(r.WO); if (w && g.wos.indexOf(w) < 0) g.wos.push(w);
+        });
+        const out = new Map();
+        m.forEach(g => { if (g.t) out.set(hm(g.t) + '|' + g.wos.join(', '), g.reason); });
+        return out;
+    }
+    function decorate() {
+        const mm = manualMap();
+        if (!mm.size) return;
+        document.querySelectorAll('#lgr-recent tr').forEach(tr => {
+            if (tr.dataset.lgb) return;
+            const tds = tr.querySelectorAll('td'); if (tds.length < 4) return;
+            const key = (tds[0].textContent || '').trim() + '|' + (tds[1].textContent || '').trim();
+            if (!mm.has(key)) return;
+            tr.dataset.lgb = '1';
+            const last = tds[tds.length - 1];
+            last.insertAdjacentHTML('beforeend', ` <span class="badge bg-warning text-dark" title="${esc(mm.get(key))}">รับย้อนหลัง</span>`);
+        });
+        document.querySelectorAll('#lgr2 .lgr2-row').forEach(row => {
+            if (row.dataset.lgb) return;
+            const tm = row.querySelector('.tm b'), wo = row.querySelector('.wo'), mid = row.querySelector('.mid'), rt = row.querySelector('.rt');
+            if (!tm || !wo || !mid) return;
+            const key = (tm.textContent || '').trim() + '|' + (wo.textContent || '').trim();
+            if (!mm.has(key)) return;
+            row.dataset.lgb = '1'; row.style.borderLeftColor = '#f59e0b';
+            mid.insertAdjacentHTML('beforeend', `<div style="font-size:.68rem;font-weight:700;color:#92580a;margin-top:2px">📝 ${esc(mm.get(key))}</div>`);
+            if (rt) rt.insertAdjacentHTML('beforeend', `<span style="display:block;margin-top:3px;font-size:.62rem;font-weight:800;color:#92580a;background:#fff4dc;border-radius:20px;padding:1px 8px">รับย้อนหลัง</span>`);
+        });
+    }
+    function watch(id) {
+        const el = document.getElementById(id);
+        if (!el || el.dataset.lgbW) return !!el;
+        el.dataset.lgbW = '1';
+        const mo = new MutationObserver(() => { try { decorate(); } catch (e) {} mo.takeRecords(); });
+        mo.observe(el, { childList: true, subtree: true });
+        decorate(); mo.takeRecords();
+        return true;
+    }
+    setInterval(() => { try { watch('lgr-recent'); watch('lgr2'); } catch (e) {} }, 1500);
+})();
+// ===== จบ LG-RECEIVE-BACKDATE-WEB =====
 // ===== จบ SYNC-CARD-A =====
 // อัปโหลดไฟล์แพลนที่กรอกแล้ว
 window.handleLGPlanFileUpload = function(event) {
