@@ -27856,6 +27856,12 @@ ${body}</div><div class="ppx2-cnt" id="ppx2-cnt"></div>`;
         again.classList.add('ppx3-flash'); setTimeout(() => again.classList.remove('ppx3-flash'), 1800);
     }
 })();
+(function () {
+    if (window.__dpBwide) return; window.__dpBwide = true;
+    const s = document.createElement('style'); s.id = 'dpB-wide-css';
+    s.textContent = '.dpB{max-width:2400px!important}';
+    document.head.appendChild(s);
+})();
 // อัปโหลดไฟล์แพลนที่กรอกแล้ว
 window.handleLGPlanFileUpload = function(event) {
     const file = event.target.files[0];
