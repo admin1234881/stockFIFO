@@ -24178,6 +24178,139 @@ renderLGTagPrintWindow = function(tags, printWin) {
     }, 0);
 })();
 // ===== จบ VEHICLE-DASH-B =====
+// ===== LG-RETURN-CHECK: หลังคืนแท็ก → ซิงก์ชีตทันที + ตรวจว่าชีตลบแถวจริงหรือไม่ + เตือนถ้า Google Script ยังเป็นเวอร์ชันเก่า =====
+// After a tag return: re-sync from the sheet, verify the rows were really removed, and warn if the deployed Google Script is stale.
+// วางแพตช์นี้ต่อจากแพตช์ "คืนแท็ก" (เหนือบรรทัดเดิม) — ลบแพตช์นี้ออก = กลับเป็นเหมือนเดิม
+(function () {
+    if (window.__lgRetCheck) return; window.__lgRetCheck = true;
+    if (typeof callAppsScript !== 'function') { console.warn('LG-RETURN-CHECK: ไม่พบ callAppsScript — แพตช์นี้ไม่ทำงาน (วางผิดตำแหน่ง?)'); return; }
+
+    const I18N = {
+        th: {
+            title: 'ตรวจกับชีตจริงแล้ว',
+            line: '{wo} / {part}: ยิงรวม {s} / แพลน {o} ชิ้น ({p}%)',
+            lineNoPlan: '{wo} / {part}: ยิงรวม {s} ชิ้น (ไม่มีแพลน)',
+            left: 'ยังเหลือแถวสแกนในชีต {n} แถว',
+            failed: 'ซิงก์ข้อมูลจากชีตไม่สำเร็จ — ลองกด F5',
+            stale: 'Google Script ยังเป็นเวอร์ชันเก่า (ยังไม่ได้ Deploy)',
+            staleHow: 'ไปที่ Apps Script → Deploy → Manage deployments → ดินสอ → Version: New version → Deploy แล้วลองใหม่',
+            notGone: 'แถวที่คืนยังอยู่ในชีต {n} แถว — ความคืบหน้าจะกลับมาเป็นเดิมทุก 30 วินาที',
+            close: 'ปิด'
+        },
+        en: {
+            title: 'Checked against the live sheet',
+            line: '{wo} / {part}: scanned {s} / plan {o} pcs ({p}%)',
+            lineNoPlan: '{wo} / {part}: scanned {s} pcs (not in plan)',
+            left: '{n} scan row(s) still in the sheet',
+            failed: 'Could not re-sync from the sheet — please press F5',
+            stale: 'The deployed Google Script is an old version (not re-deployed)',
+            staleHow: 'Apps Script → Deploy → Manage deployments → pencil → Version: New version → Deploy, then try again',
+            notGone: '{n} returned row(s) are still in the sheet — progress will bounce back at the next 30s update',
+            close: 'Close'
+        }
+    };
+    const lang = () => (typeof currentLanguage !== 'undefined' && currentLanguage === 'en') ? 'en' : 'th';
+    const t = (k, v) => { let s = I18N[lang()][k]; Object.keys(v || {}).forEach((n) => { s = s.split('{' + n + '}').join(v[n]); }); return s; };
+    const up = (s) => String(s == null ? '' : s).trim().toUpperCase();
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const num = (n) => Math.round(Number(n) || 0).toLocaleString('en-US');
+
+    function toast(html, bad) {
+        let el = document.getElementById('lgrc-toast');
+        if (!el) {
+            el = document.createElement('div'); el.id = 'lgrc-toast';
+            el.style.cssText = 'position:fixed;right:18px;bottom:18px;z-index:100000;max-width:min(460px,92vw);background:#fff;border-radius:14px;padding:12px 16px;box-shadow:0 10px 30px rgba(0,0,0,.28);font-size:.85rem;line-height:1.5;font-family:inherit';
+            document.body.appendChild(el);
+        }
+        el.style.borderLeft = '6px solid ' + (bad ? '#dc2626' : '#16a34a');
+        el.innerHTML = html + (bad ? '<div style="text-align:right;margin-top:6px"><button type="button" id="lgrc-x" style="border:0;background:#fee2e2;color:#991b1b;border-radius:8px;padding:2px 12px;font-weight:700">' + esc(t('close')) + '</button></div>' : '');
+        const x = el.querySelector('#lgrc-x'); if (x) x.onclick = () => { el.style.display = 'none'; };
+        el.style.display = 'block';
+        clearTimeout(el._t);
+        if (!bad) el._t = setTimeout(() => { el.style.display = 'none'; }, 9000);
+    }
+
+    // ซิงก์ข้อมูลล่าสุด (ใช้ตัวโหลดข้อมูลเดิมของระบบ) แล้ววาดหน้าที่แสดงความคืบหน้าใหม่ทุกครั้ง แม้ข้อมูลหน้าจอจะตรงกับชีตอยู่แล้ว
+    async function resync() {
+        if (typeof loadDataFromSheet === 'function') await loadDataFromSheet(false);
+        try { if (typeof window.renderLGMatchTable === 'function') window.renderLGMatchTable(); } catch (e) { console.warn('LG-RETURN-CHECK match table', e); }
+        try { if (typeof window.renderLGDashboard === 'function') window.renderLGDashboard(); } catch (e) { console.warn('LG-RETURN-CHECK dashboard', e); }
+        const nb = document.getElementById('nav-lg-receive-item');
+        if (nb) { try { nb.dispatchEvent(new Event('shown.bs.tab', { bubbles: true })); } catch (e) { } }
+    }
+
+    function summary(keys) {
+        const status = (typeof computeLGMatchStatus === 'function') ? computeLGMatchStatus() : [];
+        const lines = []; let left = 0;
+        keys.forEach((k) => {
+            const p = k.split('|');
+            const rows = (db.lgScanLog || []).filter((s) => up(s.WO) === p[0] && up(s.partNo) === p[1]);
+            left += rows.length;
+            const pl = status.filter((r) => up(r.WO) === p[0] && up(r.partNo) === p[1]);
+            if (pl.length) {
+                pl.forEach((r) => {
+                    const o = r.orderQty || 0, pc = o > 0 ? Math.min(100, Math.round(r.scanned / o * 100)) : 0;
+                    lines.push(t('line', { wo: esc(p[0]), part: esc(p[1]), s: num(r.scanned), o: num(o), p: pc }));
+                });
+            } else {
+                lines.push(t('lineNoPlan', { wo: esc(p[0]), part: esc(p[1]), s: num(rows.reduce((a, s) => a + (parseFloat(s.rackQty) || 0), 0)) }));
+            }
+        });
+        return { lines: Array.from(new Set(lines)), left: left };
+    }
+
+    // เช็กว่า id ที่เพิ่งคืนยังเหลือในข้อมูลจากชีตหรือไม่ / are the returned ids still in the server data?
+    function stillThere(ids) {
+        if (!ids || !ids.length) return 0;
+        const s = new Set(ids.map((x) => String(x).trim()));
+        return (db.lgScanLog || []).filter((r) => s.has(String(r.id == null ? '' : r.id).trim())).length;
+    }
+
+    async function afterChange(keys, res, isReturn) {
+        try {
+            await resync();
+            const r = keys && keys.size ? summary(Array.from(keys)) : null;
+            const stale = isReturn && res && !res.ver;
+            const n = isReturn && res ? stillThere(res.scanIds) : 0;
+            if (stale || n) {
+                let h = '<b style="color:#b91c1c">⚠ ' + esc(stale ? t('stale') : t('notGone', { n: n })) + '</b>';
+                if (stale) h += '<br>' + esc(t('staleHow')) + (n ? '<br>' + esc(t('notGone', { n: n })) : '');
+                toast(h, true);
+            } else if (r) {
+                let h = '<b>' + esc(t('title')) + '</b><br>' + r.lines.slice(0, 8).join('<br>') + (r.lines.length > 8 ? '<br>…' : '');
+                if (r.left) h += '<br><span style="color:#b45309;font-weight:700">' + esc(t('left', { n: r.left })) + '</span>';
+                toast(h, false);
+            }
+            // ซิงก์ซ้ำอีกรอบ เผื่อมีรอบดึงข้อมูลอื่นที่ยังค้างมาทับ แล้วเช็กอีกครั้ง
+            setTimeout(() => {
+                resync().then(() => {
+                    const m = isReturn && res ? stillThere(res.scanIds) : 0;
+                    if (m && !n) toast('<b style="color:#b91c1c">⚠ ' + esc(t('notGone', { n: m })) + '</b>', true);
+                }).catch(() => { });
+            }, 5000);
+        } catch (e) {
+            console.warn('LG-RETURN-CHECK', e);
+            toast(esc(t('failed')), true);
+        }
+    }
+
+    const _call = callAppsScript;
+    callAppsScript = async function (action, payload) {
+        const isRet = action === 'voidLGTag' && payload && (payload.op === 'lgReturn' || payload.op === 'lgReturnRestore');
+        const keys = new Set();
+        if (isRet && payload.op === 'lgReturn') {
+            const ids = new Set((payload.ids || []).map((x) => String(x).trim()));
+            (db.lgScanLog || []).forEach((s) => { if (ids.has(String(s.id == null ? '' : s.id).trim())) keys.add(up(s.WO) + '|' + up(s.partNo)); });
+        }
+        const r = await _call.apply(this, arguments);
+        if (isRet) {
+            if (payload.op === 'lgReturnRestore') (r && r.scanRows || []).forEach((o) => keys.add(up(o.WO) + '|' + up(o.partNo)));
+            setTimeout(() => { afterChange(keys, r, payload.op === 'lgReturn'); }, 600);
+        }
+        return r;
+    };
+})();
+// ===== จบ LG-RETURN-CHECK =====
 // อัปโหลดไฟล์แพลนที่กรอกแล้ว
 window.handleLGPlanFileUpload = function(event) {
     const file = event.target.files[0];
