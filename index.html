@@ -7990,7 +7990,7 @@ window.downloadDeliveryPlanPDF = function() {
             let htmlString = `<div style="width: 1500px; padding: 20px 30px; box-sizing: border-box; background-color: #fff; font-family: 'Sarabun', 'Mitr', sans-serif; color: #333; margin: 0 auto;">`;
 
             // 🟢 อัปเดต: ปรับเป็น 23 บรรทัดต่อ 1 หน้าตามคำขอ
-            const ROWS_PER_PAGE = 23; 
+            const ROWS_PER_PAGE = 100000;
 
             rows.forEach((r, idx) => {
                 if (idx % ROWS_PER_PAGE === 0) {
@@ -8030,6 +8030,7 @@ window.downloadDeliveryPlanPDF = function() {
 
             // 🟢 แปะ Footer ให้หน้าสุดท้ายด้วย
             htmlString += `</tbody></table>${footerHTML}</div>`;
+            if (typeof window.__dpTidy === 'function') { try { htmlString = window.__dpTidy(htmlString); } catch (e) { console.warn('dpTidy', e); } }
 
             const opt = {
                 margin:       0.2, 
@@ -16824,9 +16825,173 @@ renderLGTagPrintWindow = function(tags, printWin) {
     }
     init();
 })();
-// ===== จบ LG-DELIVERY-DASH =====
-// ===== จบ LG-TAG-2FORMAT =====
-// ===== LG-DELIVERY-REPORT-V2: บันทึกภาพ/PDF แบบทุก WO อยู่ในรูปเดียว (รายการเยอะจะบีบแถวให้เตี้ยลงอัตโนมัติ) =====
+// ===== PACKING-BOX-DB: จำนวนต่อกล่องดึงจากฐานข้อมูลสินค้า (แก้ไขได้) + ช่องจำนวนกล่องคำนวณอัตโนมัติ (แก้ไม่ได้) =====
+(function () {
+    if (window.__plbDb) return; window.__plbDb = true;
+    const fmt = (n) => Number(n || 0).toLocaleString('en-US');
+    const LS_KEY = 'plPerBox_v1';
+    const mem = () => { try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}') || {}; } catch (e) { return {}; } };
+    const dbPer = (id) => {
+        const p = (db.products || []).find((x) => String(x.id).trim() === String(id).trim());
+        const n = p ? parseInt(p.fullBoxQuantity, 10) : 0;
+        return n > 0 ? n : 0;
+    };
+
+    function label(tr) {
+        const perEl = tr.querySelector('.plb-per'), mm = tr.querySelector('.plb-mem'); if (!perEl || !mm) return;
+        const per = parseInt(perEl.value, 10), dv = Number(tr.dataset.dbper) || 0, key = tr.dataset.pkey || '';
+        let txt, col;
+        if (!(per > 0)) { txt = dv ? 'กรอกจำนวนต่อกล่อง' : 'ไม่มีค่าในฐานข้อมูล — กรอกเอง'; col = '#b45309'; }
+        else if (dv && per === dv) { txt = '✓ ดึงจากฐานข้อมูล'; col = '#16a34a'; }
+        else if (dv) { txt = '✎ แก้ไขแล้ว (ฐานข้อมูล ' + fmt(dv) + ')'; col = '#2563eb'; }
+        else if (Number(mem()[key]) === per) { txt = '✓ จำค่าล่าสุด'; col = '#16a34a'; }
+        else { txt = 'กรอกเอง'; col = '#2563eb'; }
+        mm.textContent = txt; mm.style.color = col;
+        perEl.style.borderColor = per > 0 ? (dv && per === dv ? '#16a34a' : '#2563eb') : '#f59e0b';
+    }
+
+    function enhance(tot) {
+        const root = tot.closest('.swal2-html-container') || document;
+        // ข้อความอธิบาย + หัวคอลัมน์
+        root.querySelectorAll('div').forEach((d) => {
+            if (d.children.length === 0 && /แก้ช่องกล่องเองได้/.test(d.textContent)) d.textContent = d.textContent.replace(/กรอก "ต่อกล่อง"[^]*$/, 'ค่า "ต่อกล่อง" ดึงจากฐานข้อมูลสินค้าให้แล้ว (แก้ไขได้) · จำนวนกล่องคำนวณให้อัตโนมัติ');
+        });
+        root.querySelectorAll('thead th').forEach((th) => { if (th.textContent.trim() === 'กล่องที่ต้องส่ง') th.textContent = 'กล่องที่ต้องส่ง (อัตโนมัติ)'; });
+        root.querySelectorAll('tbody tr[data-k]').forEach((tr) => {
+            const b = tr.querySelector('td b'); tr.dataset.pkey = b ? b.textContent.trim() : '';
+            tr.dataset.dbper = dbPer(tr.dataset.pkey) || '';
+            const boxEl = tr.querySelector('.plb-box');
+            if (boxEl) { boxEl.readOnly = true; boxEl.tabIndex = -1; boxEl.title = 'คำนวณอัตโนมัติจากจำนวน ÷ จำนวนต่อกล่อง (แก้ไม่ได้)'; boxEl.style.cursor = 'not-allowed'; boxEl.style.borderStyle = 'dashed'; boxEl.style.color = '#475569'; }
+        });
+        // แก้ช่อง "ต่อกล่อง" แล้วอัปเดตป้ายสถานะ (ตัวฟังของระบบเดิมทำงานก่อน แล้วเราค่อยทับป้ายทีหลัง)
+        root.addEventListener('input', (e) => { if (e.target.classList && e.target.classList.contains('plb-per')) label(e.target.closest('tr')); });
+        // ใส่ค่าจากฐานข้อมูล หลังหน้าต่างเปิดเสร็จ (รอให้ตัวคำนวณเดิมพร้อมก่อน)
+        setTimeout(() => {
+            root.querySelectorAll('tbody tr[data-k]').forEach((tr) => {
+                const perEl = tr.querySelector('.plb-per'), boxEl = tr.querySelector('.plb-box'), dv = Number(tr.dataset.dbper) || 0;
+                if (dv > 0 && perEl) {
+                    perEl.value = dv; perEl.dispatchEvent(new Event('input', { bubbles: true }));
+                    if (boxEl && !boxEl.value) { boxEl.value = Math.ceil(Number(tr.dataset.q) / dv); }   // กันพลาด ถ้าตัวคำนวณเดิมยังไม่พร้อม
+                }
+                label(tr);
+            });
+            let b = 0; root.querySelectorAll('tbody tr .plb-box').forEach((el) => { const v = parseInt(el.value, 10); if (v > 0) b += v; });
+            tot.textContent = b > 0 ? 'รวมทั้งหมด ' + fmt(b) + ' กล่อง' : '';
+        }, 120);
+    }
+    try {
+        new MutationObserver(() => {
+            const tot = document.getElementById('plb-total');
+            if (tot && !tot.dataset.plbdb) { tot.dataset.plbdb = '1'; try { enhance(tot); } catch (e) { console.warn('PACKING-BOX-DB', e); } }
+        }).observe(document.body, { childList: true, subtree: true });
+    } catch (e) { }
+})();
+// ===== จบ PACKING-BOX-DB =====
+// ===== DP-DELETE-POPUP: ป๊อปอัปลบรายการในแผน Delivery plan (ยืนยัน / กำลังลบ / สำเร็จ) แบบใหม่ =====
+(function () {
+    const T = {
+        th: {
+            ask: 'ลบรายการนี้ออกจากแผน?', askSub: 'ลบแล้วกู้คืนไม่ได้', yes: 'ใช่, ลบเลย', no: 'ยกเลิก',
+            cust: 'ลูกค้า', time: 'เวลา', qty: 'จำนวน', pcs: 'ชิ้น', date: 'วันที่', st: 'สถานะ',
+            Pending: 'รอจัดส่ง', Delivering: 'กำลังวิ่ง', Completed: 'จบงาน', Cancelled: 'ยกเลิกแล้ว',
+            busy: 'กำลังลบรายการ...', busySub: 'กำลังบันทึกลงระบบ', busyNote: 'กรุณารอสักครู่ — อย่าปิดหน้านี้',
+            ok: 'ลบเรียบร้อย', okSub: 'รายการถูกลบออกจากแผนแล้ว', err: 'ลบไม่สำเร็จ', close: 'ปิด', unknown: 'รายการในแผน'
+        },
+        en: {
+            ask: 'Remove this item from the plan?', askSub: 'This cannot be undone', yes: 'Yes, delete', no: 'Cancel',
+            cust: 'Customer', time: 'Time', qty: 'Quantity', pcs: 'pcs', date: 'Date', st: 'Status',
+            Pending: 'Pending', Delivering: 'On the road', Completed: 'Completed', Cancelled: 'Cancelled',
+            busy: 'Deleting item...', busySub: 'Saving to the system', busyNote: 'Please wait — do not close this page',
+            ok: 'Deleted', okSub: 'The item was removed from the plan', err: 'Delete failed', close: 'Close', unknown: 'Plan item'
+        }
+    };
+    const lang = () => (typeof currentLanguage !== 'undefined' && currentLanguage === 'en') ? 'en' : 'th';
+    const t = (k) => T[lang()][k] || k;
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const fmt = (n) => Number(n || 0).toLocaleString('en-US');
+
+    const st = document.createElement('style'); st.id = 'dlx-css';
+    st.textContent = `
+.swal2-popup.dlx-pop{width:min(560px,94vw);padding:0;border-radius:28px;overflow:hidden;text-align:left;box-shadow:0 30px 80px rgba(15,23,42,.4)}
+.dlx-pop .swal2-html-container{margin:0;padding:0;text-align:left}
+.dlx-pop .swal2-actions{margin:0;padding:0 30px 26px;gap:12px;width:100%;justify-content:flex-end;flex-wrap:nowrap}
+.dlx-pop .swal2-actions button{border-radius:14px;font-weight:700;padding:12px 22px;font-size:1rem;box-shadow:none}
+.dlx-pop .dlx-yes{background:linear-gradient(135deg,#e11d48,#f43f5e)!important;color:#fff!important;box-shadow:0 8px 20px rgba(225,29,72,.35)!important}
+.dlx-pop .dlx-no{background:#f1f5f9!important;color:#475569!important}
+.dlx-pop .swal2-actions button:focus{outline:none!important;box-shadow:0 0 0 3px rgba(148,163,184,.45)!important}.dlx-pop .dlx-yes:focus{box-shadow:0 0 0 3px rgba(244,63,94,.4)!important}
+.dlx-hd{background:linear-gradient(135deg,#e11d48,#fb7185);color:#fff;padding:26px 32px 24px;display:flex;gap:18px;align-items:center;position:relative;overflow:hidden}
+.dlx-hd.ok{background:linear-gradient(135deg,#059669,#14b8a6)}
+.dlx-hd:after{content:"";position:absolute;right:-40px;top:-60px;width:170px;height:170px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.28),transparent 70%)}
+.dlx-ic{width:64px;height:64px;border-radius:20px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:2rem;flex:none;position:relative;z-index:1}
+.dlx-hd.busy .dlx-ic{animation:dlxPulse 1.5s ease-out infinite}.dlx-hd.busy .dlx-ic i{animation:dlxShake .7s ease-in-out infinite}
+.dlx-hd.ok .dlx-ic{animation:dlxPop .5s cubic-bezier(.2,1.6,.4,1)}
+@keyframes dlxPulse{0%{box-shadow:0 0 0 0 rgba(255,255,255,.55)}100%{box-shadow:0 0 0 18px rgba(255,255,255,0)}}
+@keyframes dlxShake{0%,100%{transform:rotate(0)}25%{transform:rotate(-9deg)}75%{transform:rotate(9deg)}}
+@keyframes dlxPop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+.dlx-hd .tx{position:relative;z-index:1;min-width:0}.dlx-hd h3{margin:0;font-size:1.3rem;font-weight:800}
+.dlx-hd small{display:block;opacity:.93;font-size:.95rem;margin-top:3px}
+.dlx-bar{height:4px;background:#ffe4e6;position:relative;overflow:hidden}
+.dlx-bar:after{content:"";position:absolute;top:0;bottom:0;width:38%;background:linear-gradient(90deg,transparent,#e11d48,#fb7185,transparent);animation:dlxRun 1.2s ease-in-out infinite}
+@keyframes dlxRun{from{left:-40%}to{left:100%}}
+.dlx-bar.ok:after{left:0;width:100%;background:#10b981;animation:dlxShrink 1.5s linear forwards}
+@keyframes dlxShrink{from{width:100%}to{width:0}}
+.dlx-bd{padding:22px 32px 22px}
+.dlx-card{border:1px solid #e2e8f0;border-radius:18px;padding:16px 18px;background:#f8fafc}
+.dlx-pn{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}.dlx-pn b{font-size:1.15rem;color:#1d4ed8}.dlx-pn span{color:#334155;font-size:1rem}
+.dlx-row{display:flex;gap:10px 22px;flex-wrap:wrap;margin-top:12px}
+.dlx-kv{min-width:110px}.dlx-kv small{display:block;color:#94a3b8;font-size:.76rem}.dlx-kv b{font-size:1rem;color:#0f172a}
+.dlx-qty{margin-left:auto;text-align:right}.dlx-qty b{font-size:1.9rem;line-height:1;color:#e11d48;font-weight:800}.dlx-qty small{display:block;color:#94a3b8}
+.dlx-chip{display:inline-block;padding:2px 11px;border-radius:99px;background:#e0e7ff;color:#3730a3;font-size:.8rem;font-weight:700}
+.dlx-nt{margin-top:14px;text-align:center;color:#94a3b8;font-size:.86rem}
+.dlx-err{color:#be123c;font-size:1rem;word-break:break-word}
+`;
+    document.head.appendChild(st);
+
+    const find = (id) => (db.deliveryPlans || []).find((p) => String(p.id).trim() === String(id).trim());
+    const timeOf = (p) => { let s = String(p.time || '').replace(/^'+/, '').trim(); try { if (typeof formatTimeDisplay === 'function') s = formatTimeDisplay(s); } catch (e) { } return s; };
+    const dateOf = (p) => { try { return typeof formatDate === 'function' ? formatDate(p.date) : String(p.date || '').split('T')[0]; } catch (e) { return ''; } };
+
+    function head(cls, icon, title, sub) { return '<div class="dlx-hd ' + cls + '"><div class="dlx-ic"><i class="bi bi-' + icon + '"></i></div><div class="tx"><h3>' + esc(title) + '</h3><small>' + esc(sub) + '</small></div></div>'; }
+
+    function detail(p) {
+        if (!p) return '<div class="dlx-card"><div class="dlx-pn"><span>' + esc(t('unknown')) + '</span></div></div>';
+        const kv = (k, v) => '<div class="dlx-kv"><small>' + esc(t(k)) + '</small><b>' + v + '</b></div>';
+        return '<div class="dlx-card"><div class="dlx-pn"><b>' + esc(p.productId || '-') + '</b><span>' + esc(p.productName || '') + '</span></div>'
+            + '<div class="dlx-row">' + kv('cust', esc(p.customer || '-')) + kv('time', esc(timeOf(p) || '-')) + kv('date', esc(dateOf(p) || '-'))
+            + kv('st', '<span class="dlx-chip">' + esc(t(p.status) || p.status || '-') + '</span>')
+            + '<div class="dlx-qty"><small>' + esc(t('qty')) + '</small><b>' + fmt(p.quantity) + '</b><small>' + esc(t('pcs')) + '</small></div></div></div>';
+    }
+
+    function run(id, date) {
+        const plan = find(id);
+        Swal.fire({
+            customClass: { popup: 'dlx-pop', confirmButton: 'dlx-yes', cancelButton: 'dlx-no' }, buttonsStyling: false,
+            showCancelButton: true, reverseButtons: true, focusCancel: true, confirmButtonText: '<i class="bi bi-trash3-fill me-1"></i> ' + t('yes'), cancelButtonText: t('no'),
+            html: head('', 'trash3-fill', t('ask'), t('askSub')) + '<div class="dlx-bd">' + detail(plan) + '</div>'
+        }).then(async (res) => {
+            if (!res.isConfirmed) return;
+            Swal.fire({
+                customClass: { popup: 'dlx-pop' }, showConfirmButton: false, allowOutsideClick: false, allowEscapeKey: false,
+                html: head('busy', 'trash3-fill', t('busy'), plan ? ((plan.productId || '') + ' · ' + (plan.customer || '')) : t('busySub')) + '<div class="dlx-bar"></div><div class="dlx-bd"><div class="dlx-nt" style="margin:0">' + esc(t('busyNote')) + '</div></div>'
+            });
+            try {
+                await callAppsScript('deleteDeliveryPlan', { id: id });
+                db.deliveryPlans = (db.deliveryPlans || []).filter((p) => String(p.id) !== String(id));
+                try { if (typeof renderDeliveryPlanTable === 'function') renderDeliveryPlanTable(date); else if (typeof window.renderDeliveryPlanTable === 'function') window.renderDeliveryPlanTable(date); } catch (e) { console.warn(e); }
+                Swal.fire({ customClass: { popup: 'dlx-pop' }, showConfirmButton: false, timer: 1500, html: head('ok', 'check-lg', t('ok'), t('okSub')) + '<div class="dlx-bar ok"></div>' });
+            } catch (error) {
+                Swal.fire({
+                    customClass: { popup: 'dlx-pop', confirmButton: 'dlx-no' }, buttonsStyling: false, confirmButtonText: t('close'),
+                    html: head('', 'exclamation-octagon-fill', t('err'), t('busySub')) + '<div class="dlx-bd"><div class="dlx-err">' + esc(error && error.message ? error.message : error) + '</div></div>'
+                });
+            }
+        });
+    }
+
+    window.deletePlanItem = run;
+    try { Object.defineProperty(window, 'deletePlanItem', { configurable: true, enumerable: true, get: function () { return run; }, set: function () { } }); } catch (e) { }
+})();
+// ===== จบ DP-DELETE-POPUP =====
 (function () {
     if (window.__lgRep2Installed) return;
     window.__lgRep2Installed = true;
@@ -33268,6 +33433,123 @@ body:has(#anB-dr.open) #calc-toggle-btn,body:has(#anB-dr.open) #support-fab-btn,
     }, true);
 })();
 // ===== จบ DP-CALENDAR-FIX =====
+</script>
+<script>
+// ===== DP-A3-ONE-PAGE: พิมพ์แผน A3 ให้ข้อมูลทั้งหมดอยู่ในหน้าเดียว =====
+// ต้องคู่กับการแก้ในฟังก์ชัน downloadDeliveryPlanPDF (ดูคู่มือ): ROWS_PER_PAGE = 100000 และบรรทัดเรียก window.__dpTidy
+// ถ้าแถวไม่เยอะ = A3 แนวนอน (เหมือนเดิม) · ถ้าแถวเยอะจนต้องย่อมาก ระบบเปลี่ยนเป็น A3 แนวตั้งให้เอง
+// อยากบังคับแนวนอนเสมอ ให้เปลี่ยนเป็น true
+(function () {
+    var FORCE_LANDSCAPE = false;
+    var W_IN = 16.5354, H_IN = 11.6929, DPI = 96;
+    if (window.__dpOnePage) return; window.__dpOnePage = true;
+    var origPdf = window.html2pdf;
+    var WP = origPdf && origPdf.Worker && origPdf.Worker.prototype;
+    if (!WP || WP.__dpFit) return;
+    var _from = WP.from, _save = WP.save, _set = WP.set;
+    var pendPlan = null, pendOpt = null, pendT = 0;   // html2pdf สร้างตัวใหม่ทุกคำสั่งในสาย จึงจำค่าไว้ตรงนี้แทน
+
+    WP.set = function (opt) {
+        if (opt && typeof opt === 'object' && opt.filename) { pendOpt = opt; pendT = Date.now(); }
+        return _set.apply(this, arguments);
+    };
+    WP.from = function (el) {
+        if (typeof el === 'string' && el.indexOf('DAILY DELIVERY PLAN SUMMARY') > -1) { pendPlan = el; pendT = Date.now(); }
+        return _from.apply(this, arguments);
+    };
+
+    // ---------- จัดตารางแผนให้เรียบร้อย: ทุกแถวสูงเท่ากัน · ชื่อพาร์ทยาวตัดเป็น "..." · ช่องลูกค้าแคบลง · ช่องสต็อกกว้างพอ ----------
+    // ตัดข้อความที่ยาวเกินช่องให้เหลือ "..." (วัดความกว้างจริง เพราะตัวสร้างภาพไม่รองรับการตัดอัตโนมัติของเบราว์เซอร์)
+    var mctx = document.createElement('canvas').getContext('2d');
+    function clip(text, font, maxPx) {
+        text = String(text == null ? '' : text).trim(); mctx.font = font;
+        if (mctx.measureText(text).width <= maxPx) return text;
+        var lo = 0, hi = text.length;
+        while (lo < hi) { var mid = Math.ceil((lo + hi) / 2); if (mctx.measureText(text.slice(0, mid) + '…').width <= maxPx) lo = mid; else hi = mid - 1; }
+        return text.slice(0, Math.max(1, lo)).trim() + '…';
+    }
+    var FF = "'Sarabun','Mitr',sans-serif";
+    window.__dpTidy = function (html) {
+        var d = document.createElement('div'); d.innerHTML = html;
+        d.querySelectorAll('table').forEach(function (tb) {
+            if (!tb.querySelector('thead')) return;                    // ตารางหัวกระดาษ/ท้ายกระดาษไม่แตะ
+            var r1 = tb.querySelectorAll('thead tr:nth-child(1) th'), r2 = tb.querySelectorAll('thead tr:nth-child(2) th');
+            if (r1.length < 7 || r2.length < 3) return;
+            var wNo = 3, wCust = 9, wProd = 21, wStk = 5.4, wTot = 5, wBal = 5;
+            var nT = r2.length - 2, wT = (100 - wNo - wCust - wProd - 2 * wStk - wTot - wBal) / nT;
+            r1[0].style.width = wNo + '%'; r1[1].style.width = wCust + '%'; r1[2].style.width = wProd + '%';
+            r1[5].style.width = wTot + '%'; r1[6].style.width = wBal + '%';
+            r2[0].style.width = wStk + '%'; r2[1].style.width = wStk + '%';
+            for (var i = 2; i < r2.length; i++) r2[i].style.width = wT.toFixed(3) + '%';
+            tb.querySelectorAll('tbody tr').forEach(function (tr) {
+                tr.style.height = '25px';
+                var fullTxt = { 1: (tr.children[1] || {}).textContent, 2: ((tr.children[2] || {}).textContent || '').replace(/\s+/g, ' ').trim() };
+                Array.prototype.forEach.call(tr.children, function (td, ci) {
+                    td.style.paddingTop = '2px'; td.style.paddingBottom = '2px'; td.style.verticalAlign = 'middle';
+                    td.style.whiteSpace = 'nowrap'; td.style.overflow = 'hidden'; td.style.wordBreak = 'normal';
+                    if (ci === 1 || ci === 2) { td.style.textOverflow = 'ellipsis'; td.title = fullTxt[ci] || ''; }
+                    if (ci === 1) { var full1 = td.textContent.trim(); td.textContent = clip(full1, 'bold 11px ' + FF, 1440 * wCust / 100 - 16); }
+                    if (ci === 2 && td.children.length >= 2) {
+                        td.children[0].style.display = 'inline'; td.children[1].style.display = 'inline'; td.children[1].style.marginLeft = '8px';
+                        mctx.font = 'bold 11px ' + FF; var idW = mctx.measureText(td.children[0].textContent).width;
+                        td.children[1].textContent = clip(td.children[1].textContent, '10px ' + FF, 1440 * wProd / 100 - 16 - idW - 8 - 6);
+                    }
+                    if (ci === 3 || ci === 4) td.style.fontSize = '11px';
+                });
+            });
+        });
+        return d.innerHTML;
+    };
+
+    function compact(el) {
+        el.querySelectorAll('tbody td').forEach(function (td) { td.style.paddingTop = '2px'; td.style.paddingBottom = '2px'; });
+        el.querySelectorAll('tbody tr').forEach(function (tr) {
+            var c = tr.children[2];
+            if (c && c.children.length >= 2) { c.children[0].style.display = 'inline'; c.children[1].style.display = 'inline'; c.children[1].style.marginLeft = '6px'; }
+        });
+    }
+
+    async function fitAndSave(html, popt) {
+        var host = document.createElement('div');
+        host.style.cssText = 'position:fixed;left:-12000px;top:0;width:1560px;background:#fff;pointer-events:none;';
+        host.innerHTML = html; document.body.appendChild(host);
+        try {
+            var el = host.firstElementChild;
+            await Promise.all([].map.call(host.querySelectorAll('img'), function (im) { return new Promise(function (r) { if (im.complete) return r(); im.onload = im.onerror = r; setTimeout(r, 3000); }); }));
+            var opt = Object.assign({}, popt || {});
+            var margin = (typeof opt.margin === 'number') ? opt.margin : 0.2;
+            var iw = (W_IN - 2 * margin) * DPI, ih = (H_IN - 2 * margin) * DPI;      // พื้นที่พิมพ์แนวนอน (px)
+            var w = el.offsetWidth || 1500, h = el.offsetHeight || 1;
+            if (h * (iw / w) > ih) { compact(el); h = el.offsetHeight || h; }          // แถวเยอะ → บีบความสูงแถวก่อน
+            var sL = Math.min(iw / w, ih / h), sP = Math.min(ih / w, iw / h);       // สเกลที่ได้ของแนวนอน / แนวตั้ง
+            var portrait = !FORCE_LANDSCAPE && sP > sL * 1.02;
+            var pw = portrait ? ih : iw, ph = portrait ? iw : ih;                      // พื้นที่พิมพ์ที่ใช้จริง (px)
+            var sc = Math.max(1, Math.min(2.5, 14000 / h, Math.sqrt(1.2e8 / (w * h))));
+            var canvas = await window.html2canvas(el, { scale: sc, backgroundColor: '#ffffff', useCORS: true });
+            var url = canvas.toDataURL('image/jpeg', 0.95);
+            var ar = canvas.width / canvas.height, boxH = Math.floor(ph - 8);
+            var imgWpct = Math.min(100, (boxH * ar) / pw * 100);                // กว้างกี่ % ของหน้ากระดาษ (ความสูงให้เบราว์เซอร์คำนวณตามสัดส่วนภาพเอง ไม่ยืด)
+            var wrap = document.createElement('div');
+            wrap.style.cssText = 'width:100%;height:' + boxH + 'px;background:#fff;overflow:hidden;';
+            wrap.innerHTML = '<img src="' + url + '" style="display:block;margin:0 auto;width:' + imgWpct.toFixed(3) + '%;height:auto;">';
+            opt.jsPDF = Object.assign({}, opt.jsPDF || {}, { unit: 'in', format: 'a3', orientation: portrait ? 'portrait' : 'landscape' });
+            opt.pagebreak = { mode: ['avoid-all'] };
+            return await origPdf().set(opt).from(wrap).save();
+        } finally { host.remove(); }
+    }
+
+    WP.save = function (filename) {
+        var html = pendPlan, popt = pendOpt;
+        if (html && Date.now() - pendT < 30000 && typeof window.html2canvas === 'function') {
+            pendPlan = null; pendOpt = null;
+            var self = this;
+            return fitAndSave(html, popt).catch(function (e) { console.warn('DP-A3-ONE-PAGE ใช้วิธีเดิมแทน:', e); return _save.call(self, filename); });
+        }
+        return _save.apply(this, arguments);
+    };
+    WP.__dpFit = true;
+})();
+// ===== จบ DP-A3-ONE-PAGE =====
 </script>
 </body>
 </html>
