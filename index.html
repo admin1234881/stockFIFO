@@ -4731,6 +4731,7 @@ async function loadDataFromSheet(isInitialLoad = false) {
         newData.vehicles = newData.vehicles || []; // 🟢 รองรับข้อมูลทะเบียนรถ
 
         if (newData.users) newData.users = newData.users.map(normalizeBooleanFields);
+        if (Array.isArray(newData.products)) newData.products.forEach(p => { if (p) { ['name', 'customer', 'erpCode', 'customerGroup'].forEach(k => { if (p[k] !== undefined && typeof p[k] !== 'string') p[k] = (p[k] === null) ? '' : String(p[k]); }); if (p.name === undefined) p.name = ''; } }); // แก้บัค: ชื่อสินค้าเป็นตัวเลขล้วน ทำให้ช่องค้นหาพังทุกช่อง
         // 🟢 แปลงชื่อฟิลด์ Cleared (ชื่อคอลัมน์จริงในชีต) กลับเป็น erpStatus (ชื่อที่โค้ดหน้าเว็บใช้อยู่เดิม)
         if (newData.history) {
             newData.history.forEach(item => {
@@ -7849,7 +7850,7 @@ window.downloadDeliveryPlanPDF = function() {
         return;
     }
 
-    Swal.fire({ title: 'กำลังสร้าง Delivery plan', text: 'กำลังล็อกสัดส่วนตารางให้พอดีหน้ากระดาษ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    window.dpPlanBusyOpen(planDate);
 
     setTimeout(() => {
         try {
@@ -8041,7 +8042,7 @@ window.downloadDeliveryPlanPDF = function() {
 
             html2pdf().set(opt).from(htmlString).save().then(() => {
                 Swal.close();
-                Swal.fire({ icon: 'success', title: 'ดาวน์โหลดสำเร็จ!', text: 'ไฟล์ Delivery Plan ถูกบันทึกลงเครื่องแล้ว', timer: 2500, showConfirmButton: false });
+                window.dpPlanDone();
             }).catch(error => {
                 Swal.close();
                 Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถสร้าง PDF ได้: ' + error.message, 'error');
@@ -11474,7 +11475,7 @@ window.generatePackingListPDF = function(date, displayTime, customer) {
         </div>
     `;
 
-    Swal.fire({ title: 'กำลังจัดหน้า Packing List...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    window.plBusyOpen({ customer: safeCustomer, time: safeTime });
 
     // 🟢 สร้าง QR Code จากเลข Invoice รวม แล้วแปลงเป็นรูปภาพก่อนฝังลง PDF
     // (ต้องแปลงเป็น <img> เพราะ html2canvas capture <canvas> ที่ clone มาไม่ติด)
@@ -17535,9 +17536,73 @@ renderLGTagPrintWindow = function(tags, printWin) {
     document.addEventListener('change', (e) => { if (e.target && e.target.name === 'dashToggle') setTimeout(fit, 60); });
     setTimeout(fit, 300);
 })();
-// ===== จบ LG-FIT-HEIGHT =====
-// ===== LG-LINE-FILTER: เลือกดูทีละไลน์ในแท็บ LG Delivery (วางต่อท้ายบล็อก LG ทั้งหมด) =====
-// มีผลกับ ตัวเลขสรุป / กราฟ / ตาราง / สแกนล่าสุด และรูป-PDF ที่บันทึกด้วย
+// ===== DP-PLAN-POPUP: ป๊อปอัปพิมพ์แผน A3 (กำลังสร้าง + ดาวน์โหลดสำเร็จ) แบบใหม่ =====
+(function () {
+    const T = {
+        th: { title: 'กำลังสร้าง Delivery plan A3', plan: 'แผนส่งสินค้าวันที่', s1: 'รวบรวมคิวส่งสินค้า', s2: 'คำนวณสต็อกและจัดตาราง', s3: 'ล็อกสัดส่วนให้พอดีกระดาษ A3 และสร้าง PDF', note: 'ไฟล์จะดาวน์โหลดให้อัตโนมัติ — กรุณาอย่าปิดหน้านี้', okT: 'ดาวน์โหลดสำเร็จ!', okS: 'ไฟล์ Delivery Plan ถูกบันทึกลงเครื่องแล้ว' },
+        en: { title: 'Creating Delivery plan A3', plan: 'Delivery plan for', s1: 'Collecting delivery jobs', s2: 'Calculating stock and building the table', s3: 'Fitting to A3 paper and creating the PDF', note: 'The file downloads automatically — please keep this page open', okT: 'Download complete!', okS: 'The Delivery Plan file has been saved to your device' }
+    };
+    const lang = () => (typeof currentLanguage !== 'undefined' && currentLanguage === 'en') ? 'en' : 'th';
+    const t = (k) => T[lang()][k];
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const dtxt = (d) => { try { return new Date(d).toLocaleDateString(lang() === 'en' ? 'en-GB' : 'th-TH', { year: 'numeric', month: 'long', day: 'numeric' }); } catch (e) { return d; } };
+
+    const st = document.createElement('style'); st.id = 'dpx-css';
+    st.textContent = `
+.swal2-popup.dpx-pop{width:min(620px,94vw);padding:0;border-radius:28px;overflow:hidden;text-align:left;box-shadow:0 30px 80px rgba(15,23,42,.38)}
+.dpx-pop .swal2-html-container{margin:0;padding:0;text-align:left}
+.dpx-hd{background:linear-gradient(135deg,#6d28d9,#2563eb);color:#fff;padding:28px 34px 26px;display:flex;gap:20px;align-items:center;position:relative;overflow:hidden}
+.dpx-hd.ok{background:linear-gradient(135deg,#059669,#14b8a6)}
+.dpx-hd:after{content:"";position:absolute;right:-40px;top:-60px;width:180px;height:180px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.28),transparent 70%)}
+.dpx-ic{width:72px;height:72px;border-radius:22px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:2.3rem;flex:none;position:relative;z-index:1;animation:dpxPulse 1.6s ease-out infinite}
+.dpx-hd.ok .dpx-ic{animation:dpxPop .5s cubic-bezier(.2,1.6,.4,1)}
+@keyframes dpxPulse{0%{box-shadow:0 0 0 0 rgba(255,255,255,.55)}100%{box-shadow:0 0 0 20px rgba(255,255,255,0)}}
+@keyframes dpxPop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+.dpx-ic i{animation:dpxBob 1.2s ease-in-out infinite}.dpx-hd.ok .dpx-ic i{animation:none}
+@keyframes dpxBob{50%{transform:translateY(-3px)}}
+.dpx-hd .tx{position:relative;z-index:1;min-width:0}.dpx-hd h3{margin:0;font-size:1.4rem;font-weight:800;letter-spacing:-.2px}
+.dpx-hd small{display:block;opacity:.92;font-size:.98rem;margin-top:4px}
+.dpx-bar{height:4px;background:#e2e8f0;position:relative;overflow:hidden}
+.dpx-bar:after{content:"";position:absolute;top:0;bottom:0;width:38%;background:linear-gradient(90deg,transparent,#7c3aed,#2563eb,transparent);animation:dpxRun 1.3s ease-in-out infinite}
+@keyframes dpxRun{from{left:-40%}to{left:100%}}
+.dpx-bar.ok:after{left:0;width:100%;background:#10b981;animation:dpxShrink 2.5s linear forwards}
+@keyframes dpxShrink{from{width:100%}to{width:0}}
+.dpx-bd{padding:24px 34px 26px}
+.dpx-st{display:flex;align-items:center;gap:14px;padding:10px 0;color:#94a3b8;font-size:1.05rem;transition:.25s}
+.dpx-st .d{width:30px;height:30px;border-radius:50%;border:2px solid #cbd5e1;display:flex;align-items:center;justify-content:center;font-size:.85rem;flex:none;transition:.25s}
+.dpx-st.act{color:#0f172a;font-weight:700}.dpx-st.act .d{border-color:#7c3aed;border-top-color:transparent;animation:dpxSpin .8s linear infinite}
+.dpx-st.ok{color:#047857}.dpx-st.ok .d{background:#10b981;border-color:#10b981;color:#fff}
+@keyframes dpxSpin{to{transform:rotate(360deg)}}
+.dpx-nt{margin-top:16px;font-size:.88rem;color:#94a3b8;text-align:center}
+.dpx-done{padding:22px 34px 26px;font-size:1.05rem;color:#334155}
+`;
+    document.head.appendChild(st);
+
+    let timers = [];
+    const clear = () => { timers.forEach(clearTimeout); timers = []; };
+    const mark = (n, cls) => { const e = document.getElementById('dpx-s' + n); if (!e) return; e.className = 'dpx-st ' + cls; e.querySelector('.d').innerHTML = cls === 'ok' ? '<i class="bi bi-check-lg"></i>' : ''; };
+
+    window.dpPlanBusyOpen = function (planDate) {
+        clear();
+        const step = (n, label, cls) => '<div class="dpx-st ' + cls + '" id="dpx-s' + n + '"><span class="d">' + (cls === 'ok' ? '<i class="bi bi-check-lg"></i>' : '') + '</span><span>' + esc(label) + '</span></div>';
+        Swal.fire({
+            customClass: { popup: 'dpx-pop' }, allowOutsideClick: false, allowEscapeKey: false, showConfirmButton: false,
+            html: '<div class="dpx-hd"><div class="dpx-ic"><i class="bi bi-printer-fill"></i></div><div class="tx"><h3>' + esc(t('title')) + '</h3><small>' + esc(t('plan') + ' ' + dtxt(planDate)) + '</small></div></div><div class="dpx-bar"></div>'
+                + '<div class="dpx-bd">' + step(1, t('s1'), 'ok') + step(2, t('s2'), 'act') + step(3, t('s3'), '') + '<div class="dpx-nt">' + esc(t('note')) + '</div></div>',
+            willClose: clear
+        });
+        timers.push(setTimeout(() => { mark(2, 'ok'); mark(3, 'act'); }, 700));
+    };
+
+    window.dpPlanDone = function () {
+        clear();
+        Swal.fire({
+            customClass: { popup: 'dpx-pop' }, showConfirmButton: false, timer: 2500, allowOutsideClick: true,
+            html: '<div class="dpx-hd ok"><div class="dpx-ic"><i class="bi bi-check-lg"></i></div><div class="tx"><h3>' + esc(t('okT')) + '</h3><small>' + esc(t('okS')) + '</small></div></div><div class="dpx-bar ok"></div>'
+        });
+    };
+})();
+// ===== จบ DP-PLAN-POPUP =====
 (function () {
     if (window.__lgLineFilter) return;
     window.__lgLineFilter = true;
@@ -22577,19 +22642,6 @@ renderLGTagPrintWindow = function(tags, printWin) {
         }
     }, true);
 })();
-// ===== จบ LG-PLAN-PERM-WEB =====
-// ===== LG-PLAN-EDIT-WEB (v2): ปุ่ม "แก้ไขยอด" + "ยกเลิกรายการ" ในตารางแมทช์แพลน LG + ยกเลิกแท็กที่เกี่ยวข้อง + กันสแกนแท็กที่ยกเลิก =====
-// *** เวอร์ชันนี้ใช้แทนบล็อก LG-PLAN-EDIT-WEB เดิม: ลบบล็อกเก่าทั้งก้อน (ตั้งแต่บรรทัด "// ===== LG-PLAN-EDIT-WEB" ถึง "// ===== จบ LG-PLAN-EDIT-WEB =====") แล้ววางอันนี้ที่เดิม ***
-// วางไว้ "ใต้บรรทัด" // ===== จบ LG-PLAN-PERM-WEB =====   (ค้นด้วย Ctrl+F แล้ววางต่อท้ายบรรทัดนั้นได้เลย)
-// ต้องทำคู่กับ: (1) แพตช์ Google Script LG-PLAN-EDIT-GS + LG-TAG-VOID-GS  (2) สวิตช์สิทธิ์ในหน้าจัดการผู้ใช้ 2 จุด (ทำไว้แล้วรอบก่อน)
-// เพิ่มในเวอร์ชันนี้:
-// - ยกเลิกรายการแพลน → แท็กที่ออกไว้และยังไม่ถูกสแกนจะถูกยกเลิกด้วย (ใครยกเลิก/เมื่อไหร่/เหตุผล เก็บในชีต LG_TagLog)
-//   แท็กที่ใช้ร่วมกับรายการอื่น (หลาย WO ในใบเดียว) จะไม่ยกเลิกทั้งใบ — ระบบนับเฉพาะ WO ที่ยังใช้ และเตือนพนักงานตอนสแกน
-// - สแกน/รับแท็กที่ถูกยกเลิก = ปฏิเสธ + ขึ้นป๊อปอัปแดงบอกว่าใครยกเลิกเมื่อไหร่ + จดประวัติลงชีต LG_VoidTagScanLog
-// สิทธิ์ใหม่ชื่อ canLGEditPlan : ค่าเริ่มต้น = "ไม่มีสิทธิ์" (แอดมินเห็นปุ่มเสมอ, คนอื่นต้องให้แอดมินติ๊กให้ก่อน)
-// - แก้ไขยอด  : เปลี่ยนจำนวนสั่งผลิตของแถวนั้น (เก็บยอดเดิม/ผู้แก้/เวลา/เหตุผลไว้ในชีต)
-// - ยกเลิกรายการ : เอาแถวนั้นออกจากแพลน (ไม่ลบทิ้งจากชีต เก็บผู้ยกเลิก/เวลา/เหตุผลไว้ · ประวัติสแกนเดิมไม่ถูกแตะ)
-// (ลบแพตช์นี้ออก = ปุ่มหายไป กลับเป็นเหมือนเดิม)
 (function () {
     if (window.__lgPlanEdit) return; window.__lgPlanEdit = true;
 
@@ -23211,7 +23263,368 @@ renderLGTagPrintWindow = function(tags, printWin) {
         return _prevCall.apply(this, arguments);
     };
 })();
-// ===== จบ LG-PLAN-EDIT-WEB =====
+// ===== PACKING-LIST-BUSY =====
+(function () {
+    const T = {
+        th: { title: 'กำลังสร้าง Packing List', cust: 'ลูกค้า', round: 'รอบ', s1: 'รวบรวมรายการสินค้า', s2: 'สร้าง QR Code', s3: 'จัดหน้าและสร้างไฟล์ PDF', note: 'ไฟล์จะดาวน์โหลดให้อัตโนมัติ — กรุณาอย่าปิดหน้านี้' },
+        en: { title: 'Creating Packing List', cust: 'Customer', round: 'Trip', s1: 'Collecting the items', s2: 'Creating the QR code', s3: 'Laying out and building the PDF', note: 'The file downloads automatically — please keep this page open' }
+    };
+    const lang = () => (typeof currentLanguage !== 'undefined' && currentLanguage === 'en') ? 'en' : 'th';
+    const t = (k) => T[lang()][k];
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    const st = document.createElement('style'); st.id = 'plx-css';
+    st.textContent = `
+.swal2-popup.plx-pop{width:min(620px,94vw);padding:0;border-radius:28px;overflow:hidden;text-align:left;box-shadow:0 30px 80px rgba(15,23,42,.38)}
+.plx-pop .swal2-html-container{margin:0;padding:0;text-align:left}
+.plx-hd{background:linear-gradient(135deg,#2563eb,#06b6d4);color:#fff;padding:28px 34px 26px;display:flex;gap:20px;align-items:center;position:relative;overflow:hidden}
+.plx-hd:after{content:"";position:absolute;right:-40px;top:-60px;width:170px;height:170px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.28),transparent 70%)}
+.plx-ic{width:72px;height:72px;border-radius:22px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:2.3rem;flex:none;position:relative;z-index:1;animation:plxPulse 1.6s ease-out infinite}
+@keyframes plxPulse{0%{box-shadow:0 0 0 0 rgba(255,255,255,.55)}100%{box-shadow:0 0 0 20px rgba(255,255,255,0)}}
+.plx-ic i{animation:plxBob 1.2s ease-in-out infinite}
+@keyframes plxBob{50%{transform:translateY(-3px)}}
+.plx-hd .tx{position:relative;z-index:1;min-width:0}.plx-hd h3{margin:0;font-size:1.4rem;font-weight:800;letter-spacing:-.2px}
+.plx-hd small{display:block;opacity:.9;font-size:.98rem;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.plx-bar{height:4px;background:#e2e8f0;position:relative;overflow:hidden}
+.plx-bar:after{content:"";position:absolute;top:0;bottom:0;width:38%;background:linear-gradient(90deg,transparent,#2563eb,#06b6d4,transparent);animation:plxRun 1.3s ease-in-out infinite}
+@keyframes plxRun{from{left:-40%}to{left:100%}}
+.plx-bd{padding:24px 34px 26px}
+.plx-st{display:flex;align-items:center;gap:14px;padding:10px 0;color:#94a3b8;font-size:1.05rem;transition:.25s}
+.plx-st .d{width:30px;height:30px;border-radius:50%;border:2px solid #cbd5e1;display:flex;align-items:center;justify-content:center;font-size:.8rem;flex:none;transition:.25s}
+.plx-st.act{color:#0f172a;font-weight:700}.plx-st.act .d{border-color:#2563eb;border-top-color:transparent;animation:plxSpin .8s linear infinite}
+.plx-st.ok{color:#047857}.plx-st.ok .d{background:#10b981;border-color:#10b981;color:#fff}
+@keyframes plxSpin{to{transform:rotate(360deg)}}
+.plx-nt{margin-top:16px;font-size:.88rem;color:#94a3b8;text-align:center}
+`;
+    document.head.appendChild(st);
+
+    let timers = [];
+    const clear = () => { timers.forEach(clearTimeout); timers = []; };
+    window.plBusyOpen = function (o) {
+        o = o || {}; clear();
+        const sub = [o.customer ? t('cust') + ' ' + o.customer : '', o.time ? t('round') + ' ' + o.time : ''].filter(Boolean).join(' · ');
+        const step = (n, label, cls) => '<div class="plx-st ' + cls + '" id="plx-s' + n + '"><span class="d">' + (cls === 'ok' ? '<i class="bi bi-check-lg"></i>' : '') + '</span><span>' + esc(label) + '</span></div>';
+        Swal.fire({
+            customClass: { popup: 'plx-pop' }, allowOutsideClick: false, allowEscapeKey: false, showConfirmButton: false,
+            html: '<div class="plx-hd"><div class="plx-ic"><i class="bi bi-box-seam-fill"></i></div><div class="tx"><h3>' + esc(t('title')) + '</h3><small>' + esc(sub) + '</small></div></div><div class="plx-bar"></div>'
+                + '<div class="plx-bd">' + step(1, t('s1'), 'ok') + step(2, t('s2'), 'act') + step(3, t('s3'), '') + '<div class="plx-nt">' + esc(t('note')) + '</div></div>',
+            willClose: clear
+        });
+        const mark = (n, cls) => { const e = document.getElementById('plx-s' + n); if (!e) return; e.className = 'plx-st ' + cls; e.querySelector('.d').innerHTML = cls === 'ok' ? '<i class="bi bi-check-lg"></i>' : ''; };
+        timers.push(setTimeout(() => { mark(2, 'ok'); mark(3, 'act'); }, 700));
+    };
+})();
+// ===== จบ PACKING-LIST-BUSY =====
+(function () {
+    const holder = document.getElementById('pills-tabContent'), nav = document.getElementById('nav-convert-item');
+    if (!holder || !nav || document.getElementById('pills-convert')) return;
+
+    // ---------- ข้อความ 2 ภาษา ----------
+    const TXT = {
+        th: {
+            title: 'เปลี่ยนรหัสสินค้า (Convert)', sub: 'ย้ายสต็อกจากรหัสหนึ่งไปอีกรหัส · ใช้วันที่ผลิตเดิม · เปลี่ยนแพ็คกิ้งได้',
+            s1: '1 · สินค้าต้นทาง', s1h: 'หักออกจากสต็อก', s2: '2 · สินค้าปลายทาง', s2h: 'รับเข้าสต็อก', s3: '3 · จำนวนที่แปลง',
+            search: 'พิมพ์รหัส / ชื่อ / ลูกค้า…', noRes: 'ไม่พบสินค้า', noStockSrc: 'ไม่มีสินค้าที่มีสต็อก', change: 'เปลี่ยน',
+            pickLot: 'เลือกล็อตที่จะนำมาแปลง', lotLeft: 'คงเหลือ', std: 'Standard', tmp: 'Temporary', produced: 'ผลิต', noStock: 'สินค้านี้ไม่มีสต็อก',
+            pack: 'แพ็คกิ้งปลายทาง (หลังแปลง)', qty: 'จำนวนชิ้น', all: 'ทั้งล็อต', max: 'สูงสุด', pcs: 'ชิ้น', stock: 'สต็อก',
+            sumTitle: 'สรุปรายการ', cut: 'หักออก', add: 'เพิ่มเข้า', before: 'ก่อน', after: 'หลัง', lot: 'ล็อต', keepDate: 'ใช้วันที่ผลิตเดิมของต้นทาง',
+            go: 'ยืนยันการแปลง', saving: 'กำลังบันทึก…', again: 'แปลงรายการถัดไป', clear: 'ล้างฟอร์ม',
+            needSrc: 'เลือกสินค้าต้นทางก่อน', needLot: 'เลือกล็อตที่จะแปลง', needDst: 'เลือกสินค้าปลายทาง', needQty: 'ใส่จำนวนที่ต้องการแปลง',
+            overQty: 'จำนวนเกินสต็อกในล็อตนี้ (มี {n})', same: 'ต้นทางและปลายทางเหมือนกันทุกอย่าง (รหัสเดียวกัน แพ็คกิ้งเดิม) ไม่มีอะไรเปลี่ยน',
+            ok: 'แปลงสำเร็จ', okSub: 'ปรับยอดสต็อกเรียบร้อยแล้ว', fail: 'บันทึกไม่สำเร็จ', denied: 'คุณไม่มีสิทธิ์ใช้งานฟังก์ชันเปลี่ยนรหัสสินค้า',
+            hist: 'รายการแปลงล่าสุด', histEmpty: 'ยังไม่มีรายการแปลง', hTime: 'เวลา', hFlow: 'จาก → เป็น', hQty: 'จำนวน', hLot: 'ล็อต', hBy: 'ผู้ทำ'
+        },
+        en: {
+            title: 'Convert Part Code', sub: 'Move stock from one code to another · keeps the original production date · packaging can change',
+            s1: '1 · Source product', s1h: 'deducted from stock', s2: '2 · Destination product', s2h: 'received into stock', s3: '3 · Quantity to convert',
+            search: 'Type code / name / customer…', noRes: 'No product found', noStockSrc: 'No product has stock', change: 'Change',
+            pickLot: 'Pick the lot to convert', lotLeft: 'Left', std: 'Standard', tmp: 'Temporary', produced: 'Made', noStock: 'This product has no stock',
+            pack: 'Destination packaging (after convert)', qty: 'Pieces', all: 'Whole lot', max: 'Max', pcs: 'pcs', stock: 'Stock',
+            sumTitle: 'Summary', cut: 'Deduct', add: 'Add to', before: 'Before', after: 'After', lot: 'Lot', keepDate: 'Keeps the source production date',
+            go: 'Confirm convert', saving: 'Saving…', again: 'Convert another', clear: 'Clear',
+            needSrc: 'Pick the source product first', needLot: 'Pick a lot to convert', needDst: 'Pick the destination product', needQty: 'Enter the quantity to convert',
+            overQty: 'More than the stock in this lot ({n} left)', same: 'Source and destination are identical (same code, same packaging) — nothing would change.',
+            ok: 'Converted', okSub: 'Stock has been updated', fail: 'Could not save', denied: 'You do not have permission to convert part codes',
+            hist: 'Recent conversions', histEmpty: 'No conversions yet', hTime: 'Time', hFlow: 'From → To', hQty: 'Qty', hLot: 'Lot', hBy: 'By'
+        }
+    };
+    const lang = () => (typeof currentLanguage !== 'undefined' && currentLanguage === 'en') ? 'en' : 'th';
+    const t = (k, v) => { let s = (TXT[lang()][k] != null ? TXT[lang()][k] : TXT.th[k]); Object.keys(v || {}).forEach((n) => { s = s.split('{' + n + '}').join(v[n]); }); return s; };
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const fmt = (n) => Number(n || 0).toLocaleString('en-US');
+    const sid = (v) => String(v == null ? '' : v).trim();
+    const dmy = (v) => { const m = /(\d{4})-(\d{2})-(\d{2})/.exec(String(v || '')); return m ? m[3] + '/' + m[2] + '/' + m[1] : sid(v); };
+    const canUse = () => currentUser && (currentUser.username === 'admin' || currentUser.role === 'admin' || currentUser.canConvertPart === true || String(currentUser.canConvertPart).toUpperCase() === 'TRUE');
+
+    // ---------- สไตล์ ----------
+    const css = document.createElement('style');
+    css.id = 'cvx-css';
+    css.textContent = `
+#pills-convert > :not(#cvx-root){display:none!important}
+#cvx-root{max-width:1180px;margin:0 auto;padding:0 12px 80px;color:#0f172a}#cvx-root *{box-sizing:border-box}
+#cvx-root .top h1{margin:0;font-size:1.55rem;letter-spacing:-.3px}#cvx-root .top .sub{color:#64748b;font-size:.86rem;margin-top:3px}
+#cvx-root .top{margin-bottom:16px}
+#cvx-root .grid{display:grid;grid-template-columns:minmax(0,1fr) 56px minmax(0,1fr);gap:0 14px;align-items:stretch}
+#cvx-root .card{background:#fff;border-radius:22px;box-shadow:0 12px 30px rgba(30,41,90,.08);padding:18px 20px;min-width:0}
+#cvx-root .card.src{border-top:4px solid #f43f5e}#cvx-root .card.dst{border-top:4px solid #10b981}
+#cvx-root .ch{display:flex;align-items:baseline;gap:8px;margin-bottom:12px}#cvx-root .ch b{font-size:1.02rem}#cvx-root .ch small{color:#64748b;font-size:.76rem}
+#cvx-root .src .ch b{color:#be123c}#cvx-root .dst .ch b{color:#047857}
+#cvx-root .mid{display:flex;align-items:center;justify-content:center}
+#cvx-root .arr{width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#06b6d4);color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.3rem;box-shadow:0 10px 24px rgba(99,102,241,.4)}
+#cvx-root .cb{position:relative}#cvx-root .cb>i{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:#94a3b8;pointer-events:none}
+#cvx-root .in{width:100%;border:1px solid #dbe2ee;border-radius:14px;padding:11px 14px;font:inherit;background:#f8fafc;color:#0f172a;transition:.15s}
+#cvx-root .cb .in{padding-left:38px}
+#cvx-root .in:focus{outline:2px solid #a5b4fc;border-color:#6366f1;background:#fff}
+#cvx-root .dd{position:absolute;left:0;right:0;top:calc(100% + 6px);background:#fff;border-radius:16px;box-shadow:0 18px 44px rgba(15,23,42,.22);z-index:30;max-height:300px;overflow:auto;display:none;padding:6px}
+#cvx-root .dd.show{display:block}#cvx-root .card:has(.cb){overflow:visible}#cvx-root .card:has(.dd.show){position:relative;z-index:20}
+#cvx-root .dd button{display:flex;width:100%;border:0;background:transparent;text-align:left;padding:9px 11px;border-radius:11px;gap:10px;align-items:center;cursor:pointer;font:inherit}
+#cvx-root .dd button:hover,#cvx-root .dd button.on{background:#eef2ff}
+#cvx-root .dd .id{font-weight:700;color:#4338ca;white-space:nowrap}#cvx-root .dd .nm{flex:1;min-width:0;color:#334155;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#cvx-root .dd .cu{font-size:.7rem;color:#64748b;background:#f1f5f9;border-radius:99px;padding:2px 9px;white-space:nowrap}
+#cvx-root .dd .sk{font-size:.74rem;font-weight:700;color:#047857;background:#ecfdf5;border-radius:99px;padding:2px 9px;white-space:nowrap}
+#cvx-root .dd .em{padding:14px;text-align:center;color:#94a3b8;font-size:.85rem}
+#cvx-root .chip{display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#f8fafc,#eef2ff);border:1px solid #e0e7ff;border-radius:16px;padding:12px 14px}
+#cvx-root .chip .ic{width:42px;height:42px;border-radius:13px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.2rem;flex:none}
+#cvx-root .src .chip .ic{background:linear-gradient(135deg,#f43f5e,#fb923c)}#cvx-root .dst .chip .ic{background:linear-gradient(135deg,#10b981,#06b6d4)}
+#cvx-root .chip .tx{flex:1;min-width:0}#cvx-root .chip .tx b{display:block;font-size:1rem}#cvx-root .chip .tx span{display:block;color:#64748b;font-size:.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#cvx-root .chip .tx em{font-style:normal;font-size:.72rem;color:#047857;font-weight:700}
+#cvx-root .chip button{border:0;background:#fff;color:#4338ca;border-radius:10px;padding:6px 12px;font:inherit;font-size:.78rem;font-weight:600;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+#cvx-root .lh{font-size:.78rem;color:#64748b;margin:14px 0 8px}
+#cvx-root .lots{display:grid;gap:8px;max-height:270px;overflow-y:auto;overscroll-behavior:contain;padding:2px 6px 2px 2px;scrollbar-width:thin;scrollbar-color:#c7d2fe transparent}#cvx-root .lots::-webkit-scrollbar{width:7px}#cvx-root .lots::-webkit-scrollbar-thumb{background:#c7d2fe;border-radius:9px}
+#cvx-root .lot{display:flex;align-items:center;gap:12px;border:1.5px solid #e2e8f0;border-radius:14px;padding:10px 14px;background:#fff;cursor:pointer;text-align:left;font:inherit;width:100%;transition:.15s}
+#cvx-root .lot:hover{border-color:#a5b4fc;background:#f8faff}
+#cvx-root .lot.on{border-color:#6366f1;background:#eef2ff;box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+#cvx-root .lot .dot{width:18px;height:18px;border-radius:50%;border:2px solid #cbd5e1;flex:none;position:relative}
+#cvx-root .lot.on .dot{border-color:#6366f1}#cvx-root .lot.on .dot:after{content:"";position:absolute;inset:3px;border-radius:50%;background:#6366f1}
+#cvx-root .lot .d{flex:1;font-weight:600}#cvx-root .lot .d small{display:block;font-weight:400;color:#64748b;font-size:.72rem}
+#cvx-root .tag{font-size:.7rem;font-weight:700;border-radius:99px;padding:2px 9px}#cvx-root .tag.s{background:#e0f2fe;color:#0369a1}#cvx-root .tag.t{background:#fef3c7;color:#92400e}
+#cvx-root .lot .q{font-weight:800;font-size:1.05rem;color:#0f172a}#cvx-root .lot .q small{font-weight:500;color:#64748b;font-size:.7rem;margin-left:3px}
+#cvx-root .seg{display:flex;background:#f1f5f9;border-radius:14px;padding:4px;margin-top:14px}
+#cvx-root .seg span{flex:1;text-align:center;padding:9px;border-radius:11px;cursor:pointer;font-weight:600;font-size:.88rem;color:#475569;user-select:none;transition:.15s}
+#cvx-root .seg span.on.s{background:#fff;color:#0369a1;box-shadow:0 2px 8px rgba(0,0,0,.12)}#cvx-root .seg span.on.t{background:#fff;color:#92400e;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+#cvx-root .lab{font-size:.78rem;color:#64748b;margin:14px 0 6px;display:block}
+#cvx-root .low{margin-top:16px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:14px}
+#cvx-root .qrow{display:flex;gap:8px;align-items:stretch}
+#cvx-root .qrow .in{font-size:1.5rem;font-weight:800;text-align:center;padding:10px}
+#cvx-root .qrow button{border:1px solid #c7d2fe;background:#eef2ff;color:#4338ca;border-radius:14px;padding:0 14px;font:inherit;font-weight:600;font-size:.8rem;cursor:pointer;white-space:nowrap}
+#cvx-root .qrow button:hover{background:#e0e7ff}
+#cvx-root .hint{font-size:.74rem;color:#94a3b8;margin-top:6px}
+#cvx-root .sum{background:linear-gradient(135deg,#0f172a,#1e1b4b 62%,#312e81);color:#e2e8f0;border-radius:22px;padding:18px 20px;box-shadow:0 16px 36px rgba(30,27,75,.3);display:flex;flex-direction:column}
+#cvx-root .sum h4{margin:0 0 12px;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:#a5b4fc;font-weight:600}
+#cvx-root .ln{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px dashed rgba(255,255,255,.12)}#cvx-root .ln:last-of-type{border-bottom:0}
+#cvx-root .ln .k{font-size:.72rem;font-weight:700;border-radius:8px;padding:3px 9px;flex:none}
+#cvx-root .ln .k.r{background:rgba(244,63,94,.2);color:#fda4af}#cvx-root .ln .k.g{background:rgba(16,185,129,.2);color:#6ee7b7}
+#cvx-root .ln .n{flex:1;min-width:0}#cvx-root .ln .n b{display:block;font-size:.92rem;color:#fff}#cvx-root .ln .n small{color:#94a3b8;font-size:.74rem}
+#cvx-root .ln .v{font-weight:800;font-size:1.15rem;white-space:nowrap}#cvx-root .ln .v.r{color:#fb7185}#cvx-root .ln .v.g{color:#34d399}
+#cvx-root .ln .ba{font-size:.72rem;color:#94a3b8;white-space:nowrap;text-align:right}#cvx-root .ln .ba b{color:#e2e8f0}
+#cvx-root .sum .empty{color:#94a3b8;font-size:.86rem;padding:10px 0}
+#cvx-root .note{font-size:.72rem;color:#94a3b8;margin-top:8px}
+#cvx-root .err{margin-top:12px;border-radius:14px;padding:10px 14px;font-size:.84rem;background:#fff1f2;color:#9f1239;border:1px solid #fecdd3;display:none;gap:9px;align-items:flex-start}#cvx-root .err.show{display:flex}
+#cvx-root .acts{display:flex;gap:10px;margin-top:14px}
+#cvx-root .btn{border:0;border-radius:14px;padding:12px 18px;font:inherit;font-weight:700;cursor:pointer;display:inline-flex;gap:8px;align-items:center;justify-content:center;transition:.15s}
+#cvx-root .btn.go{flex:1;background:linear-gradient(135deg,#10b981,#06b6d4);color:#fff;box-shadow:0 10px 24px rgba(16,185,129,.35);font-size:1rem}
+#cvx-root .btn.go:disabled{background:#334155;color:#94a3b8;box-shadow:none;cursor:not-allowed}
+#cvx-root .btn.go:not(:disabled):hover{filter:brightness(1.08);transform:translateY(-1px)}
+#cvx-root .btn.gh{background:rgba(255,255,255,.1);color:#cbd5e1}#cvx-root .btn.gh:hover{background:rgba(255,255,255,.18)}
+#cvx-root .done{background:linear-gradient(135deg,#ecfdf5,#f0fdfa);border:1px solid #a7f3d0;border-radius:22px;padding:22px;text-align:center;box-shadow:0 12px 30px rgba(16,185,129,.12);margin-bottom:16px;display:none}
+#cvx-root .done.show{display:block;animation:cvxIn .35s ease}
+@keyframes cvxIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+#cvx-root .done .ck{width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,#10b981,#06b6d4);color:#fff;font-size:1.9rem;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 10px 26px rgba(16,185,129,.4)}
+#cvx-root .done h3{margin:10px 0 2px;color:#065f46;font-size:1.2rem}#cvx-root .done p{margin:0;color:#047857;font-size:.9rem}
+#cvx-root .done .flow{margin:12px auto 14px;font-weight:600;color:#0f172a}
+#cvx-root .done .btn{background:#fff;color:#047857;border:1px solid #a7f3d0}
+#cvx-root .hist{margin-top:18px}#cvx-root .hist h3{font-size:1rem;margin:0 0 10px;display:flex;gap:8px;align-items:center}
+#cvx-root table{width:100%;border-collapse:collapse;font-size:.84rem}#cvx-root th{text-align:left;color:#64748b;font-weight:600;font-size:.74rem;padding:6px 10px;border-bottom:1px solid #e2e8f0}
+#cvx-root td{padding:9px 10px;border-bottom:1px solid #f1f5f9}#cvx-root td.q{font-weight:700}
+#cvx-root .arrow{color:#6366f1;margin:0 6px}
+#cvx-root .hempty{text-align:center;color:#94a3b8;padding:16px;font-size:.85rem}
+#cvx-root .deny{background:#fff7ed;border:1px solid #fdba74;color:#9a3412;border-radius:18px;padding:18px;text-align:center}
+@media (max-width:900px){#cvx-root .grid{grid-template-columns:minmax(0,1fr)}#cvx-root .mid{padding:6px 0}#cvx-root .arr{transform:rotate(90deg)}#cvx-root .low{grid-template-columns:minmax(0,1fr)}}
+`;
+    document.head.appendChild(css);
+
+    // ---------- สร้างหน้า ----------
+    const pane = document.createElement('div');
+    pane.className = 'tab-pane fade'; pane.id = 'pills-convert'; pane.setAttribute('role', 'tabpanel');
+    const root = document.createElement('div'); root.id = 'cvx-root'; pane.appendChild(root);
+    holder.appendChild(pane);
+
+    const S = { src: null, lot: null, dst: null, pack: 'standard', qty: '', busy: false, done: null };
+    const prodById = (id) => (db.products || []).find((p) => sid(p.id) === sid(id));
+    const stockOf = (id) => (calculatedStock || []).find((s) => sid(s.productId) === sid(id));
+    const totalOf = (id) => { const s = stockOf(id); return s ? Number(s.totalQuantity) || 0 : 0; };
+    const lotsOf = (id) => { const s = stockOf(id); return s && s.lots ? s.lots.filter((l) => Number(l.quantity) > 0).slice().sort((a, b) => new Date(a.productionDate) - new Date(b.productionDate)) : []; };
+    const lotKey = (l) => sid(l.productionDate) + '|' + (l.packagingType === 'temporary' ? 'temporary' : 'standard');
+    const packTag = (p) => p === 'temporary' ? `<span class="tag t">${esc(t('tmp'))}</span>` : `<span class="tag s">${esc(t('std'))}</span>`;
+    const $ = (s) => root.querySelector(s);
+
+    function shell() {
+        root.innerHTML = `
+<div class="top"><h1><i class="bi bi-arrow-left-right me-2" style="color:#6366f1"></i>${esc(t('title'))}</h1><div class="sub">${esc(t('sub'))}</div></div>
+<div class="done" id="cvx-done"></div>
+<div id="cvx-body">
+<div class="grid">
+<div class="card src"><div class="ch"><b>${esc(t('s1'))}</b><small>${esc(t('s1h'))}</small></div><div id="cvx-src"></div></div>
+<div class="mid"><div class="arr"><i class="bi bi-arrow-right"></i></div></div>
+<div class="card dst"><div class="ch"><b>${esc(t('s2'))}</b><small>${esc(t('s2h'))}</small></div><div id="cvx-dst"></div></div>
+</div>
+<div class="low">
+<div class="card"><div class="ch"><b>${esc(t('s3'))}</b></div>
+<div class="qrow"><input class="in" id="cvx-qty" type="number" min="1" inputmode="numeric" placeholder="0"><button type="button" id="cvx-all">${esc(t('all'))}</button></div>
+<div class="hint" id="cvx-max"></div>
+<label class="lab">${esc(t('pack'))}</label>
+<div class="seg" id="cvx-pack" style="margin-top:0"><span class="s on" data-p="standard">${esc(t('std'))}</span><span class="t" data-p="temporary">${esc(t('tmp'))}</span></div></div>
+<div class="sum"><h4>${esc(t('sumTitle'))}</h4><div id="cvx-sum"></div><div class="err" id="cvx-err"></div>
+<div class="acts"><button type="button" class="btn go" id="cvx-go" disabled><i class="bi bi-check2-circle"></i>${esc(t('go'))}</button><button type="button" class="btn gh" id="cvx-clr">${esc(t('clear'))}</button></div></div>
+</div>
+</div>
+<div class="card hist"><h3><i class="bi bi-clock-history" style="color:#6366f1"></i>${esc(t('hist'))}</h3><div id="cvx-hist"></div></div>`;
+        renderSrc(); renderDst(); renderSum(); renderHist();
+        $('#cvx-qty').value = S.qty;
+        syncPack();
+    }
+
+    // ---------- กล่องค้นหาสินค้า ----------
+    function comboHtml(role) { return `<div class="cb" data-role="${role}"><i class="bi bi-search"></i><input class="in" type="text" autocomplete="off" placeholder="${esc(t('search'))}"><div class="dd"></div></div>`; }
+    function fillDd(cb) {
+        const role = cb.dataset.role, q = cb.querySelector('input').value.trim().toLowerCase(), dd = cb.querySelector('.dd');
+        let list = (db.products || []);
+        if (role === 'src') list = list.filter((p) => totalOf(p.id) > 0);
+        if (q) list = list.filter((p) => [p.id, p.name, p.customer, p.erpCode].some((x) => String(x || '').toLowerCase().includes(q)));
+        list = list.slice(0, 40);
+        dd.innerHTML = list.length ? list.map((p) => `<button type="button" data-id="${esc(sid(p.id))}"><span class="id">${esc(sid(p.id))}</span><span class="nm">${esc(p.name)}</span>${p.customer ? `<span class="cu">${esc(p.customer)}</span>` : ''}${role === 'src' ? `<span class="sk">${fmt(totalOf(p.id))}</span>` : ''}</button>`).join('') : `<div class="em">${esc(role === 'src' && !q ? t('noStockSrc') : t('noRes'))}</div>`;
+        dd.classList.add('show');
+    }
+    function chip(p, role) {
+        const tot = totalOf(p.id);
+        return `<div class="chip"><div class="ic"><i class="bi bi-${role === 'src' ? 'box-arrow-up' : 'box-arrow-in-down'}"></i></div><div class="tx"><b>${esc(sid(p.id))}</b><span>${esc(p.name)}${p.customer ? ' · ' + esc(p.customer) : ''}</span><em>${esc(t('stock'))} ${fmt(tot)} ${esc(t('pcs'))}</em></div><button type="button" data-chg="${role}">${esc(t('change'))}</button></div>`;
+    }
+    function renderSrc() {
+        const box = $('#cvx-src');
+        if (!S.src) { box.innerHTML = comboHtml('src'); return; }
+        const lots = lotsOf(S.src.id);
+        box.innerHTML = chip(S.src, 'src') + `<div class="lh">${esc(t('pickLot'))}</div>` + (lots.length ? `<div class="lots">${lots.map((l) => `<button type="button" class="lot ${S.lot && lotKey(S.lot) === lotKey(l) ? 'on' : ''}" data-lot="${esc(lotKey(l))}"><span class="dot"></span><span class="d">${esc(t('produced'))} ${esc(dmy(l.productionDate))}<small>${l.packagingType === 'temporary' ? esc(t('tmp')) : esc(t('std'))}</small></span>${packTag(l.packagingType === 'temporary' ? 'temporary' : 'standard')}<span class="q">${fmt(l.quantity)}<small>${esc(t('pcs'))}</small></span></button>`).join('')}</div>` : `<div class="deny" style="padding:12px">${esc(t('noStock'))}</div>`);
+    }
+    function renderDst() { const box = $('#cvx-dst'); box.innerHTML = S.dst ? chip(S.dst, 'dst') : comboHtml('dst'); }
+    function syncPack() { root.querySelectorAll('#cvx-pack span').forEach((x) => x.classList.toggle('on', x.dataset.p === S.pack)); }
+
+    // ---------- สรุป + ตรวจสอบ ----------
+    function check() {
+        const q = parseInt(S.qty, 10);
+        if (!S.src) return { m: t('needSrc') }; if (!S.lot) return { m: t('needLot') }; if (!S.dst) return { m: t('needDst') };
+        if (!(q > 0)) return { m: t('needQty'), soft: true };
+        const mx = Number(S.lot.quantity) || 0;
+        if (q > mx) return { m: t('overQty', { n: fmt(mx) }) };
+        const lp = S.lot.packagingType === 'temporary' ? 'temporary' : 'standard';
+        if (sid(S.src.id) === sid(S.dst.id) && lp === S.pack) return { m: t('same') };
+        return { ok: true, q: q };
+    }
+    function renderSum() {
+        const sum = $('#cvx-sum'), go = $('#cvx-go'), err = $('#cvx-err'), mxh = $('#cvx-max');
+        const c = check(), q = parseInt(S.qty, 10) || 0;
+        mxh.textContent = S.lot ? (t('max') + ' ' + fmt(S.lot.quantity) + ' ' + t('pcs')) : '';
+        if (!S.src || !S.dst || !S.lot) { sum.innerHTML = `<div class="empty">${esc(c.m)}</div>`; }
+        else {
+            const sT = totalOf(S.src.id), dT = totalOf(S.dst.id), lp = S.lot.packagingType === 'temporary' ? 'temporary' : 'standard';
+            sum.innerHTML = `<div class="ln"><span class="k r">${esc(t('cut'))}</span><div class="n"><b>${esc(sid(S.src.id))} · ${esc(S.src.name)}</b><small>${esc(t('lot'))} ${esc(dmy(S.lot.productionDate))} · ${lp === 'temporary' ? esc(t('tmp')) : esc(t('std'))}</small></div><div class="v r">− ${fmt(q)}</div><div class="ba">${esc(t('before'))} <b>${fmt(sT)}</b><br>${esc(t('after'))} <b>${fmt(sT - q)}</b></div></div>
+<div class="ln"><span class="k g">${esc(t('add'))}</span><div class="n"><b>${esc(sid(S.dst.id))} · ${esc(S.dst.name)}</b><small>${S.pack === 'temporary' ? esc(t('tmp')) : esc(t('std'))}</small></div><div class="v g">+ ${fmt(q)}</div><div class="ba">${esc(t('before'))} <b>${fmt(dT)}</b><br>${esc(t('after'))} <b>${fmt(dT + q)}</b></div></div>
+<div class="note"><i class="bi bi-info-circle me-1"></i>${esc(t('keepDate'))}</div>`;
+        }
+        go.disabled = !c.ok || S.busy;
+        if (c.ok || c.soft || !S.src || !S.dst || !S.lot) { err.classList.remove('show'); err.innerHTML = ''; }
+        else { err.innerHTML = `<i class="bi bi-exclamation-triangle-fill"></i><span>${esc(c.m)}</span>`; err.classList.add('show'); }
+    }
+    function showErr(msg) { const err = $('#cvx-err'); err.innerHTML = `<i class="bi bi-x-octagon-fill"></i><span>${esc(msg)}</span>`; err.classList.add('show'); }
+
+    // ---------- ประวัติการแปลง ----------
+    function renderHist() {
+        const box = $('#cvx-hist');
+        const rows = (db.history || []).filter((h) => h && h.type === 'export' && String(h.id || '').indexOf('exp-conv-') === 0)
+            .sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10);
+        if (!rows.length) { box.innerHTML = `<div class="hempty">${esc(t('histEmpty'))}</div>`; return; }
+        box.innerHTML = `<div style="overflow-x:auto"><table><thead><tr><th>${esc(t('hTime'))}</th><th>${esc(t('hFlow'))}</th><th>${esc(t('hQty'))}</th><th>${esc(t('hLot'))}</th><th>${esc(t('hBy'))}</th></tr></thead><tbody>${rows.map((h) => {
+            const m = /(?:แปลงรหัสไปเป็น|to)\s+(.+)$/.exec(String(h.remarks || '')); const d = new Date(h.date);
+            const when = isNaN(d) ? '' : String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+            return `<tr><td>${esc(when)}</td><td><b>${esc(h.productId)}</b><span class="arrow">→</span><b>${esc(m ? m[1] : '-')}</b></td><td class="q">${fmt(h.quantity)}</td><td>${esc(dmy(h.productionDate))}</td><td>${esc(h.user || '')}</td></tr>`;
+        }).join('')}</tbody></table></div>`;
+    }
+
+    // ---------- บันทึก (ลอจิกเดียวกับของเดิม) ----------
+    async function submit() {
+        if (S.busy) return;
+        if (!canUse()) { showErr(t('denied')); return; }
+        const c = check(); if (!c.ok) { if (c.m) showErr(c.m); return; }
+        const qty = c.q, sp = prodById(S.src.id), dp = prodById(S.dst.id);
+        if (!sp || !dp) { showErr(t('fail')); return; }
+        const prodDate = S.lot.productionDate, packType = S.lot.packagingType;
+        S.busy = true; const go = $('#cvx-go'); go.disabled = true; go.innerHTML = `<span class="spinner-border spinner-border-sm"></span>${esc(t('saving'))}`;
+        const ts = new Date().toISOString(), base = Date.now();
+        const entries = [
+            { id: 'exp-conv-' + base, date: ts, type: 'export', exportType: 'Other', productId: sp.id, productName: sp.name, customer: sp.customer, erpCode: sp.erpCode, quantity: qty, productionDate: prodDate, user: currentUser.username, invoiceNumber: '-', remarks: 'CONVERSION: แปลงรหัสไปเป็น ' + dp.id, packagingType: packType, priceAtTimeOfSale: 0 },
+            { id: 'imp-conv-' + (base + 1), date: ts, type: 'import', productId: dp.id, productName: dp.name, customer: dp.customer, erpCode: dp.erpCode, quantity: qty, productionDate: prodDate, user: currentUser.username, invoiceNumber: '-', remarks: 'CONVERSION: รับเข้าจากการแปลงรหัส ' + sp.id, packagingType: S.pack }
+        ];
+        try {
+            entries.forEach((e) => db.history.unshift(e));
+            calculateStockFromHistory(); populateAll();
+            await callAppsScript('appendBatchHistory', entries);
+            S.done = { src: sid(sp.id), dst: sid(dp.id), qty: qty, pack: S.pack };
+            S.src = S.dst = S.lot = null; S.qty = ''; S.pack = 'standard'; S.busy = false;
+            shell(); showDone();
+        } catch (err) {
+            db.history.splice(0, 2); calculateStockFromHistory(); populateAll();
+            S.busy = false; go.innerHTML = `<i class="bi bi-check2-circle"></i>${esc(t('go'))}`; renderSum();
+            showErr(t('fail') + ': ' + (err && err.message ? err.message : err));
+        }
+    }
+    function showDone() {
+        const d = $('#cvx-done'); if (!d || !S.done) return;
+        d.innerHTML = `<div class="ck"><i class="bi bi-check-lg"></i></div><h3>${esc(t('ok'))}</h3><p>${esc(t('okSub'))}</p><div class="flow">${esc(S.done.src)} <span class="arrow">→</span> ${esc(S.done.dst)} · ${fmt(S.done.qty)} ${esc(t('pcs'))} · ${S.done.pack === 'temporary' ? esc(t('tmp')) : esc(t('std'))}</div><button type="button" class="btn" id="cvx-again"><i class="bi bi-arrow-repeat"></i>${esc(t('again'))}</button>`;
+        d.classList.add('show');
+    }
+    function reset(keepDone) { S.src = S.dst = S.lot = null; S.qty = ''; S.pack = 'standard'; if (!keepDone) S.done = null; render(); }
+
+    function render() {
+        if (!canUse()) { root.innerHTML = `<div class="top"><h1>${esc(t('title'))}</h1></div><div class="deny"><i class="bi bi-lock-fill me-2"></i>${esc(t('denied'))}</div>`; return; }
+        shell();
+        if (S.done) showDone();
+    }
+
+    // ---------- เหตุการณ์ ----------
+    root.addEventListener('input', (e) => {
+        const cb = e.target.closest('.cb'); if (cb) { fillDd(cb); return; }
+        if (e.target.id === 'cvx-qty') { S.qty = e.target.value; renderSum(); }
+    });
+    root.addEventListener('focusin', (e) => { const cb = e.target.closest('.cb'); if (cb && e.target.tagName === 'INPUT') fillDd(cb); });
+    document.addEventListener('click', (e) => { root.querySelectorAll('.dd.show').forEach((d) => { if (!d.parentElement.contains(e.target)) d.classList.remove('show'); }); });
+    root.addEventListener('click', (e) => {
+        const it = e.target.closest('.dd button');
+        if (it) {
+            const role = it.closest('.cb').dataset.role, p = prodById(it.dataset.id); if (!p) return;
+            if (role === 'src') { S.src = p; S.lot = null; const ls = lotsOf(p.id); if (ls.length === 1) S.lot = ls[0]; renderSrc(); }
+            else { S.dst = p; renderDst(); }
+            renderSum(); return;
+        }
+        const chg = e.target.closest('[data-chg]');
+        if (chg) { if (chg.dataset.chg === 'src') { S.src = null; S.lot = null; renderSrc(); } else { S.dst = null; renderDst(); } renderSum(); const i = root.querySelector('.cb input'); if (i) i.focus(); return; }
+        const lt = e.target.closest('[data-lot]');
+        if (lt && S.src) { const lsEl = root.querySelector('.lots'), keepTop = lsEl ? lsEl.scrollTop : 0; S.lot = lotsOf(S.src.id).find((l) => lotKey(l) === lt.dataset.lot) || null; renderSrc(); const lsNew = root.querySelector('.lots'); if (lsNew) lsNew.scrollTop = keepTop; renderSum(); return; }
+        const pk = e.target.closest('#cvx-pack [data-p]'); if (pk) { S.pack = pk.dataset.p; syncPack(); renderSum(); return; }
+        if (e.target.closest('#cvx-all')) { if (S.lot) { S.qty = String(S.lot.quantity); $('#cvx-qty').value = S.qty; renderSum(); } return; }
+        if (e.target.closest('#cvx-go')) { submit(); return; }
+        if (e.target.closest('#cvx-clr')) { reset(); return; }
+        if (e.target.closest('#cvx-again')) { reset(); return; }
+    });
+
+    // ---------- เมนูซ้าย: เปลี่ยนจากเด้งป๊อปอัป เป็นเปิดหน้านี้ ----------
+    nav.removeAttribute('onclick');
+    nav.setAttribute('data-bs-toggle', 'pill'); nav.setAttribute('data-bs-target', '#pills-convert');
+    nav.addEventListener('shown.bs.tab', () => { if (S.busy) return; S.src = S.dst = S.lot = null; S.qty = ''; S.pack = 'standard'; S.done = null; render(); });
+    const openPage = function () { if (pane.classList.contains('active')) { if (!S.busy) { S.src = S.dst = S.lot = null; S.qty = ''; S.pack = 'standard'; S.done = null; render(); } return; } try { bootstrap.Tab.getOrCreateInstance(nav).show(); } catch (e) { nav.click(); } };
+    // กันโค้ดเดิมที่อยู่ท้ายไฟล์ มาเขียนทับให้กลับไปเด้งป๊อปอัป
+    Object.defineProperty(window, 'openConvertModal', { configurable: true, enumerable: true, get() { return openPage; }, set() { } });
+    render();
+})();
+// ===== จบ CONVERT-PAGE =====
 (function () {
     if (window.__userMgmtA2) return; window.__userMgmtA2 = true; window.__userMgmtA = true;   // __userMgmtA = ปิดตัวเก่าถ้ามันยังไม่ได้ทำงาน
     const pane = document.getElementById('pills-users');
@@ -32611,6 +33024,7 @@ window.cancelGroupRelease = async function(date, displayTime, customer) {
     + '#atx-dock .atx-d:hover{background:rgba(255,255,255,.12)!important;color:#fff!important}'
     + '#atx-dock .atx-d.on{background:linear-gradient(135deg,#2563eb,#06b6d4)!important;color:#fff!important}'
     + '#atx-dock .atx-d:focus-visible,#atx-dock .atx-handle:focus-visible{outline:2px solid #38bdf8;outline-offset:1px}'
+    + 'body:has(#login-page:not([style*="display: none"])) #atx-dock{display:none!important}'
     + '#atx-dock .support-fab-badge{top:2px!important;right:2px!important;min-width:17px;height:17px;border:0}'
     /* เครื่องคิดเลข: หน้าตาใหม่ + ตำแหน่งข้างแถบ */
     + '#calculator-widget{left:auto!important;right:78px!important;bottom:auto!important;top:50%!important;translate:0 -50%;width:292px!important;z-index:4000;border-radius:22px!important;background:#0f172a!important;border:1px solid rgba(255,255,255,.08)!important;box-shadow:0 22px 56px rgba(2,8,23,.5)!important}'
@@ -32839,5 +33253,21 @@ body #anB-dr::-webkit-scrollbar{width:8px}body #anB-dr::-webkit-scrollbar-thumb{
 body:has(#anB-dr.open) #calc-toggle-btn,body:has(#anB-dr.open) #support-fab-btn,body:has(#anB-dr.open) #atx-dock{display:none!important}
 /* ===== จบ ANNOUNCE-SCIFI ===== */
 </style>
+<script>
+// ===== DP-CALENDAR-FIX: กดไอคอนปฏิทินในบอร์ด Delivery plan แล้วปฏิทินเด้ง =====
+(function () {
+    document.addEventListener('click', function (e) {
+        var b = e.target && e.target.closest ? e.target.closest('.dpB .dn button') : null;
+        if (!b) return;
+        var pk = b.querySelector('input[type="date"]');
+        if (!pk) return;
+        try {
+            if (typeof pk.showPicker === 'function') pk.showPicker();
+            else { pk.focus(); pk.click(); }
+        } catch (err) { try { pk.focus(); pk.click(); } catch (e2) {} }
+    }, true);
+})();
+// ===== จบ DP-CALENDAR-FIX =====
+</script>
 </body>
 </html>
