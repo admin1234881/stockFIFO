@@ -22578,13 +22578,640 @@ renderLGTagPrintWindow = function(tags, printWin) {
     }, true);
 })();
 // ===== จบ LG-PLAN-PERM-WEB =====
-// ===== USER-MGMT-A2: หน้าจัดการผู้ใช้แบบใหม่ (v2: เพิ่มสิทธิ์หน้า LG — ปริ้นแท็ก/อัปโหลดแพลน/เพิ่มแพลนด้วยมือ/ปริ้นแพลน)
-// วางได้ทั้งเหนือหรือใต้บล็อก USER-MGMT-A ตัวเก่า (ตัวนี้จะเข้าไปแทนที่เอง) · ถ้ายังไม่ได้วางตัวเก่า วางตัวนี้ตัวเดียวพอ
-// (เดิม:) หน้าจัดการผู้ใช้แบบใหม่ (การ์ดผู้ใช้ซ้าย + แผงแก้ไขขวา แยกสิทธิ์เป็นหมวด) =====
-// ไม่แตะระบบบันทึก/แก้ไข/ลบเดิม: ใช้ช่องกรอกและสวิตช์ที่มี id เดิมทุกตัว (user-username, permission-... ฯลฯ) ปุ่มบันทึกยังเป็นตัวเดิม
-// ถ้าอยากเพิ่ม/แก้ "ชุดสิทธิ์สำเร็จรูป" ให้แก้รายการ PRESETS ด้านล่างนี้ (ชื่อ + รายชื่อสิทธิ์)
-// ถ้าอยากเพิ่มสิทธิ์ใหม่ในอนาคต ให้เพิ่มบรรทัดใน CATS (ต้องมีฟิลด์นั้นในระบบบันทึกด้วย)
-// (ลบแพตช์นี้ออก = กลับเป็นหน้าเดิม)
+// ===== LG-PLAN-EDIT-WEB (v2): ปุ่ม "แก้ไขยอด" + "ยกเลิกรายการ" ในตารางแมทช์แพลน LG + ยกเลิกแท็กที่เกี่ยวข้อง + กันสแกนแท็กที่ยกเลิก =====
+// *** เวอร์ชันนี้ใช้แทนบล็อก LG-PLAN-EDIT-WEB เดิม: ลบบล็อกเก่าทั้งก้อน (ตั้งแต่บรรทัด "// ===== LG-PLAN-EDIT-WEB" ถึง "// ===== จบ LG-PLAN-EDIT-WEB =====") แล้ววางอันนี้ที่เดิม ***
+// วางไว้ "ใต้บรรทัด" // ===== จบ LG-PLAN-PERM-WEB =====   (ค้นด้วย Ctrl+F แล้ววางต่อท้ายบรรทัดนั้นได้เลย)
+// ต้องทำคู่กับ: (1) แพตช์ Google Script LG-PLAN-EDIT-GS + LG-TAG-VOID-GS  (2) สวิตช์สิทธิ์ในหน้าจัดการผู้ใช้ 2 จุด (ทำไว้แล้วรอบก่อน)
+// เพิ่มในเวอร์ชันนี้:
+// - ยกเลิกรายการแพลน → แท็กที่ออกไว้และยังไม่ถูกสแกนจะถูกยกเลิกด้วย (ใครยกเลิก/เมื่อไหร่/เหตุผล เก็บในชีต LG_TagLog)
+//   แท็กที่ใช้ร่วมกับรายการอื่น (หลาย WO ในใบเดียว) จะไม่ยกเลิกทั้งใบ — ระบบนับเฉพาะ WO ที่ยังใช้ และเตือนพนักงานตอนสแกน
+// - สแกน/รับแท็กที่ถูกยกเลิก = ปฏิเสธ + ขึ้นป๊อปอัปแดงบอกว่าใครยกเลิกเมื่อไหร่ + จดประวัติลงชีต LG_VoidTagScanLog
+// สิทธิ์ใหม่ชื่อ canLGEditPlan : ค่าเริ่มต้น = "ไม่มีสิทธิ์" (แอดมินเห็นปุ่มเสมอ, คนอื่นต้องให้แอดมินติ๊กให้ก่อน)
+// - แก้ไขยอด  : เปลี่ยนจำนวนสั่งผลิตของแถวนั้น (เก็บยอดเดิม/ผู้แก้/เวลา/เหตุผลไว้ในชีต)
+// - ยกเลิกรายการ : เอาแถวนั้นออกจากแพลน (ไม่ลบทิ้งจากชีต เก็บผู้ยกเลิก/เวลา/เหตุผลไว้ · ประวัติสแกนเดิมไม่ถูกแตะ)
+// (ลบแพตช์นี้ออก = ปุ่มหายไป กลับเป็นเหมือนเดิม)
+(function () {
+    if (window.__lgPlanEdit) return; window.__lgPlanEdit = true;
+
+    const KEY = 'canLGEditPlan';
+    const isTrue = (v) => v === true || String(v).toUpperCase() === 'TRUE';
+    const me = () => (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null;
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const lang = () => { try { return currentLanguage === 'en' ? 'en' : 'th'; } catch (e) { return 'th'; } };
+
+    function allowed() {
+        const u = me();
+        if (!u) return false;
+        if (u.username === 'admin' || u.role === 'admin') return true;
+        return isTrue(u[KEY]);              // ไม่เคยตั้งค่า = ไม่มีสิทธิ์
+    }
+    window.lgPlanEditAllowed = allowed;
+
+    // ---------- ข้อความ 2 ภาษา ----------
+    const TX = {
+        th: {
+            edit: 'แก้ไขยอด', cancel: 'ยกเลิกรายการ',
+            editTitle: 'แก้ไขยอดสั่งผลิต', cur: 'ยอดเดิม', scanned: 'สแกนแล้ว', newQty: 'ยอดใหม่', whyOpt: 'เหตุผล (ไม่บังคับ)',
+            save: 'บันทึกยอดใหม่', close: 'ปิด', needQty: 'กรอกยอดเป็นตัวเลขที่มากกว่า 0', sameQty: 'ยอดเท่าเดิม ไม่มีอะไรต้องแก้',
+            lowTitle: 'ยอดใหม่ต่ำกว่าที่สแกนไปแล้ว', lowMsg: 'สแกนไปแล้ว {s} แต่ยอดใหม่คือ {n} — รายการนี้จะขึ้นว่า "ครบแล้ว" ทันที ยืนยันไหม?',
+            yes: 'ยืนยัน', back: 'ย้อนกลับ',
+            cancelTitle: 'ยกเลิกรายการนี้ออกจากแพลน?', whyReq: 'เหตุผลที่ยกเลิก (จำเป็น)', needWhy: 'กรุณาใส่เหตุผลที่ยกเลิก',
+            cancelNote: 'แถวนี้จะหายไปจากแพลนทุกหน้าจอ (ข้อมูลยังเก็บในชีตพร้อมชื่อผู้ยกเลิกและเหตุผล)',
+            cancelScanned: 'รายการนี้สแกนไปแล้ว {s} — ประวัติการสแกนยังอยู่ ไม่ถูกลบ',
+            doCancel: 'ยกเลิกรายการ', keep: 'ไม่ยกเลิก',
+            savedQty: 'แก้ยอดแล้ว: {a} → {b}', cancelled: 'ยกเลิกรายการแล้ว',
+            noPerm: 'ไม่มีสิทธิ์', noPermMsg: 'คุณไม่มีสิทธิ์ "แก้ไขยอด / ยกเลิกรายการแพลน LG" ให้แอดมินเปิดสิทธิ์ให้ในหน้าจัดการผู้ใช้',
+            notFound: 'ไม่พบรายการนี้ (อาจถูกยกเลิกหรือถูกแก้ไปแล้ว) ลองกดรีเฟรชตาราง',
+            failed: 'บันทึกไม่สำเร็จ',
+            tRem: 'เหลือ', dUp: 'เพิ่มขึ้น +{n}', dDown: 'ลดลง −{n}', dSame: 'ยังไม่เปลี่ยนยอด', whyOptShort: 'เหตุผล (ไม่บังคับ)', itemFor: '{w} · {p}', warnTitle: 'โปรดตรวจสอบ', errTitle: 'ทำรายการไม่สำเร็จ', infoTitle: 'ไม่พบรายการ',
+            busyEdit: 'กำลังบันทึกยอดใหม่…', busyEditSub: 'กรุณารอสักครู่ อย่าเพิ่งปิดหน้านี้', busyCancel: 'กำลังยกเลิกรายการ…', busyCancelSub: 'กำลังยกเลิกแท็กที่เกี่ยวข้องด้วย กรุณารอสักครู่',
+            tagsHead: 'แท็กที่ปริ้นไว้ของรายการนี้', tagVoid: 'จะถูกยกเลิก {n} ใบ', tagPart: 'ใช้ร่วมกับรายการอื่น {n} ใบ — ไม่ยกเลิกทั้งใบ ระบบนับเฉพาะ {w} และเตือนพนักงานตอนสแกน', tagUsed: 'สแกนไปแล้ว {n} ใบ — ไม่แตะต้อง', tagNone: 'ยังไม่มีแท็กที่ปริ้นของรายการนี้',
+            editTags: 'รายการนี้มีแท็กที่ปริ้นไปแล้ว {n} ใบ — ยอดบนแท็กจะไม่เปลี่ยนตามยอดใหม่ (ถ้าต้องการ ให้ยกเลิกแท็กเก่าที่หน้า "เช็คแท็กค้างสแกน" แล้วปริ้นใหม่)',
+            doneTitle: 'ยกเลิกรายการแล้ว', doneVoid: 'ยกเลิกแท็กแล้ว {n} ใบ', donePart: 'แท็กที่ใช้ร่วม {n} ใบ: ทำเครื่องหมายว่า {w} ถูกยกเลิก', doneUsed: 'แท็กที่สแกนไปแล้ว {n} ใบ ไม่ได้แตะต้อง', oldGs: 'ยกเลิกรายการแล้ว แต่ Google Script ยังเป็นเวอร์ชันเก่า จึง "ยังไม่ได้ยกเลิกแท็ก" — วางแพตช์ LG-TAG-VOID-GS แล้ว Deploy เวอร์ชันใหม่ หรือยกเลิกแท็กเองที่หน้า "เช็คแท็กค้างสแกน"',
+            bTitle: 'แท็กใบนี้ถูกยกเลิกแล้ว — ห้ามใช้', bBy: 'ยกเลิกโดย', bAt: 'เมื่อ', bWhy: 'เหตุผล', bNote: 'ไม่ได้บันทึกการสแกนนี้ นำแท็กใบนี้ไปคืนหัวหน้า ห้ามติดแร็ค', bLogged: 'ระบบจดไว้แล้วว่า {u} สแกนแท็กใบนี้ เมื่อ {t}', bOk: 'รับทราบ', bFeed: 'แท็ก {d} ถูกยกเลิกแล้ว — ไม่บันทึกการสแกน', bFeedGen: 'แท็กใบนี้ถูกยกเลิกแล้ว — ไม่บันทึกการสแกน', bManual: 'ยกเลิกด้วยมือที่หน้าเช็คแท็ก',
+            pTitle: 'แท็กใบนี้มี WO ที่ถูกยกเลิก: {c} — ระบบนับเฉพาะ {w} กรุณาเช็กจำนวนชิ้นจริงบนแร็ค',
+            needUpdate: 'Google Script ยังไม่ได้อัปเดต (ยังไม่รู้จักคำสั่งนี้) ให้วางแพตช์ฝั่ง Google Script แล้ว Deploy เป็นเวอร์ชันใหม่ก่อน'
+        },
+        en: {
+            edit: 'Edit qty', cancel: 'Cancel item',
+            editTitle: 'Edit order quantity', cur: 'Current', scanned: 'Scanned', newQty: 'New quantity', whyOpt: 'Reason (optional)',
+            save: 'Save quantity', close: 'Close', needQty: 'Enter a number greater than 0', sameQty: 'Same as the current quantity — nothing to change',
+            lowTitle: 'New quantity is below what was scanned', lowMsg: 'Scanned {s} but the new quantity is {n} — this row will show as "Complete" right away. Continue?',
+            yes: 'Continue', back: 'Go back',
+            cancelTitle: 'Cancel this item from the plan?', whyReq: 'Reason for cancelling (required)', needWhy: 'Please enter a reason',
+            cancelNote: 'The row disappears from the plan everywhere (it stays in the sheet with who cancelled it and why).',
+            cancelScanned: 'This item already has {s} scanned — the scan history is kept, not deleted.',
+            doCancel: 'Cancel item', keep: 'Keep it',
+            savedQty: 'Quantity changed: {a} → {b}', cancelled: 'Item cancelled',
+            noPerm: 'No permission', noPermMsg: 'You do not have permission to edit quantity / cancel LG plan items. Ask an admin to enable it in User Management.',
+            notFound: 'This item was not found (it may have been cancelled or changed). Try refreshing the table.',
+            failed: 'Could not save',
+            tRem: 'Left', dUp: 'Up +{n}', dDown: 'Down −{n}', dSame: 'No change yet', whyOptShort: 'Reason (optional)', itemFor: '{w} · {p}', warnTitle: 'Please check', errTitle: 'Could not complete', infoTitle: 'Not found',
+            busyEdit: 'Saving the new quantity…', busyEditSub: 'Please wait — do not close this page', busyCancel: 'Cancelling the item…', busyCancelSub: 'Cancelling the related tags too — please wait',
+            tagsHead: 'Tags already printed for this item', tagVoid: '{n} will be cancelled', tagPart: '{n} shared with other items — the whole tag is not cancelled; only {w} will be counted and staff get a warning when scanning', tagUsed: '{n} already scanned — left untouched', tagNone: 'No tags have been printed for this item yet',
+            editTags: 'This item already has {n} printed tag(s) — the quantity on them will not follow the new quantity (cancel the old tags in "Unscanned tag check" and reprint if needed)',
+            doneTitle: 'Item cancelled', doneVoid: '{n} tag(s) cancelled', donePart: '{n} shared tag(s): {w} marked as cancelled', doneUsed: '{n} already-scanned tag(s) left untouched', oldGs: 'Item cancelled, but the Google Script is still the old version so the tags were NOT cancelled — paste the LG-TAG-VOID-GS patch and deploy a new version, or cancel the tags yourself in "Unscanned tag check"',
+            bTitle: 'This tag was cancelled — do not use', bBy: 'Cancelled by', bAt: 'at', bWhy: 'Reason', bNote: 'This scan was NOT recorded. Hand the tag back to your supervisor; do not attach it to a rack.', bLogged: 'Logged: {u} scanned this tag at {t}', bOk: 'Understood', bFeed: 'Tag {d} is cancelled — scan not recorded', bFeedGen: 'This tag is cancelled — scan not recorded', bManual: 'Cancelled manually in the tag check page',
+            pTitle: 'This tag has cancelled WO(s): {c} — only {w} will be counted. Please check the real quantity on the rack.',
+            needUpdate: 'The Google Script has not been updated yet (it does not know this command). Paste the Google Script patch and deploy a new version first.'
+        }
+    };
+    const t = (k, v) => {
+        let s = (TX[lang()] || TX.th)[k] || TX.th[k] || k;
+        if (v) Object.keys(v).forEach(n => { s = s.split('{' + n + '}').join(v[n]); });
+        return s;
+    };
+
+    // ---------- CSS ----------
+    const st = document.createElement('style');
+    st.textContent = `
+    .lgep-box{display:inline-flex;gap:4px;margin-left:8px;padding-left:8px;border-left:1px solid #dee2e6;vertical-align:middle}
+    .lgep-box .btn{line-height:1.3}
+    .swal2-popup.lgep-pop{width:30em;max-width:94vw;padding:0;border-radius:26px;overflow:hidden;text-align:left;box-shadow:0 30px 80px rgba(15,23,42,.38);animation-duration:.22s}
+    .lgep-pop .swal2-html-container{margin:0;padding:0;overflow:visible;text-align:left;font-size:1rem}
+    .lgep-pop .swal2-actions{margin:0;padding:8px 22px 22px;width:100%;box-sizing:border-box;gap:10px;flex-wrap:nowrap}
+    .lgep-pop .swal2-validation-message{margin:6px 22px 0;border-radius:12px;background:#fef2f2;color:#b91c1c;font-weight:700;font-size:.85rem;justify-content:flex-start}
+    .lgep-pop .lgep-b{flex:1;margin:0;border:0;border-radius:14px;padding:13px 14px;font-weight:800;font-size:.95rem;cursor:pointer;transition:transform .12s,box-shadow .12s;font-family:inherit}
+    .lgep-pop .lgep-b:hover{transform:translateY(-1px)}.lgep-pop .lgep-b:active{transform:none}
+    .lgep-pop .lgep-b-ok{background:linear-gradient(135deg,#2563eb,#4f46e5);color:#fff;box-shadow:0 10px 22px rgba(37,99,235,.35)}
+    .lgep-pop .lgep-b-danger{background:linear-gradient(135deg,#f43f5e,#dc2626);color:#fff;box-shadow:0 10px 22px rgba(220,38,38,.35)}
+    .lgep-pop .lgep-b-ghost{background:#f1f5f9;color:#475569}
+    .lgep-pop .lgep-b:focus-visible{outline:3px solid rgba(37,99,235,.35);outline-offset:2px}
+    .lgep-hd{display:flex;gap:14px;align-items:center;padding:22px 24px 20px;color:#fff;position:relative;overflow:hidden}
+    .lgep-hd:after{content:'';position:absolute;right:-40px;top:-50px;width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,.12)}
+    .lgep-hd.edit{background:linear-gradient(135deg,#2563eb,#6366f1)}
+    .lgep-hd.cancel{background:linear-gradient(135deg,#fb923c,#e11d48)}
+    .lgep-hd.warn{background:linear-gradient(135deg,#f59e0b,#ea580c)}
+    .lgep-hd.ok{background:linear-gradient(135deg,#10b981,#0d9488)}
+    .lgep-hd.block{background:linear-gradient(135deg,#ef4444,#991b1b)}
+    .lgep-hd .ic{width:50px;height:50px;border-radius:17px;background:rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;font-size:1.55rem;flex:none;position:relative;z-index:1}
+    .lgep-hd.block .ic{animation:lgepPulse 1.2s ease-out infinite}
+    .lgep-hd .tt{position:relative;z-index:1;min-width:0}
+    .lgep-hd h3{margin:0;font-size:1.18rem;font-weight:800;line-height:1.25;color:#fff}
+    .lgep-hd p{margin:3px 0 0;font-size:.82rem;opacity:.9;color:#fff}
+    .lgep-bd{padding:18px 24px 8px}
+    .lgep-item{display:flex;align-items:center;gap:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:12px 14px;margin-bottom:14px}
+    .lgep-item .wo{font-weight:800;font-size:1.08rem;color:#0f172a;line-height:1.2}
+    .lgep-item .pn{font-size:.8rem;color:#64748b}
+    .lgep-item .ch{margin-left:auto;display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+    .lgep-chip{display:inline-block;background:#e0e7ff;color:#3730a3;border-radius:20px;padding:2px 10px;font-size:.72rem;font-weight:800}
+    .lgep-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px}
+    .lgep-tile{background:#f1f5f9;border-radius:14px;padding:9px 6px;text-align:center}
+    .lgep-tile small{display:block;color:#64748b;font-size:.68rem;font-weight:800;letter-spacing:.02em}
+    .lgep-tile b{font-size:1.3rem;color:#0f172a}
+    .lgep-prog{height:7px;border-radius:6px;background:#e2e8f0;overflow:hidden;margin-bottom:14px}.lgep-prog i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,#2563eb,#8b5cf6)}
+    .lgep-lbl{display:block;font-size:.76rem;font-weight:800;color:#475569;margin:12px 0 6px;letter-spacing:.01em}
+    .lgep-qty{display:flex;gap:6px;align-items:center}
+    .lgep-step{flex:none;min-width:40px;height:46px;border:0;border-radius:12px;background:#eef2ff;color:#4338ca;font-weight:800;font-size:.85rem;cursor:pointer;padding:0 8px}
+    .lgep-step:hover{background:#e0e7ff}
+    .lgep-qty input{flex:1;min-width:0;height:46px;text-align:center;font-size:1.5rem;font-weight:800;border:2px solid #c7d2fe;border-radius:14px;outline:0;color:#0f172a;background:#fff}
+    .lgep-qty input:focus{border-color:#4f46e5;box-shadow:0 0 0 4px rgba(79,70,229,.15)}
+    .lgep-delta{display:inline-block;margin-top:8px;border-radius:20px;padding:3px 12px;font-size:.78rem;font-weight:800;background:#f1f5f9;color:#64748b}
+    .lgep-delta.up{background:#dcfce7;color:#166534}.lgep-delta.down{background:#fee2e2;color:#991b1b}
+    .lgep-in{width:100%;border:1.5px solid #e2e8f0;border-radius:12px;padding:11px 14px;font-size:.95rem;outline:0;background:#fff;font-family:inherit}
+    .lgep-in:focus{border-color:#4f46e5;box-shadow:0 0 0 4px rgba(79,70,229,.13)}
+    .lgep-qr{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+    .lgep-qr button{border:1.5px solid #e2e8f0;background:#fff;color:#475569;border-radius:20px;padding:3px 11px;font-size:.76rem;font-weight:700;cursor:pointer}
+    .lgep-qr button:hover{border-color:#6366f1;color:#4338ca;background:#eef2ff}
+    .lgep-warn{display:flex;gap:10px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:14px;padding:10px 14px;font-size:.84rem;margin-top:12px;line-height:1.45}
+    .lgep-warn i{margin-top:2px}
+    .lgep-note{color:#94a3b8;font-size:.78rem;margin-top:12px;line-height:1.45}
+    .lgep-imp{display:flex;gap:12px;align-items:flex-start;border-radius:14px;padding:10px 12px;margin-bottom:8px;border:1px solid transparent}
+    .lgep-imp .ico{width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;flex:none;font-size:1.05rem}
+    .lgep-imp .tx{min-width:0;font-size:.86rem;line-height:1.4}
+    .lgep-imp.v{background:#fef2f2;border-color:#fecaca;color:#991b1b}.lgep-imp.v .ico{background:#fee2e2;color:#dc2626}
+    .lgep-imp.p{background:#fffbeb;border-color:#fde68a;color:#92400e}.lgep-imp.p .ico{background:#fef3c7;color:#d97706}
+    .lgep-imp.u{background:#f0fdf4;border-color:#bbf7d0;color:#166534}.lgep-imp.u .ico{background:#dcfce7;color:#16a34a}
+    .lgep-imp.n{background:#f8fafc;border-color:#e2e8f0;color:#64748b}.lgep-imp.n .ico{background:#e2e8f0;color:#64748b}
+    .lgep-cl{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+    .lgep-mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.7rem;background:rgba(255,255,255,.75);border:1px solid rgba(0,0,0,.08);border-radius:7px;padding:1px 7px;color:#334155}
+    .lgep-sect{font-size:.72rem;font-weight:800;color:#64748b;letter-spacing:.04em;margin:2px 0 8px}
+    .lgep-doc{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:800;font-size:1.35rem;color:#991b1b;letter-spacing:.02em;word-break:break-all}
+    .lgep-chips{display:flex;gap:5px;flex-wrap:wrap;margin:6px 0 14px}
+    .lgep-chips .lgep-chip{background:#fee2e2;color:#991b1b}
+    .lgep-rows{border:1px solid #fecaca;background:#fef2f2;border-radius:16px;padding:6px 14px}
+    .lgep-rows .r{display:flex;gap:10px;align-items:baseline;padding:8px 0;border-bottom:1px dashed #fecaca}.lgep-rows .r:last-child{border:0}
+    .lgep-rows .r i{color:#dc2626;width:18px;flex:none;text-align:center}
+    .lgep-rows .r small{color:#b91c1c;font-weight:800;font-size:.72rem;min-width:62px;flex:none}
+    .lgep-rows .r b{color:#450a0a;font-size:.92rem;word-break:break-word}
+    .lgep-alert{margin-top:12px;background:#450a0a;color:#fff;border-radius:14px;padding:11px 14px;font-weight:800;font-size:.86rem;text-align:center;line-height:1.45}
+    .lgep-foot{margin-top:10px;text-align:center;color:#94a3b8;font-size:.76rem}
+    .lgep-text{font-size:.92rem;color:#334155;line-height:1.55}
+    .swal2-popup.lgep-toast{border-radius:16px;padding:12px 14px;box-shadow:0 14px 36px rgba(15,23,42,.25);border-left:6px solid #f59e0b;align-items:center}
+    .swal2-popup.lgep-toast.ok{border-left-color:#10b981}
+    .lgep-toast .swal2-html-container{margin:0;padding:0;font-size:.9rem;color:#334155;text-align:left}
+    .lgep-toast .lgep-tw{display:flex;gap:10px;align-items:flex-start;line-height:1.45}
+    .lgep-toast .lgep-tw i{font-size:1.25rem;color:#f59e0b;margin-top:1px}.lgep-toast.ok .lgep-tw i{color:#10b981}
+    .lgep-toast .lgep-tb{border:0;border-radius:10px;background:#0f172a;color:#fff;font-weight:800;font-size:.8rem;padding:7px 14px;margin:0 0 0 8px;cursor:pointer}
+    .swal2-popup.lgep-busy{width:21em;padding:1.8em 1.2em 1.5em;border-radius:24px;overflow:hidden}
+    .lgep-busy .swal2-html-container{margin:0;padding:0;text-align:center}
+    .lgep-busy .lgep-spin{width:52px;height:52px;margin:2px auto 16px;border-radius:50%;background:conic-gradient(from 0deg,#2563eb,#8b5cf6,#e2e8f0 70%);-webkit-mask:radial-gradient(circle,transparent 54%,#000 56%);mask:radial-gradient(circle,transparent 54%,#000 56%);animation:lgepSpin .85s linear infinite}
+    .lgep-busy .lgep-bt{font-weight:800;font-size:1.1rem;color:#0f172a}
+    .lgep-busy .lgep-bs{color:#64748b;font-size:.84rem;margin-top:4px}
+    @keyframes lgepSpin{to{transform:rotate(360deg)}}
+    @keyframes lgepPulse{0%{box-shadow:0 0 0 0 rgba(255,255,255,.55)}100%{box-shadow:0 0 0 18px rgba(255,255,255,0)}}`;
+    document.head.appendChild(st);
+
+    // ---------- ใส่ปุ่มในแต่ละแถว (หาไอดีแถวจากปุ่มเลื่อน ▲▼ ที่มีอยู่แล้ว จึงไม่ต้องแก้ฟังก์ชันวาดตารางเดิม) ----------
+    function decorate() {
+        const tb = document.getElementById('lg-match-tbody');
+        if (!tb) return;
+        const ok = allowed();
+        tb.querySelectorAll('tr').forEach(tr => {
+            const mv = tr.querySelector('button[onclick*="moveLGPlan"]');
+            let box = tr.querySelector('.lgep-box');
+            if (!mv) { if (box) box.remove(); return; }
+            if (!ok) { if (box) box.remove(); return; }
+            if (box) return;
+            const m = /moveLGPlan\('([^']*)'/.exec(mv.getAttribute('onclick') || '');
+            if (!m) return;
+            box = document.createElement('span');
+            box.className = 'lgep-box';
+            box.innerHTML =
+                '<button type="button" class="btn btn-sm btn-outline-primary py-0 px-2 lgep-edit"><i class="bi bi-pencil-square"></i></button>' +
+                '<button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 lgep-cancel"><i class="bi bi-x-circle"></i></button>';
+            const bs = box.querySelectorAll('button');
+            bs.forEach(b => b.setAttribute('data-id', m[1]));
+            mv.parentNode.appendChild(box);
+        });
+        tb.querySelectorAll('.lgep-edit').forEach(b => { b.title = t('edit'); });
+        tb.querySelectorAll('.lgep-cancel').forEach(b => { b.title = t('cancel'); });
+    }
+
+    // ตัดแถวที่ถูกยกเลิกออกจากข้อมูลในหน้าเว็บ (ด่านสำรอง — ปกติ Google Script ไม่ส่งแถวที่ยกเลิกมาให้อยู่แล้ว)
+    function stripCancelled() {
+        try {
+            if (typeof db === 'undefined' || !db || !Array.isArray(db.lgPlan)) return false;
+            if (!db.lgPlan.some(p => p && p.planCancelledAt)) return false;
+            db.lgPlan = db.lgPlan.filter(p => !(p && p.planCancelledAt));
+            return true;
+        } catch (e) { return false; }
+    }
+    function rerender() {
+        try { if (typeof window.renderLGMatchTable === 'function') window.renderLGMatchTable(); } catch (e) { }
+        try { if (typeof window.renderLGDashboard === 'function') window.renderLGDashboard(); } catch (e) { }
+        decorate();
+    }
+
+    let watched = null;
+    function tick() {
+        try {
+            if (stripCancelled()) rerender();
+            const tb = document.getElementById('lg-match-tbody');
+            if (tb && tb !== watched) {
+                watched = tb;
+                new MutationObserver(() => { try { decorate(); } catch (e) { } }).observe(tb, { childList: true });
+            }
+            decorate();
+        } catch (e) { }
+    }
+    setInterval(tick, 900);
+    tick();
+
+    // ---------- ช่วยหาแถว / ส่งคำสั่งไป Google Script ----------
+    function findRow(id) {
+        try {
+            const list = (typeof computeLGMatchStatus === 'function') ? computeLGMatchStatus() : (window.computeLGMatchStatus ? window.computeLGMatchStatus() : []);
+            return list.find(r => String(r.id) === String(id)) || null;
+        } catch (e) { return null; }
+    }
+    const IC = (n) => '<i class="bi bi-' + n + '"></i>';
+    function hd(kind, icon, title, sub) {
+        return '<div class="lgep-hd ' + kind + '"><div class="ic">' + IC(icon) + '</div><div class="tt"><h3>' + esc(title) + '</h3>' + (sub ? '<p>' + esc(sub) + '</p>' : '') + '</div></div>';
+    }
+    // การ์ดป๊อปอัปหน้าตาเดียวกันทั้งฟีเจอร์: หัวสีไล่เฉด + เนื้อหา + ปุ่มโค้งมน
+    function pop(o) {
+        return Swal.fire({
+            customClass: { popup: 'lgep-pop', confirmButton: 'lgep-b ' + (o.danger ? 'lgep-b-danger' : 'lgep-b-ok'), cancelButton: 'lgep-b lgep-b-ghost', actions: 'lgep-actions' },
+            buttonsStyling: false, reverseButtons: true, focusConfirm: false,
+            html: hd(o.kind, o.icon, o.title, o.sub) + '<div class="lgep-bd">' + o.body + '</div>',
+            confirmButtonText: o.ok, showCancelButton: !!o.cancel, cancelButtonText: o.cancel || '',
+            allowOutsideClick: !o.lock, allowEscapeKey: !o.lock, preConfirm: o.preConfirm, didOpen: o.didOpen
+        });
+    }
+    function deny() { if (typeof Swal !== 'undefined') pop({ kind: 'warn', icon: 'shield-lock-fill', title: t('noPerm'), body: '<div class="lgep-text">' + esc(t('noPermMsg')) + '</div>', ok: t('bOk') }); }
+    function fail(e) {
+        const msg = String((e && e.message) || e || '');
+        const text = /Invalid action/i.test(msg) ? t('needUpdate') : msg;
+        pop({ kind: 'cancel', icon: 'x-octagon-fill', title: t('failed'), body: '<div class="lgep-text">' + esc(text) + '</div>', ok: t('bOk') });
+    }
+    function toast(title, kind) {
+        Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2600, timerProgressBar: true, buttonsStyling: false,
+            customClass: { popup: 'lgep-toast ok' }, html: '<div class="lgep-tw">' + IC('check-circle-fill') + '<div><b>' + esc(title) + '</b></div></div>' });
+    }
+    function itemCard(r) {
+        const chips = [r.line, r.model].filter(Boolean).map(x => '<span class="lgep-chip">' + esc(x) + '</span>').join('');
+        return '<div class="lgep-item"><div><div class="wo">' + esc(r.WO) + '</div><div class="pn">' + esc(r.partNo) + (r.partName ? ' · ' + esc(r.partName) : '') + '</div></div><div class="ch">' + chips + '</div></div>';
+    }
+    const docChips = (docs, max) => { max = max || 8; return docs.slice(0, max).map(d => '<span class="lgep-mono">' + esc(d) + '</span>').join('') + (docs.length > max ? '<span class="lgep-mono">+' + (docs.length - max) + '</span>' : ''); };
+    const impRow = (kind, icon, text, docsHtml) => '<div class="lgep-imp ' + kind + '"><div class="ico">' + IC(icon) + '</div><div class="tx"><b>' + esc(text) + '</b>' + (docsHtml ? '<div class="lgep-cl">' + docsHtml + '</div>' : '') + '</div></div>';
+    const QR = {
+        th: { edit: ['ลูกค้าเพิ่มยอด', 'ลูกค้าลดยอด', 'คีย์ยอดผิด', 'เปลี่ยนแพลน'], cancel: ['ลูกค้ายกเลิกออเดอร์', 'คีย์ผิด / คีย์ซ้ำ', 'ไม่ผลิตแล้ว', 'เปลี่ยนแพลน'] },
+        en: { edit: ['Customer increased', 'Customer reduced', 'Typo in qty', 'Plan changed'], cancel: ['Customer cancelled the order', 'Typo / duplicate entry', 'No longer produced', 'Plan changed'] }
+    };
+    function quickReasons(kind) {
+        return '<div class="lgep-qr">' + (QR[lang()] || QR.th)[kind].map(x => '<button type="button" data-qr="' + esc(x) + '">' + esc(x) + '</button>').join('') + '</div>';
+    }
+    function bindQuick() {
+        document.querySelectorAll('.lgep-qr button').forEach(b => b.addEventListener('click', () => { const w = document.getElementById('lgep-why'); if (w) { w.value = b.getAttribute('data-qr'); w.focus(); } }));
+    }
+    let busy = false;
+    // หน้าต่างรอตอนบันทึก (การ์ดมีข้อความบอกว่ากำลังทำอะไร)
+    function busyPopup(k, sub) {
+        Swal.fire({
+            customClass: { popup: 'lgep-pop lgep-busy' }, allowOutsideClick: false, allowEscapeKey: false, showConfirmButton: false,
+            html: '<div class="lgep-spin"></div><div class="lgep-bt">' + esc(t(k)) + '</div><div class="lgep-bs">' + esc(t(sub)) + '</div>'
+        });
+    }
+
+    // ---------- ช่วยอ่านข้อมูลแท็ก (LG_TagLog) ----------
+    const up = (x) => String(x == null ? '' : x).trim().toUpperCase();
+    const groupsOf = (tag) => String(tag.woList || '').split('|').map(x => x.trim()).filter(Boolean).map(x => {
+        const i = x.lastIndexOf(':');
+        return i < 0 ? { WO: up(x), qty: 0 } : { WO: up(x.slice(0, i)), qty: Number(x.slice(i + 1)) || 0 };
+    });
+    const listOf = (x) => String(x == null ? '' : x).split(/[,\s|]+/).map(up).filter(Boolean);
+    function tagByDoc(doc) {
+        doc = up(doc); if (!doc) return null;
+        return (db.lgTagLog || []).find(x => up(x.docNumber) === doc) || null;
+    }
+    function tagState(tag) {
+        const cancelled = listOf(tag.cancelledWO), groups = groupsOf(tag);
+        return { isVoid: String(tag.status).trim() === 'void', cancelled: cancelled, groups: groups, remaining: groups.filter(g => cancelled.indexOf(g.WO) < 0) };
+    }
+    const isPartial = (st) => !st.isVoid && st.cancelled.length > 0 && st.remaining.length > 0;   // ใบที่ถูกกู้คืนจนไม่เหลือ WO ที่ใช้ได้ ถือว่าเป็นใบปกติ
+    const fmtT = (v) => { const x = String(v == null ? '' : v).trim(); return /^\d{4}-\d\d-\d\dT/.test(x) ? x.slice(0, 19).replace('T', ' ') : x; };
+    function usedDocs() {
+        const set = new Set();
+        (db.lgScanLog || []).forEach(l => { try { const p = parseLGBarcode(l.rawBarcode); if (p && p.docNumber) set.add(up(p.docNumber)); } catch (e) { } });
+        (db.lgReceiveLog || []).forEach(r => { const d = up(r.docNumber); if (d) set.add(d); });
+        return set;
+    }
+    // แท็กที่ปริ้นไว้ของแถวแพลนนี้ แยก 3 กลุ่ม: ยกเลิกทั้งใบ / ใช้ร่วมกับรายการอื่น / สแกนไปแล้ว
+    function tagImpact(row) {
+        const wo = up(row.WO), pn = up(row.partNo);
+        let pd = ''; try { pd = String(lgPlanDateOf(row) || '').slice(0, 10); } catch (e) { }
+        const used = usedDocs(), out = { voidDocs: [], partial: [], used: [], all: 0 };
+        (db.lgTagLog || []).forEach(tag => {
+            if (String(tag.status).trim() === 'void') return;
+            if (up(tag.partNo) !== pn) return;
+            const td = String(tag.planDate || '').trim().slice(0, 10);
+            if (pd && td && td !== pd) return;
+            const st = tagState(tag);
+            if (!st.groups.some(g => g.WO === wo)) return;
+            out.all++;
+            const doc = up(tag.docNumber);
+            if (used.has(doc)) { out.used.push(doc); return; }
+            const cancelled = st.cancelled.concat(st.cancelled.indexOf(wo) < 0 ? [wo] : []);
+            const remaining = st.groups.filter(g => cancelled.indexOf(g.WO) < 0);
+            if (!remaining.length) out.voidDocs.push(doc); else out.partial.push({ doc: doc, remaining: remaining });
+        });
+        return out;
+    }
+    const remText = (arr) => arr.map(g => g.WO + ' (' + g.qty + ')').join(', ');
+
+    // ---------- แก้ไขยอด ----------
+    async function editQty(id) {
+        if (!allowed()) return deny();
+        if (busy) return;
+        const r = findRow(id);
+        if (!r) return pop({ kind: 'warn', icon: 'search', title: t('infoTitle'), body: '<div class="lgep-text">' + esc(t('notFound')) + '</div>', ok: t('bOk') });
+        const oldQty = parseFloat(r.orderQty) || 0, scanned = parseFloat(r.scanned) || 0;
+        let printed = 0; try { printed = tagImpact(r).all; } catch (e) { }
+        const pct = oldQty > 0 ? Math.min(100, Math.round(scanned / oldQty * 100)) : 0;
+        const res = await pop({
+            kind: 'edit', icon: 'pencil-square', title: t('editTitle'), sub: t('itemFor', { w: r.WO, p: r.partNo }),
+            body: itemCard(r) +
+                '<div class="lgep-tiles"><div class="lgep-tile"><small>' + esc(t('cur')) + '</small><b>' + oldQty + '</b></div><div class="lgep-tile"><small>' + esc(t('scanned')) + '</small><b>' + scanned + '</b></div><div class="lgep-tile"><small>' + esc(t('tRem')) + '</small><b>' + Math.max(0, oldQty - scanned) + '</b></div></div>' +
+                '<div class="lgep-prog"><i style="width:' + pct + '%"></i></div>' +
+                '<label class="lgep-lbl">' + esc(t('newQty')) + '</label>' +
+                '<div class="lgep-qty"><button type="button" class="lgep-step" data-d="-10">−10</button><button type="button" class="lgep-step" data-d="-1">−1</button>' +
+                '<input id="lgep-qty" type="number" min="1" step="any" inputmode="decimal" value="' + oldQty + '">' +
+                '<button type="button" class="lgep-step" data-d="1">+1</button><button type="button" class="lgep-step" data-d="10">+10</button></div>' +
+                '<span id="lgep-delta" class="lgep-delta same">' + esc(t('dSame')) + '</span>' +
+                '<label class="lgep-lbl">' + esc(t('whyOpt')) + '</label><input id="lgep-why" class="lgep-in" type="text" maxlength="200">' + quickReasons('edit') +
+                (printed > 0 ? '<div class="lgep-warn">' + IC('info-circle-fill') + '<div>' + esc(t('editTags', { n: printed })) + '</div></div>' : ''),
+            ok: t('save'), cancel: t('close'),
+            didOpen: () => {
+                const q = document.getElementById('lgep-qty'), dl = document.getElementById('lgep-delta');
+                const upd = () => {
+                    const n = parseFloat(q.value), d = isFinite(n) ? n - oldQty : 0;
+                    dl.className = 'lgep-delta ' + (d > 0 ? 'up' : d < 0 ? 'down' : 'same');
+                    dl.textContent = d > 0 ? t('dUp', { n: d }) : d < 0 ? t('dDown', { n: -d }) : t('dSame');
+                };
+                q.addEventListener('input', upd);
+                document.querySelectorAll('.lgep-step').forEach(b => b.addEventListener('click', () => {
+                    const cur = parseFloat(q.value); q.value = Math.max(0, (isFinite(cur) ? cur : 0) + parseFloat(b.getAttribute('data-d'))); upd(); q.focus();
+                }));
+                bindQuick(); q.focus(); q.select();
+            },
+            preConfirm: () => {
+                const n = parseFloat(document.getElementById('lgep-qty').value);
+                if (!isFinite(n) || n <= 0) { Swal.showValidationMessage(t('needQty')); return false; }
+                if (n === oldQty) { Swal.showValidationMessage(t('sameQty')); return false; }
+                return { qty: n, why: String(document.getElementById('lgep-why').value || '').trim() };
+            }
+        });
+        if (!res.isConfirmed || !res.value) return;
+        const nq = res.value.qty;
+        if (nq < scanned) {
+            const c = await pop({ kind: 'warn', icon: 'exclamation-triangle-fill', title: t('lowTitle'), body: '<div class="lgep-text">' + esc(t('lowMsg', { s: scanned, n: nq })) + '</div>', ok: t('yes'), cancel: t('back') });
+            if (!c.isConfirmed) return;
+        }
+        busy = true;
+        try {
+            busyPopup('busyEdit', 'busyEditSub');
+            const u = me();
+            await callAppsScript('updateLGPlanQty', { id: r.id, orderQty: nq, by: u ? u.username : '', reason: res.value.why });
+            const p = (db.lgPlan || []).find(x => String(x.id) === String(r.id));
+            if (p) {
+                if (p.origQty === undefined || p.origQty === null || p.origQty === '') p.origQty = oldQty;
+                p.orderQty = nq; p.qtyEditedBy = u ? u.username : ''; p.qtyEditReason = res.value.why;
+            }
+            rerender();
+            Swal.close();
+            toast(t('savedQty', { a: oldQty, b: nq }));
+        } catch (e) { fail(e); } finally { busy = false; }
+    }
+
+    // ---------- ยกเลิกรายการ ----------
+    async function cancelItem(id) {
+        if (!allowed()) return deny();
+        if (busy) return;
+        const r = findRow(id);
+        if (!r) return pop({ kind: 'warn', icon: 'search', title: t('infoTitle'), body: '<div class="lgep-text">' + esc(t('notFound')) + '</div>', ok: t('bOk') });
+        const scanned = parseFloat(r.scanned) || 0;
+        let imp = { voidDocs: [], partial: [], used: [], all: 0 }; try { imp = tagImpact(r); } catch (e) { }
+        let tagsHtml = '<div class="lgep-sect">' + esc(t('tagsHead')).toUpperCase() + '</div>';
+        if (!imp.all) tagsHtml += impRow('n', 'tag', t('tagNone'), '');
+        if (imp.voidDocs.length) tagsHtml += impRow('v', 'slash-circle-fill', t('tagVoid', { n: imp.voidDocs.length }), docChips(imp.voidDocs));
+        if (imp.partial.length) {
+            const w = {}; imp.partial.forEach(p => p.remaining.forEach(g => { w[g.WO] = (w[g.WO] || 0) + g.qty; }));
+            tagsHtml += impRow('p', 'diagram-2-fill', t('tagPart', { n: imp.partial.length, w: Object.keys(w).map(k => k + ' (' + w[k] + ')').join(', ') }), docChips(imp.partial.map(p => p.doc)));
+        }
+        if (imp.used.length) tagsHtml += impRow('u', 'check-circle-fill', t('tagUsed', { n: imp.used.length }), docChips(imp.used));
+        const res = await pop({
+            kind: 'cancel', icon: 'trash3-fill', title: t('cancelTitle'), sub: t('itemFor', { w: r.WO, p: r.partNo }), danger: true,
+            body: itemCard(r) +
+                (scanned > 0 ? '<div class="lgep-warn" style="margin:0 0 12px">' + IC('exclamation-triangle-fill') + '<div>' + esc(t('cancelScanned', { s: scanned })) + '</div></div>' : '') +
+                tagsHtml +
+                '<label class="lgep-lbl">' + esc(t('whyReq')) + '</label><input id="lgep-why" class="lgep-in" type="text" maxlength="200">' + quickReasons('cancel') +
+                '<div class="lgep-note">' + esc(t('cancelNote')) + '</div>',
+            ok: t('doCancel'), cancel: t('keep'),
+            didOpen: () => { bindQuick(); const w = document.getElementById('lgep-why'); if (w) w.focus(); },
+            preConfirm: () => {
+                const why = String(document.getElementById('lgep-why').value || '').trim();
+                if (!why) { Swal.showValidationMessage(t('needWhy')); return false; }
+                return { why: why };
+            }
+        });
+        if (!res.isConfirmed || !res.value) return;
+        busy = true;
+        try {
+            busyPopup('busyCancel', imp.all ? 'busyCancelSub' : 'busyEditSub');
+            const u = me();
+            const out = await callAppsScript('cancelLGPlan', { id: r.id, by: u ? u.username : '', reason: res.value.why }) || {};
+            db.lgPlan = (db.lgPlan || []).filter(x => String(x.id) !== String(r.id));
+            (out.tagUpdates || []).forEach(up2 => { const tg = tagByDoc(up2.docNumber); if (tg) Object.assign(tg, up2); });
+            rerender();
+            Swal.close();
+            const nV = (out.voided || []).length, nP = (out.partial || []).length, nU = (out.used || []).length;
+            if (!out.tagsHandled && imp.all > 0) {
+                pop({ kind: 'warn', icon: 'exclamation-triangle-fill', title: t('doneTitle'), sub: t('itemFor', { w: r.WO, p: r.partNo }), body: '<div class="lgep-text">' + esc(t('oldGs')) + '</div>', ok: t('bOk') });
+            } else if (nV || nP || nU) {
+                let h = '';
+                if (nV) h += impRow('v', 'slash-circle-fill', t('doneVoid', { n: nV }), docChips(out.voided));
+                if (nP) h += impRow('p', 'diagram-2-fill', t('donePart', { n: nP, w: up(r.WO) }), out.partial.map(p => '<span class="lgep-mono">' + esc(p.docNumber + ' → ' + remText(p.remaining)) + '</span>').join(''));
+                if (nU) h += impRow('u', 'check-circle-fill', t('doneUsed', { n: nU }), docChips(out.used));
+                pop({ kind: 'ok', icon: 'check2-circle', title: t('doneTitle'), sub: t('itemFor', { w: r.WO, p: r.partNo }), body: h, ok: t('close') });
+            } else toast(t('cancelled'));
+        } catch (e) { fail(e); } finally { busy = false; }
+    }
+
+    document.addEventListener('click', function (e) {
+        const b = e.target && e.target.closest ? e.target.closest('.lgep-edit,.lgep-cancel') : null;
+        if (!b) return;
+        e.preventDefault(); e.stopPropagation();
+        const id = b.getAttribute('data-id');
+        if (b.classList.contains('lgep-edit')) editQty(id); else cancelItem(id);
+    }, true);
+
+    // =====================================================================
+    //  กันสแกน/รับแท็กที่ถูกยกเลิก + เก็บประวัติคนที่เอาไปสแกน
+    // =====================================================================
+    let DROP = null;   // ระหว่างสแกนแท็กที่ "ยกเลิกบางส่วน": ตัด WO ที่ยกเลิกออกจากข้อมูลแท็กที่อ่านได้
+    const _parse = (typeof parseLGBarcode === 'function') ? parseLGBarcode : null;
+    if (_parse) {
+        parseLGBarcode = function (raw) {
+            const r = _parse.apply(this, arguments);
+            try {
+                if (r && DROP && up(r.docNumber) === DROP.doc) {
+                    r.groups = (r.groups || []).filter(g => !DROP.wos.has(up(g.WO)));
+                    if (!r.groups.length) return null;
+                }
+            } catch (e) { }
+            return r;
+        };
+    }
+
+    const lastShown = {};
+    const fresh = (key, ms) => { const n = Date.now(); if (lastShown[key] && n - lastShown[key] < ms) return false; lastShown[key] = n; return true; };
+    let _actx = null;
+    function alarm() {
+        try {
+            _actx = _actx || new (window.AudioContext || window.webkitAudioContext)();
+            [0, 0.28, 0.56].forEach(w => {
+                const o = _actx.createOscillator(), g = _actx.createGain();
+                o.type = 'square'; o.frequency.value = 330; o.connect(g); g.connect(_actx.destination);
+                const t0 = _actx.currentTime + w;
+                g.gain.setValueAtTime(0.18, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.22);
+                o.start(t0); o.stop(t0 + 0.24);
+            });
+        } catch (e) { }
+        try { if (navigator.vibrate) navigator.vibrate([300, 120, 300, 120, 300]); } catch (e) { }
+    }
+    const nowStr = () => { const d = new Date(), p = (n) => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()); };
+    const userName = () => { const u = me(); return u ? u.username : ''; };
+
+    let _call = callAppsScript;      // ตัวเดิม (ไม่ผ่านการดักของเรา) — ใช้ส่งบันทึกประวัติ
+    function logAttempt(tag, channel, result, tagStatus) {
+        try {
+            const pr = _call('logVoidTagScan', {
+                docNumber: up(tag.docNumber), channel: channel, attemptBy: userName(), partNo: tag.partNo, woList: tag.woList,
+                result: result, tagStatus: tagStatus, voidedBy: tag.voidedBy || '', voidedAt: fmtT(tag.voidedAt), voidReason: tag.voidReason || '', cancelledWO: tag.cancelledWO || ''
+            });
+            if (pr && pr.catch) pr.catch((e) => console.warn('logVoidTagScan', e && e.message));
+        } catch (e) { }
+    }
+    function blockedMsg(tag) {
+        return '🚫 ' + t('bFeed', { d: up(tag.docNumber) });
+    }
+    // ขึ้นป๊อปอัปแดง + เสียง + จดประวัติ (ซ้ำเลขเดิมภายใน 4 วินาทีไม่เด้งซ้ำ เผื่อเครื่องสแกนยิงรัว)
+    const blockOpen = () => { try { return !!(Swal.isVisible() && document.querySelector('.swal2-popup .lgep-blk')); } catch (e) { return false; } };
+    function showBlocked(tag, channel, feedbackEl) {
+        const doc = up(tag.docNumber);
+        if (feedbackEl) feedbackEl.innerHTML = '<div class="alert alert-danger mb-0"><i class="bi bi-slash-circle-fill me-1"></i><b>' + esc(t('bFeed', { d: doc })) + '</b></div>';
+        if (fresh('l|' + doc, 4000)) logAttempt(tag, channel, 'ปฏิเสธ (แท็กถูกยกเลิก)', 'void');   // เครื่องสแกนยิงรัว → จดครั้งเดียว
+        if (blockOpen()) return;          // ป๊อปอัปแดงเปิดอยู่แล้ว ไม่เปิดซ้อน (ปิดแล้วสแกนอีก = เด้งใหม่ทุกครั้ง)
+        alarm();
+        const by = tag.voidedBy || '-', at = fmtT(tag.voidedAt) || '-', why = tag.voidReason || t('bManual');
+        const wos = groupsOf(tag).map(g => '<span class="lgep-chip">' + esc(g.WO + ' · ' + g.qty) + '</span>').join('');
+        pop({
+            kind: 'block', icon: 'slash-circle-fill', title: t('bTitle'), lock: true,
+            body: '<div class="lgep-blk"><div class="lgep-doc">' + esc(doc) + '</div>' +
+                '<div class="lgep-chips"><span class="lgep-chip">' + esc(tag.partNo || '') + '</span>' + wos + '</div>' +
+                '<div class="lgep-rows"><div class="r">' + IC('person-fill') + '<small>' + esc(t('bBy')) + '</small><b>' + esc(by) + '</b></div>' +
+                '<div class="r">' + IC('clock-fill') + '<small>' + esc(t('bAt')) + '</small><b>' + esc(at) + '</b></div>' +
+                '<div class="r">' + IC('chat-left-text-fill') + '<small>' + esc(t('bWhy')) + '</small><b>' + esc(why) + '</b></div></div>' +
+                '<div class="lgep-alert">' + esc(t('bNote')) + '</div>' +
+                '<div class="lgep-foot">' + esc(t('bLogged', { u: userName() || '-', t: nowStr() })) + '</div></div>',
+            ok: t('bOk'), danger: true
+        });
+    }
+    function showPartial(tag, st, channel) {
+        const doc = up(tag.docNumber);
+        if (!fresh('p|' + doc, 4000)) return;
+        if (channel) logAttempt(tag, channel, 'ใช้แท็กที่ยกเลิกบางส่วน (นับเฉพาะ WO ที่เหลือ)', 'partial');
+        Swal.fire({
+            toast: true, position: 'top', showConfirmButton: true, confirmButtonText: t('bOk'), timer: 12000, timerProgressBar: true, width: 580, buttonsStyling: false,
+            customClass: { popup: 'lgep-toast', confirmButton: 'lgep-tb' },
+            html: '<div class="lgep-tw">' + IC('exclamation-triangle-fill') + '<div>' + esc(t('pTitle', { c: st.cancelled.join(', '), w: remText(st.remaining) })) + '</div></div>'
+        });
+    }
+    let srvBlock = 0;     // เวลาล่าสุดที่เซิร์ฟเวอร์ปฏิเสธเพราะแท็กถูกยกเลิก (เครื่องนี้ยังไม่รู้ตัวเพราะข้อมูลยังไม่รีเฟรช)
+    function serverBlocked(msg) {
+        srvBlock = Date.now();
+        // ระบบเดิมจะเด้งป๊อปอัป "บันทึกไม่สำเร็จ" ตามหลัง จึงหน่วงให้ป๊อปอัปของเราขึ้นทีหลังเพื่อทับ
+        setTimeout(() => {
+            if (blockOpen()) return;
+            alarm();
+            pop({
+                kind: 'block', icon: 'slash-circle-fill', title: t('bTitle'), lock: true,
+                body: '<div class="lgep-blk"><div class="lgep-rows"><div class="r">' + IC('exclamation-octagon-fill') + '<b>' + esc(String(msg).replace(/^🚫\s*/, '')) + '</b></div></div>' +
+                    '<div class="lgep-alert">' + esc(t('bNote')) + '</div><div class="lgep-foot">' + esc(t('bLogged', { u: userName() || '-', t: nowStr() })) + '</div></div>',
+                ok: t('bOk'), danger: true
+            });
+        }, 450);
+    }
+
+    // 1) หน้า "สแกนแท็ก" (ATECH สแกนออก)
+    (function () {
+        if (typeof processLGScanRaw !== 'function') return;
+        const _p = processLGScanRaw;
+        processLGScanRaw = async function (raw, feedbackEl) {
+            let mode = null;
+            try {
+                const p = parseLGBarcode(raw), tag = p && p.docNumber ? tagByDoc(p.docNumber) : null;
+                if (tag) { const st = tagState(tag); if (st.isVoid) mode = { type: 'void', tag: tag }; else if (isPartial(st)) mode = { type: 'part', tag: tag, st: st }; }
+            } catch (e) { mode = null; }
+            if (mode && mode.type === 'void') { showBlocked(mode.tag, 'ATECH สแกนออก', feedbackEl); return; }
+            if (mode && mode.type === 'part') {
+                showPartial(mode.tag, mode.st, 'ATECH สแกนออก');
+                DROP = { doc: up(mode.tag.docNumber), wos: new Set(mode.st.cancelled) };
+                try { return await _p.apply(this, arguments); } finally { DROP = null; }
+            }
+            const t0 = Date.now();
+            const out = await _p.apply(this, arguments);
+            if (srvBlock >= t0 && feedbackEl) feedbackEl.innerHTML = '<div class="alert alert-danger mb-0"><i class="bi bi-slash-circle-fill me-1"></i><b>' + esc(t('bFeedGen')) + '</b></div>';
+            return out;
+        };
+    })();
+
+    // 2) หน้า "รับแท็ก LG": ดักตอนพิมพ์/ยิงเข้าช่อง ก่อนระบบเดิมประมวลผล (ถ้าไม่ทัน ด่านที่ 3 ด้านล่างยังกันไว้ให้)
+    function inspectInput(e) {
+        const el = e.target;
+        if (!el || el.id !== 'lgr-input') return;
+        try {
+            const p = parseLGBarcode(String(el.value || ''));
+            if (!p || !p.docNumber) return;
+            const tag = tagByDoc(p.docNumber); if (!tag) return;
+            if (tagState(tag).isVoid) {
+                e.stopImmediatePropagation(); if (e.type === 'keypress') e.preventDefault();
+                el.value = ''; showBlocked(tag, 'LG รับแท็ก', document.getElementById('lgr-result'));
+            }
+        } catch (x) { }
+    }
+    document.addEventListener('input', inspectInput, true);
+    document.addEventListener('keypress', inspectInput, true);
+
+    // 3) ด่านสุดท้าย: ทุกการส่งไปบันทึกสแกน/รับ (รวมกล้อง, สแกนย้อนหลัง, รับย้อนหลัง)
+    const _prevCall = callAppsScript;
+    callAppsScript = async function (action, payload) {
+        if (action === 'submitLGScan' || action === 'submitLGReceive') {
+            const p = payload || {};
+            const manual = p.manual === true || String(p.manual).toLowerCase() === 'true';
+            let docs = [];
+            try {
+                if (action === 'submitLGScan') { const pr = parseLGBarcode(p.rawBarcode); docs = pr && pr.docNumber ? [pr.docNumber] : []; }
+                else if (manual) docs = (Array.isArray(p.manualDocs) && p.manualDocs.length ? p.manualDocs : [p.manualDoc]);
+                else docs = [p.docNumber];
+            } catch (e) { docs = []; }
+            const chan = action === 'submitLGScan' ? (manual ? 'ATECH สแกนออก (ย้อนหลัง)' : 'ATECH สแกนออก') : (manual ? 'LG รับแท็ก (ย้อนหลัง)' : 'LG รับแท็ก');
+            for (const d of docs) {
+                const tag = tagByDoc(d); if (!tag) continue;
+                const st = tagState(tag);
+                if (st.isVoid) {
+                    showBlocked(tag, chan, null);
+                    const err = new Error(blockedMsg(tag)); err.blockedTag = true; throw err;
+                }
+                if (isPartial(st) && !manual) {
+                    if (action === 'submitLGScan' && st.cancelled.indexOf(up(p.WO)) >= 0) {
+                        showBlocked(tag, chan, null);
+                        const err = new Error('🚫 ' + up(p.WO) + ' ' + t('bFeed', { d: up(tag.docNumber) })); err.blockedTag = true; throw err;
+                    }
+                    if (action === 'submitLGReceive' && Array.isArray(p.groups)) {
+                        const keep = p.groups.filter(g => g && st.cancelled.indexOf(up(g.WO)) < 0);
+                        if (keep.length !== p.groups.length) { p.groups.splice(0, p.groups.length, ...keep); showPartial(tag, st, null); }
+                    }
+                }
+            }
+            try { return await _prevCall.apply(this, arguments); }
+            catch (e) { if (e && /🚫/.test(String(e.message || ''))) serverBlocked(e.message); throw e; }
+        }
+        return _prevCall.apply(this, arguments);
+    };
+})();
+// ===== จบ LG-PLAN-EDIT-WEB =====
 (function () {
     if (window.__userMgmtA2) return; window.__userMgmtA2 = true; window.__userMgmtA = true;   // __userMgmtA = ปิดตัวเก่าถ้ามันยังไม่ได้ทำงาน
     const pane = document.getElementById('pills-users');
@@ -22621,7 +23248,8 @@ renderLGTagPrintWindow = function(tags, printWin) {
             ['canLGPrintTags', 'ปริ้นแท็ก LG', 'ปริ้นแท็กจากแพลน', 'printer', () => window.__lgPlanPerm],
             ['canLGUploadPlan', 'อัปโหลดแพลน LG', 'อัปโหลดไฟล์แพลน / เทมเพลต', 'upload', () => window.__lgPlanPerm],
             ['canLGManualPlan', 'เพิ่มแพลน LG ด้วยมือ', 'คีย์แพลนเองทีละรายการ', 'plus-circle', () => window.__lgPlanPerm],
-            ['canLGPrintPlan', 'ปริ้นแพลน LG', 'ปริ้นใบแพลนของวัน', 'file-earmark-text', () => window.__lgPlanPerm]] },
+            ['canLGPrintPlan', 'ปริ้นแพลน LG', 'ปริ้นใบแพลนของวัน', 'file-earmark-text', () => window.__lgPlanPerm],
+            ['canLGEditPlan', 'แก้ไขยอด / ยกเลิกแพลน LG', 'แก้จำนวนสั่งผลิต และยกเลิกรายการในแพลน', 'pencil-square', () => window.__lgPlanEdit]] },
         { name: 'ข้อมูลหลัก & แผน', icon: 'database', color: '#7c3aed', items: [
             ['canManageProducts', 'จัดการสินค้า', 'เพิ่ม / แก้ไข / ลบข้อมูลสินค้า', 'tags'],
             ['canForecast', 'อัปโหลด Forecast', 'นำเข้าข้อมูลพยากรณ์', 'graph-up-arrow']] },
@@ -22637,7 +23265,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
         { name: 'หัวหน้าไลน์ LG', keys: ['canCheckLGTags', 'canReceiveLG', 'canBackdateLGReceive', 'canReturnLGTag', 'canViewHistory', 'canManageDeliveryPlan'] },
         { name: 'พนักงาน LG', keys: ['canReceiveLG'] }
     ];
-    const EXTRA_KEYS = ['canReceiveLG', 'canBackdateLGReceive', 'canReturnLGTag', 'canLGPrintTags', 'canLGUploadPlan', 'canLGManualPlan', 'canLGPrintPlan'];
+    const EXTRA_KEYS = ['canReceiveLG', 'canBackdateLGReceive', 'canReturnLGTag', 'canLGPrintTags', 'canLGUploadPlan', 'canLGManualPlan', 'canLGPrintPlan', 'canLGEditPlan'];
     // สิทธิ์ที่ "ยังไม่เคยตั้งค่า (ช่องว่าง)" ถือว่าเปิดอยู่ ตามที่แพตช์ LG-PLAN-PERM-WEB กำหนด (LEGACY_ALLOW)
     const LEGACY_KEYS = ['canLGPrintTags', 'canLGUploadPlan', 'canLGManualPlan', 'canLGPrintPlan'];
     const onOf = (u, k) => {
