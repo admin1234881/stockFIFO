@@ -4498,14 +4498,25 @@ function handleLogin(e) {
                     });
                 })();
 
+
+                let idleLastX = null, idleLastY = null;
+                function idleOnMove(e) {
+                    if (!e.isTrusted) return;
+                    const x = e.screenX, y = e.screenY;
+                    if (idleLastX === null) { idleLastX = x; idleLastY = y; return; }
+                    if (Math.abs(x - idleLastX) + Math.abs(y - idleLastY) < 3) return;
+                    idleLastX = x; idleLastY = y;
+                    resetInactivityTimer();
+                }
+                function idleOnInput(e) { if (e.isTrusted) resetInactivityTimer(); }
                 function setupActivityListeners() {
-                    const events = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'];
-                    events.forEach(event => window.addEventListener(event, resetInactivityTimer, true));
+                    window.addEventListener('mousemove', idleOnMove, true);
+                    ['mousedown', 'keydown', 'wheel', 'touchstart'].forEach(ev => window.addEventListener(ev, idleOnInput, true));
                 }
 
                 function clearActivityListeners() {
-                    const events = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'];
-                    events.forEach(event => window.removeEventListener(event, resetInactivityTimer, true));
+                    window.removeEventListener('mousemove', idleOnMove, true);
+                    ['mousedown', 'keydown', 'wheel', 'touchstart'].forEach(ev => window.removeEventListener(ev, idleOnInput, true));
                 }
 
                     function startDataSync() {
