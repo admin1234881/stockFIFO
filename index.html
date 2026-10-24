@@ -33235,93 +33235,7 @@ window.cancelGroupRelease = async function(date, displayTime, customer) {
 })();
 /* ===== จบ ATX-DOCK ===== */
 </script>
-<script>
-/* ===== DELIVERY-PLAN-IMAGE: บันทึก/คัดลอก "แผนการจัดส่ง A3" เป็นรูปภาพ (ใช้ตารางเดียวกับปุ่มพิมพ์แผน A3) ===== */
-(function () {
-    if (window.dpSaveImage) return;
-    var EN = function () { return (typeof currentLanguage !== 'undefined' && currentLanguage === 'en'); };
-    var tx = function (th, en) { return EN() ? en : th; };
-    var pad = function (n) { return String(n).padStart(2, '0'); };
-    var toast = function (icon, title) { try { Swal.fire({ toast: true, position: 'bottom-end', icon: icon, title: title, showConfirmButton: false, timer: 3500 }); } catch (e) {} };
-    var loading = function (t) { try { Swal.fire({ title: t, allowOutsideClick: false, didOpen: function () { Swal.showLoading(); } }); } catch (e) {} };
-    var closeSwal = function () { try { Swal.close(); } catch (e) {} };
-    var busy = false;
 
-    // ดึง HTML ของตารางแผนจากฟังก์ชันพิมพ์ A3 เดิม (ไม่ต้องเขียนตารางซ้ำ — หน้าตาเหมือนใบ A3 ทุกประการ)
-    function grabPlanHtml() {
-        return new Promise(function (resolve) {
-            var orig = window.downloadDeliveryPlanPDF;
-            if (typeof orig !== 'function') { resolve(null); return; }
-            var saved = window.html2pdf, html = null, done = false;
-            var fake = function () {
-                var o = { set: function () { return o; }, from: function (h) { html = h; return o; }, save: function () { return new Promise(function () {}); } };
-                return o;
-            };
-            var finish = function (v) { if (done) return; done = true; window.html2pdf = saved; resolve(v); };
-            window.html2pdf = fake;
-            try { orig(); } catch (e) { finish(null); return; }
-            var t0 = Date.now();
-            (function poll() {
-                if (html) return finish(html);
-                if (Date.now() - t0 > 3000) return finish(null); // ฟังก์ชันเดิมแจ้งเตือนเองแล้ว (เช่น ยังไม่เลือกวัน / ไม่มีคิว)
-                setTimeout(poll, 60);
-            })();
-        });
-    }
-
-    window.dpSaveImage = async function (mode) {
-        if (busy) return;
-        if (typeof html2canvas !== 'function') { toast('error', tx('ยังโหลดตัวสร้างภาพไม่เสร็จ ลองรีเฟรชหน้าแล้วกดใหม่', 'Image tool is still loading — refresh and try again')); return; }
-        busy = true;
-        var host = null;
-        try {
-            var html = await grabPlanHtml();
-            if (!html) return;
-            closeSwal();
-            loading(tx('กำลังสร้างภาพ...', 'Creating image...'));
-            host = document.createElement('div');
-            host.style.cssText = 'position:fixed;left:-12000px;top:0;width:1560px;background:#fff;pointer-events:none;';
-            host.innerHTML = html;
-            document.body.appendChild(host);
-            var el = host.firstElementChild;
-            await Promise.all([].map.call(host.querySelectorAll('img'), function (im) {
-                return new Promise(function (r) { if (im.complete) return r(); im.onload = im.onerror = r; setTimeout(r, 3000); });
-            }));
-            var h = el.offsetHeight || 1, w = el.offsetWidth || 1500;
-            var sc = Math.max(1, Math.min(2, 14000 / h, Math.sqrt(1.2e8 / (w * h))));
-            var canvas = await html2canvas(el, { scale: sc, backgroundColor: '#ffffff', useCORS: true });
-            var blob = await new Promise(function (r) { canvas.toBlob(r, 'image/png'); });
-            host.remove(); host = null;
-            closeSwal();
-            var di = document.getElementById('view-plan-date');
-            var n = new Date();
-            var name = 'Delivery_Plan_' + ((di && di.value) || (n.getFullYear() + '-' + pad(n.getMonth() + 1) + '-' + pad(n.getDate()))) + '_' + pad(n.getHours()) + pad(n.getMinutes()) + '.png';
-            var file = new File([blob], name, { type: 'image/png' });
-            if (mode === 'copy') {
-                try {
-                    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-                    toast('success', tx('คัดลอกภาพแล้ว วางในไลน์ได้เลย (Ctrl+V)', 'Image copied — paste it with Ctrl+V'));
-                    return;
-                } catch (e) { toast('info', tx('คัดลอกไม่ได้บนเครื่องนี้ ดาวน์โหลดไฟล์ภาพแทน', 'Cannot copy on this device — downloading the image instead')); }
-            }
-            var isPhone = /Android|iPhone|iPad/i.test(navigator.userAgent) && navigator.maxTouchPoints > 0;
-            if (mode !== 'copy' && isPhone && navigator.canShare && navigator.canShare({ files: [file] })) {
-                try { await navigator.share({ files: [file], title: 'Delivery Plan' }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
-            }
-            var a = document.createElement('a');
-            a.href = URL.createObjectURL(blob); a.download = name;
-            document.body.appendChild(a); a.click(); a.remove();
-            setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
-            if (mode !== 'copy') toast('success', tx('บันทึกภาพเรียบร้อยแล้ว', 'Image saved'));
-        } catch (err) {
-            if (host) host.remove();
-            closeSwal();
-            toast('error', tx('สร้างภาพไม่สำเร็จ: ', 'Could not create the image: ') + (err && err.message ? err.message : err));
-        } finally { busy = false; }
-    };
-})();
-/* ===== จบ DELIVERY-PLAN-IMAGE ===== */
-</script>
 <style id="hdr-ticker-scifi-css">
 /* ===== HEADER-TICKER-SCIFI: ป้ายประกาศวิ่งบนหัวเว็บ สไตล์ Sci-Fi (แก้เฉพาะหน้าตา ไม่แตะการทำงาน) ===== */
 body .header-announcement-wrapper{position:relative;border:1px solid rgba(34,211,238,.6);border-radius:12px;padding:4px 16px 4px 4px;
@@ -33550,6 +33464,139 @@ body:has(#anB-dr.open) #calc-toggle-btn,body:has(#anB-dr.open) #support-fab-btn,
     WP.__dpFit = true;
 })();
 // ===== จบ DP-A3-ONE-PAGE =====
+</script>
+<script>
+/* ===== DELIVERY-PLAN-IMAGE: บันทึก/คัดลอก "แผนการจัดส่ง A3" เป็นรูปภาพ (ใช้ตารางเดียวกับปุ่มพิมพ์แผน A3) ===== */
+(function () {
+    if (window.__dpImg2) return; window.__dpImg2 = true;
+    var EN = function () { return (typeof currentLanguage !== 'undefined' && currentLanguage === 'en'); };
+    var tx = function (th, en) { return EN() ? en : th; };
+    var pad = function (n) { return String(n).padStart(2, '0'); };
+    var toast = function (icon, title) { try { Swal.fire({ toast: true, position: 'bottom-end', icon: icon, title: title, showConfirmButton: false, timer: 4000 }); } catch (e) {} };
+    var loading = function (t) { try { Swal.fire({ title: t, allowOutsideClick: false, didOpen: function () { Swal.showLoading(); } }); } catch (e) {} };
+    var closeSwal = function () { try { Swal.close(); } catch (e) {} };
+    var busy = false;
+
+    // ดึง HTML ของตารางแผนจากฟังก์ชันพิมพ์ A3 เดิม (หน้าตาเหมือนใบ A3 ทุกประการ)
+    function grabPlanHtml() {
+        return new Promise(function (resolve) {
+            var orig = window.downloadDeliveryPlanPDF;
+            if (typeof orig !== 'function') { resolve(null); return; }
+            var saved = window.html2pdf, html = null, done = false;
+            var fake = function () {
+                var o = { set: function () { return o; }, from: function (h) { html = h; return o; }, save: function () { return new Promise(function () {}); } };
+                return o;
+            };
+            var finish = function (v) { if (done) return; done = true; window.html2pdf = saved; resolve(v); };
+            window.html2pdf = fake;
+            try { orig(); } catch (e) { finish(null); return; }
+            var t0 = Date.now();
+            (function poll() {
+                if (html) return finish(html);
+                if (Date.now() - t0 > 3000) return finish(null);
+                setTimeout(poll, 60);
+            })();
+        });
+    }
+
+    // สร้างรูป (คืนค่า {blob, name} หรือ null ถ้าไม่มีข้อมูลให้ทำ)
+    async function render() {
+        var host = null;
+        try {
+            var html = await grabPlanHtml();
+            if (!html) return null;
+            closeSwal();
+            loading(tx('กำลังสร้างภาพ...', 'Creating image...'));
+            host = document.createElement('div');
+            host.style.cssText = 'position:fixed;left:-12000px;top:0;width:1560px;background:#fff;pointer-events:none;';
+            host.innerHTML = html;
+            document.body.appendChild(host);
+            var el = host.firstElementChild;
+            await Promise.all([].map.call(host.querySelectorAll('img'), function (im) {
+                return new Promise(function (r) { if (im.complete) return r(); im.onload = im.onerror = r; setTimeout(r, 3000); });
+            }));
+            var h = el.offsetHeight || 1, w = el.offsetWidth || 1500;
+            var sc = Math.max(1, Math.min(2, 14000 / h, Math.sqrt(1.2e8 / (w * h))));
+            var canvas = await html2canvas(el, { scale: sc, backgroundColor: '#ffffff', useCORS: true });
+            var blob = await new Promise(function (r) { canvas.toBlob(r, 'image/png'); });
+            host.remove(); host = null;
+            closeSwal();
+            var di = document.getElementById('view-plan-date'), n = new Date();
+            var name = 'Delivery_Plan_' + ((di && di.value) || (n.getFullYear() + '-' + pad(n.getMonth() + 1) + '-' + pad(n.getDate()))) + '_' + pad(n.getHours()) + pad(n.getMinutes()) + '.png';
+            return { blob: blob, name: name };
+        } finally { if (host) host.remove(); }
+    }
+
+    function download(blob, name) {
+        var file = null; try { file = new File([blob], name, { type: 'image/png' }); } catch (e) {}
+        var isPhone = /Android|iPhone|iPad/i.test(navigator.userAgent) && navigator.maxTouchPoints > 0;
+        if (isPhone && file && navigator.canShare && navigator.canShare({ files: [file] })) {
+            return navigator.share({ files: [file], title: 'Delivery Plan' }).catch(function () {});
+        }
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob); a.download = name;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+        return Promise.resolve();
+    }
+
+    // ถ้าคัดลอกอัตโนมัติไม่ได้: โชว์รูปให้ดู + ปุ่ม "คัดลอกภาพ" (กดใหม่ 1 ครั้งเบราว์เซอร์จะยอมให้คัดลอก)
+    function copyDialog(blob, name) {
+        var url = URL.createObjectURL(blob);
+        Swal.fire({
+            title: tx('กดปุ่มคัดลอกอีกครั้ง', 'Press Copy once more'),
+            html: '<div style="font-size:.9rem;color:#64748b;margin-bottom:10px">' + tx('เบราว์เซอร์ต้องการให้กดคัดลอกเองอีกครั้ง — กดแล้วไปวางในไลน์ได้เลย (Ctrl+V)', 'Your browser needs one more click to copy — then paste it in LINE with Ctrl+V') + '</div>'
+                + '<img src="' + url + '" style="max-width:100%;max-height:52vh;border:1px solid #e2e8f0;border-radius:12px;background:#fff">',
+            width: 820, showCancelButton: true, showDenyButton: true, focusConfirm: true,
+            confirmButtonText: '<i class="bi bi-clipboard-check"></i> ' + tx('คัดลอกภาพ', 'Copy image'),
+            denyButtonText: '<i class="bi bi-download"></i> ' + tx('ดาวน์โหลดแทน', 'Download instead'),
+            cancelButtonText: tx('ปิด', 'Close'),
+            preConfirm: function () {
+                return navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(function () { return true; }).catch(function (e) {
+                    Swal.showValidationMessage(tx('เบราว์เซอร์นี้บล็อกการคัดลอก — คลิกขวาที่รูป แล้วเลือก "คัดลอกรูปภาพ" ได้เลย', 'This browser blocks copying — right-click the picture and choose "Copy image"') + ' (' + (e && e.name ? e.name : 'error') + ')');
+                    return false;
+                });
+            }
+        }).then(function (res) {
+            URL.revokeObjectURL(url);
+            if (res.isConfirmed) toast('success', tx('คัดลอกภาพแล้ว วางในไลน์ได้เลย (Ctrl+V)', 'Image copied — paste it with Ctrl+V'));
+            else if (res.isDenied) { download(blob, name); toast('info', tx('บันทึกภาพเรียบร้อยแล้ว', 'Image saved')); }
+        });
+    }
+
+    window.dpSaveImage = async function (mode) {
+        if (busy) return;
+        if (typeof html2canvas !== 'function') { toast('error', tx('ยังโหลดตัวสร้างภาพไม่เสร็จ ลองรีเฟรชหน้าแล้วกดใหม่', 'Image tool is still loading — refresh and try again')); return; }
+        busy = true;
+        try {
+            var job = render();
+            var copyP = null;
+            if (mode === 'copy' && navigator.clipboard && typeof window.ClipboardItem === 'function') {
+                // เริ่มสั่งคัดลอก "ทันทีที่กดปุ่ม" (ส่งรูปที่กำลังสร้างเข้าไปเป็น Promise) — เบราว์เซอร์จึงยังนับว่าเป็นการกดของผู้ใช้
+                try {
+                    copyP = navigator.clipboard.write([new ClipboardItem({ 'image/png': job.then(function (r) { if (!r) throw new Error('no-data'); return r.blob; }) })]);
+                    copyP.catch(function () {});
+                } catch (e) { copyP = null; }
+            }
+            var r = await job;
+            if (!r) return;
+            if (mode === 'copy') {
+                if (copyP) {
+                    try { await copyP; toast('success', tx('คัดลอกภาพแล้ว วางในไลน์ได้เลย (Ctrl+V)', 'Image copied — paste it with Ctrl+V')); return; }
+                    catch (e) { console.warn('DELIVERY-PLAN-IMAGE copy', e); }
+                }
+                copyDialog(r.blob, r.name);
+                return;
+            }
+            await download(r.blob, r.name);
+            toast('success', tx('บันทึกภาพเรียบร้อยแล้ว', 'Image saved'));
+        } catch (err) {
+            closeSwal();
+            toast('error', tx('สร้างภาพไม่สำเร็จ: ', 'Could not create the image: ') + (err && err.message ? err.message : err));
+        } finally { busy = false; }
+    };
+})();
+/* ===== จบ DELIVERY-PLAN-IMAGE ===== */
 </script>
 </body>
 </html>
