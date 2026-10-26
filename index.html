@@ -23811,7 +23811,388 @@ renderLGTagPrintWindow = function(tags, printWin) {
     render();
 })();
 // ===== จบ CONVERT-PAGE =====
-// ===== LG-UHT v4: ตั้ง UHT + ติ๊ก WO ที่ LG ผลิตครบแล้ว (ติ๊กได้หลาย WO) + รองรับภาษาไทย/อังกฤษ (ส่งเข้า − ผลิตแล้ว = เหลืองานกี่ชม.) (จำนวนชิ้น/ชม. ที่ไลน์รันได้) ต่อไลน์ + เตือนเมื่อยอดอยู่ได้ต่ำกว่าขั้นต่ำ (แดชบอร์ด LG / หน้าแพลน / ตอนปริ้นแท็ก / หน้ารับแท็ก) (วางต่อท้ายบล็อก LG ทั้งหมด ใต้บรรทัด จบ CONVERT-PAGE) =====
+// ===== LG-RECV-I18N: เมนูด้านซ้าย (หัวข้อกลุ่ม + เมนู รับแท็ก LG) และหน้า "รับแท็กเข้า LG" (รวมกล่องภาพรวมด้านขวา, ปุ่มเลือกไลน์, ผลสแกน และป๊อบอัพของหน้านี้) แปลเป็นอังกฤษตามปุ่มเปลี่ยนภาษาของระบบ (วางใต้บรรทัด จบ CONVERT-PAGE) =====
+(function () {
+    if (window.__lgRecvI18n) return; window.__lgRecvI18n = true;
+
+    const PANE = 'pills-lg-receive';
+    const THAI = /[฀-๿]/;
+    const isEn = () => { try { return currentLanguage === 'en'; } catch (e) { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e2) { return false; } } };
+
+    // [ไทย, อังกฤษ] เรียงจากวลียาวไปสั้น
+    const TT = [
+        // ----- เมนูด้านซ้าย -----
+        [/^\s*ภาพรวม\s*$/g, 'Overview'],
+        [/^\s*คลังสินค้า\s*$/g, 'Warehouse'],
+        [/^\s*จัดส่งและวางแผน\s*$/g, 'Delivery & Planning'],
+        [/^\s*ตรวจสอบและประวัติ\s*$/g, 'Review & History'],
+        [/^\s*ตั้งค่าระบบ\s*$/g, 'System Settings'],
+        [/^\s*รับแท็ก LG\s*$/g, 'Receive LG Tags'],
+        // ----- หน้ารับแท็ก -----
+        [/ยิงแท็กอย่างเดียว ไม่ต้องกรอกอะไร — ระบบจับคู่กับที่ ATECH สแกนออกให้เอง/g, 'Just scan the tag — nothing to type. The system matches it with what ATECH scanned out.'],
+        [/🔦 คลิกช่องนี้แล้วสแกนแท็กได้เลย \(เครื่องสแกน USB\)\.\.\./g, '🔦 Click here, then scan the tag (USB scanner)...'],
+        [/บันทึกรับไว้แล้ว แต่ ATECH ยังไม่ได้สแกนออกแท็กใบนี้ — ระบบติดธง/g, 'Recorded as received, but ATECH has not scanned this tag out — flagged as'],
+        [/ไว้ให้ตรวจสอบ กรุณาแจ้งหัวหน้า\/ATECH/g, 'for review. Please tell your supervisor / ATECH.'],
+        [/แท็กนี้ยังไม่ถูกนับว่ารับ สแกนใหม่ได้เลย/g, 'This tag is not counted as received yet — you can scan it again'],
+        [/ระบบกำลังยุ่ง \(มีงานอื่นใช้ชีตอยู่นาน\)/g, 'System busy (another job is using the sheet)'],
+        [/เน็ตหลุด หรือต่อเซิร์ฟเวอร์ไม่ได้/g, 'Network lost or cannot reach the server'],
+        [/⛔ รับแล้ว แต่ไม่พบการสแกนออกจาก ATECH/g, '⛔ Received, but no ATECH scan-out found'],
+        [/⚠️ รับซ้ำ — ไม่บันทึกซ้ำ/g, '⚠️ Already received — not recorded again'],
+        [/❌ ยังไม่ได้บันทึกรับ/g, '❌ Not recorded as received'],
+        [/❌ อ่านบาร์โค้ดไม่ได้/g, '❌ Cannot read the barcode'],
+        [/⏳ กำลังบันทึก\.\.\./g, '⏳ Saving...'],
+        [/✅ รับเข้าแล้ว/g, '✅ Received'],
+        [/📤 ATECH สแกนออก/g, '📤 ATECH scanned out'],
+        [/→\s*📥 รับ/g, '→ 📥 received'],
+        [/ถูกรับไปแล้วเมื่อ/g, 'was already received at'],
+        [/ลองสแกนใหม่อีกครั้ง/g, 'Please scan again'],
+        [/ยังไม่มีรายการรับวันนี้/g, 'No receipts yet today'],
+        [/โหลดไลบรารีกล้องไม่สำเร็จ/g, 'Could not load the camera library'],
+        [/กรุณาเช็กอินเทอร์เน็ตแล้วรีเฟรชหน้าเว็บ/g, 'Please check your internet and refresh the page'],
+        [/เปิดกล้องไม่สำเร็จ/g, 'Could not open the camera'],
+        [/กรุณาอนุญาตการใช้กล้อง หรือใช้เครื่องสแกน USB แทน:/g, 'Please allow camera access, or use a USB scanner instead:'],
+        [/รับแท็กเข้า LG/g, 'Receive tags into LG'],
+        [/สแกนด้วยกล้อง/g, 'Scan with camera'],
+        [/ปิดกล้อง/g, 'Close camera'],
+        [/ไม่ทราบสาเหตุ/g, 'Unknown cause'],
+        // ----- กล่องภาพรวม (LG-RECV-PANEL / สถานะรับแท็ก LG) -----
+        [/LG รับแล้ว จากที่ ATECH สแกนออกวันนี้/g, 'received at LG, of what ATECH scanned out today'],
+        [/ยังไม่มีแท็กที่ ATECH สแกนออกวันนี้ให้เทียบ %/g, 'No tags scanned out by ATECH today to compare %'],
+        [/· LG รับแล้ว จากที่ ATECH ยิงออกวันนี้/g, '· received at LG, of what ATECH scanned out today'],
+        [/· ยังไม่มีแท็กที่ ATECH ยิงออกวันนี้ให้เทียบ %/g, '· no tags scanned out by ATECH today to compare %'],
+        [/ตั้งแต่วันที่ LG รับแท็กใบแรก/g, 'from the day LG receives its first tag'],
+        [/ยังไม่มีการรับ จึงยังไม่แสดงรายการ/g, 'Nothing received yet, so no list is shown'],
+        [/ที่ ATECH ยิงออกมาแล้ว LG รับครบหมด/g, 'everything ATECH scanned out has been received by LG'],
+        [/สูงสุด (\d+) แท็ก ช่วง/g, 'Peak $1 tags at'],
+        [/ระหว่างทาง (\d+) แท็ก/g, 'In transit $1 tags'],
+        [/ไม่มีแท็กค้างทาง/g, 'Nothing in transit'],
+        [/ไม่มีแท็กค้างรับ/g, 'No pending tags'],
+        [/ยังไม่มีแท็กที่รับวันนี้/g, 'no tags received today'],
+        [/ยังไม่มีรายการรับ/g, 'No receipts yet'],
+        [/สแกนแท็กใบแรกได้เลย/g, 'Scan the first tag to start'],
+        [/วันนี้ที่ LG รับแล้ว/g, 'Received at LG today'],
+        [/สถานะรับแท็ก LG/g, 'LG tag receiving status'],
+        [/เลือกไลน์ที่ต้องการดู/g, 'Choose a line to view'],
+        [/แสดง 8 รายการล่าสุด/g, 'Showing the latest 8'],
+        [/กล่องเลือกไลน์ทำงานไม่ได้ —/g, 'The line selector failed —'],
+        [/ค้างจากวันก่อน/g, 'Carried over'],
+        [/ค้างเกิน 3 ชม\./g, 'Over 3 h'],
+        [/ค้าง >3 ชม\./g, 'Over 3 h'],
+        [/ระบบเริ่มนับ/g, 'Counting starts'],
+        [/ยิงออกวันนี้/g, 'Scanned out today'],
+        [/รับแล้ววันนี้/g, 'Received today'],
+        [/รับต่อชั่วโมง/g, 'Received per hour'],
+        [/ไม่มีสแกนออก/g, 'No scan-out'],
+        [/LG รับแล้ว/g, 'LG received'],
+        [/อัปเดตสด/g, 'Live'],
+        [/รับล่าสุด/g, 'Latest received'],
+        [/ระหว่างทาง/g, 'In transit'],
+        [/ผิดปกติ/g, 'abnormal'],
+        [/แท็ก\/ชม\./g, 'tags/h'],
+        [/ทุกไลน์/g, 'All lines'],
+        [/ค้างรับ/g, 'Pending'],
+        // ----- ป๊อบอัพ เช็กแท็กค้างรับ / รับย้อนหลัง -----
+        [/ATECH สแกนออกแล้ว LG ยังไม่ได้(?:สแกน)?รับ/g, 'ATECH scanned out, LG has not received'],
+        [/รับแท็กย้อนหลัง \(เช็กแท็กค้างรับ \+ กดรับย้อนหลังได้ — ต้องเปิด/g, 'Retroactive receiving (check pending tags + receive retroactively — requires'],
+        [/นี้ของถึง LG แล้วจริง \(การรับย้อนหลังจำนวนมากแก้กลับยาก\)/g, 'tags have really reached LG (large retroactive receipts are hard to undo)'],
+        [/\(เหมาะกับเคลียร์แท็กเก่า — ไม่ไปปนกับยอดรับของวันนี้\)/g, '(good for clearing old tags — not mixed into today’s totals)'],
+        [/ใช้เวลาเดียวกับที่ ATECH สแกนออก/g, 'Use the same time as the ATECH scan-out'],
+        [/เวลาที่รับต้องไม่ก่อนเวลาที่ ATECH สแกนออก/g, 'Receipt time must not be before the ATECH scan-out time'],
+        [/เวลาที่รับต้องไม่เป็นเวลาในอนาคต/g, 'Receipt time must not be in the future'],
+        [/กรุณาติ๊กยืนยันว่าตรวจสอบแล้ว \(เลือกไว้/g, 'Please tick to confirm you have checked (selected'],
+        [/แท็กเก่า \(ก่อนเริ่มใช้ระบบรับ\)/g, 'Old tags (before receiving started)'],
+        [/แท็กเก่าก่อนเริ่มใช้ระบบรับ \(เคลียร์ยอดค้าง\)/g, 'Old tag from before receiving started (clearing backlog)'],
+        [/แสดง 200 รายการแรก — ใช้ช่องค้นหาเพื่อกรอง/g, 'Showing the first 200 — use search to filter'],
+        [/ใบถูกรับไปแล้วก่อนหน้านี้ \(ไม่บันทึกซ้ำ\)/g, 'tags were already received earlier (not recorded again)'],
+        [/พนักงานลืมสแกน แต่ของถึงแล้ว/g, 'Staff forgot to scan, but the goods arrived'],
+        [/Google Script ยังไม่ได้อัปเดต[^\n<]*/g, 'Google Script is not updated yet — paste the new Google Script file and deploy a new version.'],
+        [/Google Script ตอบกลับไม่ถูกรูปแบบ[^\n<]*/g, 'Unexpected reply from Google Script — paste the new Google Script file and deploy a new version.'],
+        [/Google Script ยังเป็นเวอร์ชันเก่า[^\n<]*/g, 'Google Script is still an old version — paste the new Google Script file and deploy a new version.'],
+        [/ค้นหา เลขแท็ก \/ WO \/ พาร์ท/g, 'Search tag no. / WO / part'],
+        [/ไม่พบรายการที่ตรงกับตัวกรอง/g, 'No items match the filter'],
+        [/เช่น หัวหน้ากะยืนยันว่าของถึงแล้ว/g, 'e.g. Shift leader confirmed the goods arrived'],
+        [/ชิ้น · ATECH สแกนออก/g, 'pcs · ATECH scanned out'],
+        [/รับย้อนหลังที่เลือก \(/g, 'Receive selected retroactively ('],
+        [/ฉันตรวจสอบแล้วว่าแท็ก/g, 'I have verified that'],
+        [/เวลาที่รับต้องไม่/g, 'Receipt time must not'],
+        [/กรุณาระบุเวลาที่รับจริง/g, 'Please enter the actual receipt time'],
+        [/กรุณาระบุเหตุผล/g, 'Please enter a reason'],
+        [/บันทึกรับย้อนหลังแล้ว/g, 'Retroactive receipt saved'],
+        [/บันทึกรับย้อนหลัง/g, 'Save retroactive receipt'],
+        [/ยืนยันรับย้อนหลัง/g, 'Confirm retroactive receipt'],
+        [/และบันทึกไม่สำเร็จอีก/g, 'and failed to save'],
+        [/เวลาที่รับจริง/g, 'Actual receipt time'],
+        [/หมายเหตุ \(ไม่บังคับ\)/g, 'Note (optional)'],
+        [/เลือกทั้งหมดที่แสดง/g, 'Select all shown'],
+        [/สแกนไม่ติด \/ QR เสีย/g, 'Scan failed / damaged QR'],
+        [/ใบ · รวม/g, 'tags · total'],
+        [/ใบ — กดดู/g, 'tags — click to view'],
+        [/ยังมีแท็กเก่า/g, 'Old tags remain:'],
+        [/เช็กแท็กค้างรับ/g, 'Check pending tags'],
+        [/บันทึกไม่สำเร็จ/g, 'Save failed'],
+        [/กำลังบันทึก/g, 'Saving'],
+        [/ไม่ทราบเวลา/g, 'Unknown time'],
+        [/รับย้อนหลัง/g, 'Receive retroactively'],
+        [/ระบุเหตุผล/g, 'Specify reason'],
+        [/พิมพ์เหตุผล/g, 'Type a reason'],
+        [/ระบบขัดข้อง/g, 'System fault'],
+        [/อื่นๆ \(ระบุ\)/g, 'Other (specify)'],
+        [/บันทึกโดย/g, 'Saved by'],
+        [/\(ย้อนหลัง\)/g, '(retroactive)'],
+        [/ทั้งหมด/g, 'All'],
+        [/เลือกไว้/g, 'Selected'],
+        [/เหตุผล/g, 'Reason'],
+        [/วันนี้/g, 'Today'],
+        [/ยกเลิก/g, 'Cancel'],
+        // ----- ทั่วไป (สั้น ใส่ท้ายสุด) -----
+        [/^แท็ก $/g, 'Tag '],
+        [/แท็กใบนี้/g, 'this tag'],
+        [/ไลน์ /g, 'Line '],
+        [/ไลน์/g, 'Line'],
+        [/จำนวน/g, 'Qty'],
+        [/แท็ก/g, 'tags'],
+        [/ชิ้น/g, 'pcs'],
+        [/นาที/g, 'min'],
+        [/(\d)\s*น\./g, '$1 min'],
+        [/ชม\./g, 'h'],
+        [/โดย /g, 'by '],
+        [/\(ขนส่ง /g, '(transit '],
+        [/เก่า/g, 'old'],
+        [/ค้าง/g, 'pending'],
+        [/ใบ\)/g, 'tags)'],
+        [/จาก /g, 'of '],
+        [/ใบ/g, 'tags']
+    ];
+    // เรียงจากวลียาวไปสั้นอัตโนมัติ กันวลียาวถูกคำสั้นตัดก่อน
+    TT.sort((a, b) => b[0].source.length - a[0].source.length);
+    function tr(s) {
+        let t = String(s);
+        for (let i = 0; i < TT.length; i++) t = t.replace(TT[i][0], TT[i][1]);
+        return t;
+    }
+
+    // ---------- ขอบเขต: หน้ารับแท็ก + ป๊อบอัพที่เปิดขณะอยู่หน้านี้ ----------
+    const pane = () => document.getElementById(PANE);
+    const paneActive = () => { const p = pane(); return !!p && (p.classList.contains('active') || p.classList.contains('show')); };
+    function inScope(node) {
+        const el = node && (node.nodeType === 1 ? node : node.parentElement);
+        if (!el || !el.closest) return false;
+        if (el.closest('#' + PANE) || el.closest('#lgb-ov') || el.closest('#pills-tab')) return true;
+        if (paneActive() && el.closest('.swal2-container')) return true;
+        return false;
+    }
+
+    // ---------- แปล / คืนค่าเดิม (จำข้อความไทยเดิมไว้ เพื่อสลับกลับไทยได้) ----------
+    const ORIG = new WeakMap();   // text node -> {o, t}
+    const AORIG = new WeakMap();  // element -> {attr: {o, t}}
+    const ATTRS = ['placeholder', 'title', 'aria-label'];
+
+    function doText(n) {
+        const v = n.nodeValue, rec = ORIG.get(n);
+        if (rec && v === rec.t) {
+            if (!isEn()) { n.nodeValue = rec.o; ORIG.delete(n); }
+            else { const t = tr(rec.o); if (t !== rec.t) { rec.t = t; n.nodeValue = t; } }
+            return;
+        }
+        if (rec) ORIG.delete(n);          // แอปเขียนทับด้วยข้อความใหม่ → ถือเป็นข้อความเดิมใหม่
+        if (!isEn() || !v || !THAI.test(v)) return;
+        const t = tr(v);
+        if (t !== v) { ORIG.set(n, { o: v, t }); n.nodeValue = t; }
+    }
+    function doAttrs(el) {
+        let m = AORIG.get(el);
+        ATTRS.forEach(a => {
+            const v = el.getAttribute(a), rec = m && m[a];
+            if (rec && v === rec.t) {
+                if (!isEn()) { el.setAttribute(a, rec.o); delete m[a]; }
+                else { const t = tr(rec.o); if (t !== rec.t) { rec.t = t; el.setAttribute(a, t); } }
+                return;
+            }
+            if (rec) delete m[a];
+            if (!isEn() || !v || !THAI.test(v)) return;
+            const t = tr(v);
+            if (t !== v) { if (!m) { m = {}; AORIG.set(el, m); } m[a] = { o: v, t }; el.setAttribute(a, t); }
+        });
+    }
+    function sweep(root) {
+        if (!root) return;
+        const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        const nodes = []; while (w.nextNode()) nodes.push(w.currentNode);
+        nodes.forEach(doText);
+        if (root.querySelectorAll) root.querySelectorAll('[placeholder],[title],[aria-label]').forEach(doAttrs);
+        if (root.nodeType === 1) doAttrs(root);
+    }
+    function sweepAll() {
+        sweep(pane());
+        sweep(document.getElementById('lgb-ov'));
+        sweep(document.getElementById('pills-tab'));
+        if (paneActive()) document.querySelectorAll('.swal2-container').forEach(sweep);
+    }
+
+    let busy = false;
+    const mo = new MutationObserver((muts) => {
+        if (busy) return;
+        busy = true;
+        try {
+            for (const m of muts) {
+                if (m.type === 'childList') { m.addedNodes.forEach(n => { if (inScope(n)) { if (n.nodeType === 3) doText(n); else sweep(n); } }); }
+                else if (m.type === 'characterData') { if (inScope(m.target)) doText(m.target); }
+                else if (m.type === 'attributes') { if (inScope(m.target)) doAttrs(m.target); }
+            }
+        } catch (e) { console.warn('LG-RECV-I18N', e); }
+        finally { busy = false; try { mo.takeRecords(); } catch (e) { } }
+    });
+    mo.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ATTRS });
+
+    // ---------- สลับภาษา ----------
+    let last = isEn();
+    function onLang() { const n = isEn(); if (n === last) return; last = n; busy = true; try { sweepAll(); } finally { busy = false; try { mo.takeRecords(); } catch (e) { } } }
+    if (typeof window.setLanguage === 'function') {
+        const _sl = window.setLanguage;
+        window.setLanguage = function () { try { return _sl.apply(this, arguments); } finally { setTimeout(onLang, 80); } };
+    }
+    setInterval(() => { try { onLang(); } catch (e) { } }, 800);
+    try { if (isEn()) sweepAll(); } catch (e) { }
+})();
+// ===== จบ LG-RECV-I18N =====
+(function () {
+    if (window.__lgTagLine) return; window.__lgTagLine = true;
+
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const isEn = () => { try { return currentLanguage === 'en'; } catch (e) { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e2) { return false; } } };
+    const T = (th, en) => (isEn() ? en : th);
+    const docOf = (raw) => { try { const p = parseLGBarcode(raw); return p && p.docNumber ? String(p.docNumber).trim() : ''; } catch (e) { return ''; } };
+
+    // ---------- CSS ----------
+    const st = document.createElement('style');
+    st.textContent = `
+    .swal2-popup.lgtl-pop{width:25em;max-width:92vw;padding:0;border-radius:24px;overflow:hidden}
+    .swal2-popup.lgtl-pop .swal2-html-container{margin:0;padding:0}
+    .lgtl-ld{position:relative;display:flex;align-items:center;gap:16px;padding:26px 28px 30px;text-align:left}
+    .lgtl-ld .ring{width:46px;height:46px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;background:#eef2ff}
+    .lgtl-ld .ring i{width:26px;height:26px;border-radius:50%;border:3.5px solid #c7d2fe;border-top-color:#4f46e5;animation:lgtl-spin .75s linear infinite}
+    .lgtl-ld b{display:block;font-size:1.05rem;color:#0b1b33}
+    .lgtl-ld small{display:block;margin-top:2px;color:#64748b;font-size:.8rem}
+    .lgtl-ld .bar{position:absolute;left:0;right:0;bottom:0;height:4px;background:#eef2ff;overflow:hidden}
+    .lgtl-ld .bar i{position:absolute;top:0;bottom:0;width:38%;border-radius:4px;background:linear-gradient(90deg,#6366f1,#2563eb);animation:lgtl-bar 1.1s ease-in-out infinite}
+    @keyframes lgtl-spin{to{transform:rotate(360deg)}}
+    @keyframes lgtl-bar{0%{left:-40%}100%{left:100%}}
+    .lgtl-in{animation:lgtl-pop .18s ease-out}
+    @keyframes lgtl-pop{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:none}}
+    #lgtc-lines{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:2px 0 8px;text-align:left}
+    #lgtc-lines .lb{font-size:.82rem;font-weight:800;color:#475569;margin-right:2px}
+    #lgtc-lines button{display:inline-flex;align-items:center;gap:7px;border:1.5px solid #cbd5e1;background:#fff;color:#334155;border-radius:20px;padding:4px 6px 4px 14px;font-weight:800;font-size:.85rem;cursor:pointer;transition:.12s}
+    #lgtc-lines button:hover{border-color:#6366f1}
+    #lgtc-lines button.on{background:#4f46e5;border-color:#4f46e5;color:#fff;box-shadow:0 3px 10px rgba(79,70,229,.3)}
+    #lgtc-lines button .n{min-width:24px;text-align:center;border-radius:12px;padding:1px 8px;font-size:.74rem;background:#fef3c7;color:#92580a}
+    #lgtc-lines button .n.z{background:#dcfce7;color:#15803d}
+    #lgtc-lines button.on .n{background:rgba(255,255,255,.95)}
+    #lgtc-lines .hint{font-size:.72rem;color:#94a3b8;margin-left:4px}
+    tr.lgtl-hide{display:none !important}`;
+    document.head.appendChild(st);
+
+    // ---------- ป๊อบอัพ "กำลังโหลดข้อมูลล่าสุด..." ----------
+    const _fire = Swal.fire;
+    let loadingAt = 0;
+    Swal.fire = function () {
+        const a = Array.prototype.slice.call(arguments), o = a[0];
+        try {
+            if (o && typeof o === 'object' && o.title === 'กำลังโหลดข้อมูลล่าสุด...') {
+                loadingAt = Date.now();
+                a[0] = {
+                    customClass: { popup: 'lgtl-pop' }, showConfirmButton: false, allowOutsideClick: false, allowEscapeKey: false,
+                    showClass: { popup: 'lgtl-in' },
+                    html: `<div class="lgtl-ld"><div class="ring"><i></i></div><div><b>${T('กำลังโหลดข้อมูลแท็กล่าสุด', 'Loading the latest tag data')}</b><small>${T('ดึงข้อมูลจากชีต สักครู่…', 'Fetching from the sheet, one moment…')}</small></div><div class="bar"><i></i></div></div>`
+                };
+            } else if (o && typeof o === 'object' && o.title === 'เช็คแท็กค้างสแกน' && Date.now() - loadingAt < 30000) {
+                // เปลี่ยนจากหน้าโหลดเป็นหน้าหลักโดยไม่เด้ง/กระพริบ
+                a[0] = Object.assign({}, o, { showClass: { popup: 'swal2-noanimation', backdrop: 'swal2-noanimation' } });
+                loadingAt = 0;
+            }
+        } catch (e) { console.warn('LG-TAGCHECK-LINE swal', e); }
+        return _fire.apply(this, a);
+    };
+
+    // ---------- ปุ่มเลือกไลน์ ----------
+    const lineOf = (t) => String(t.line == null ? '' : t.line).trim() || '-';
+    function attach(body) {
+        if (body.__lgLine) return;
+        const dateEl = document.getElementById('lgtc-date'), bar = dateEl && dateEl.parentNode;
+        if (!bar) return;
+        body.__lgLine = true;
+        const holder = document.createElement('div');
+        holder.id = 'lgtc-lines';
+        bar.insertAdjacentElement('afterend', holder);
+        let sel = '', busy = false, mo = null;
+
+        function tagsOfDay() {
+            const d = dateEl.value, scanMap = {};
+            (db.lgScanLog || []).forEach(l => { const k = docOf(l.rawBarcode); if (k) scanMap[k] = true; });
+            return (db.lgTagLog || []).filter(t => String(t.planDate || '').trim().slice(0, 10) === d).map(t => ({
+                line: lineOf(t), st: String(t.status) === 'void' ? 'void' : (scanMap[String(t.docNumber).trim()] ? 'used' : 'unused')
+            }));
+        }
+        function draw(tags) {
+            const by = {};
+            tags.forEach(x => { const o = by[x.line] = by[x.line] || { used: 0, unused: 0, void: 0 }; o[x.st]++; });
+            const lines = Object.keys(by).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+            if (sel && lines.indexOf(sel) < 0) sel = '';
+            const un = (o) => o.unused;
+            const tot = tags.filter(x => x.st === 'unused').length;
+            holder.style.display = lines.length > 1 ? '' : 'none';
+            holder.innerHTML = `<span class="lb"><i class="bi bi-funnel-fill"></i> ${T('ไลน์', 'Line')}:</span>`
+                + `<button type="button" data-l="" class="${sel === '' ? 'on' : ''}">${T('ทุกไลน์', 'All lines')} <span class="n ${tot ? '' : 'z'}">${tot ? tot : '✓'}</span></button>`
+                + lines.map(l => `<button type="button" data-l="${esc(l)}" class="${sel === l ? 'on' : ''}">${esc(l)} <span class="n ${un(by[l]) ? '' : 'z'}">${un(by[l]) ? un(by[l]) : '✓'}</span></button>`).join('')
+                + `<span class="hint">${T('ตัวเลข = ยังไม่ใช้ (ค้างสแกน)', 'number = unscanned')}</span>`;
+        }
+        function apply() {
+            if (busy) return;
+            busy = true;
+            try {
+                const tags = tagsOfDay();
+                draw(tags);
+                // หาคอลัมน์ Line จากหัวตาราง
+                const ths = Array.from(body.parentNode.querySelectorAll('thead th'));
+                let ci = ths.findIndex(th => th.textContent.trim().toLowerCase() === 'line');
+                if (ci < 0) ci = 4;
+                body.querySelectorAll('.lgtl-none').forEach(e => e.remove());
+                const rows = Array.from(body.querySelectorAll('tr')).filter(tr => !tr.querySelector('td[colspan]'));
+                let shown = 0;
+                rows.forEach(tr => {
+                    const c = tr.children[ci], v = c ? (c.textContent.trim() || '-') : '';
+                    const ok = !sel || v === sel;
+                    tr.classList.toggle('lgtl-hide', !ok);
+                    if (ok) shown++;
+                });
+                if (sel && rows.length && !shown) body.insertAdjacentHTML('beforeend', `<tr class="lgtl-none"><td colspan="10" class="text-center text-muted py-4">${T('ไม่มีรายการของไลน์', 'No items for line')} ${esc(sel)} ${T('ในตัวกรองนี้', 'in this filter')}</td></tr>`);
+                // สรุปด้านบน นับเฉพาะไลน์ที่เลือก
+                const sum = document.getElementById('lgtc-sum');
+                if (sum && sel) {
+                    const c = { used: 0, unused: 0, void: 0 };
+                    tags.filter(x => x.line === sel).forEach(x => c[x.st]++);
+                    sum.innerHTML = `<span class="lgtc-chip" style="background:#4f46e5;color:#fff;">${T('ไลน์', 'Line')} ${esc(sel)}</span>`
+                        + `<span class="lgtc-chip" style="background:#e9ecef;">${T('ปริ้นทั้งหมด', 'Printed')} ${c.used + c.unused} ${T('ใบ', '')}</span>`
+                        + `<span class="lgtc-chip" style="background:#d1e7dd;color:#0f5132;">${T('ใช้แล้ว', 'Used')} ${c.used}</span>`
+                        + `<span class="lgtc-chip" style="background:#fff3cd;color:#664d03;">${T('ยังไม่ใช้', 'Unused')} ${c.unused}</span>`
+                        + (c.void ? `<span class="lgtc-chip" style="background:#e2e3e5;color:#41464b;">${T('ยกเลิก', 'Void')} ${c.void}</span>` : '');
+                }
+            } catch (e) { console.warn('LG-TAGCHECK-LINE', e); }
+            finally { busy = false; try { mo.takeRecords(); } catch (e) { } }
+        }
+        holder.addEventListener('click', (e) => {
+            const b = e.target.closest('button[data-l]');
+            if (!b) return;
+            const was = sel; sel = b.getAttribute('data-l');
+            if (!sel && was) { dateEl.dispatchEvent(new Event('change')); return; }   // กลับ "ทุกไลน์" → ให้หน้าเดิมวาดสรุปใหม่
+            apply();
+        });
+        mo = new MutationObserver(() => { if (!busy) apply(); });
+        mo.observe(body, { childList: true });
+        apply();
+    }
+    new MutationObserver(() => { const b = document.getElementById('lgtc-body'); if (b) attach(b); }).observe(document.body, { childList: true, subtree: true });
+})();
+// ===== จบ LG-TAGCHECK-LINE =====
 (function () {
     if (window.__lgUht) return; window.__lgUht = true;
 
