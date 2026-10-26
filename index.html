@@ -19177,7 +19177,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
     let capturing = false, snap = null;
     if (typeof computeLGMatchStatus === 'function') {
         const _c = computeLGMatchStatus;
-        computeLGMatchStatus = function () { const r = _c.apply(this, arguments); if (capturing) snap = r; return r; };
+        computeLGMatchStatus = function () { const r = _c.apply(this, arguments); if (capturing && !snap) snap = r; return r; };
     }
     const dateVal = () => { const d = document.getElementById('lgd-date'); return (d && d.value) || (typeof lgTodayStr === 'function' ? lgTodayStr() : dayOf(Date.now())); };
 
@@ -19760,7 +19760,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
     let capturing = false, snap = null;
     if (typeof computeLGMatchStatus === 'function') {
         const _c = computeLGMatchStatus;
-        computeLGMatchStatus = function () { const r = _c.apply(this, arguments); if (capturing) snap = r; return r; };
+         computeLGMatchStatus = function () { const r = _c.apply(this, arguments); if (capturing && !snap) snap = r; return r; };
     }
     const dateVal = () => { const d = document.getElementById('lgd-date'); return (d && d.value) || (typeof lgTodayStr === 'function' ? lgTodayStr() : dayOf(Date.now())); };
 
@@ -23811,6 +23811,1296 @@ renderLGTagPrintWindow = function(tags, printWin) {
     render();
 })();
 // ===== จบ CONVERT-PAGE =====
+// ===== LG-UHT v4: ตั้ง UHT + ติ๊ก WO ที่ LG ผลิตครบแล้ว (ติ๊กได้หลาย WO) + รองรับภาษาไทย/อังกฤษ (ส่งเข้า − ผลิตแล้ว = เหลืองานกี่ชม.) (จำนวนชิ้น/ชม. ที่ไลน์รันได้) ต่อไลน์ + เตือนเมื่อยอดอยู่ได้ต่ำกว่าขั้นต่ำ (แดชบอร์ด LG / หน้าแพลน / ตอนปริ้นแท็ก / หน้ารับแท็ก) (วางต่อท้ายบล็อก LG ทั้งหมด ใต้บรรทัด จบ CONVERT-PAGE) =====
+(function () {
+    if (window.__lgUht) return; window.__lgUht = true;
+
+    const LSK = 'lgUhtCache_v1';
+    const MINKEY = '_MIN_HOURS';
+    const PANE_PLAN = 'pills-lg-matching', PANE_RECV = 'pills-lg-receive';
+    const pad = (n) => String(n).padStart(2, '0');
+    const up = (s) => String(s == null ? '' : s).trim().toUpperCase();
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const num = (n) => (Number(n) || 0).toLocaleString('en-US');
+    const dayKey = (t) => { const d = new Date(t); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+    const lineOfPlan = (p) => String(p && p.line != null ? p.line : '').trim() || '-';
+    const msOf = (v) => { if (!v) return null; const t = new Date(String(v)).getTime(); return isNaN(t) ? null : t; };
+    const hh = (h) => (Math.round(h * 10) / 10).toFixed(1);
+
+    // ---------- ข้อมูล UHT ----------
+    function allRows() {
+        try { if (db && Array.isArray(db.lgLineUHT) && db.lgLineUHT.length) return db.lgLineUHT; } catch (e) { }
+        try { return JSON.parse(localStorage.getItem(LSK) || '[]') || []; } catch (e) { return []; }
+    }
+    function uhtOf(line) {
+        const r = allRows().find(x => String(x.line).trim() === String(line).trim());
+        const v = r ? parseFloat(r.uht) : 0;
+        return v > 0 ? v : 0;
+    }
+    function minH() {
+        const r = allRows().find(x => String(x.line).trim() === MINKEY);
+        const v = r ? parseFloat(r.uht) : 0;
+        return v > 0 ? v : 2;
+    }
+    function status(h) { const m = minH(); return h >= m ? 'ok' : (h >= m * 0.5 ? 'warn' : 'bad'); }
+    function canEdit() {
+        try { return !!(window.lgPlanEditAllowed && window.lgPlanEditAllowed()); } catch (e) { return false; }
+    }
+    // ---------- ความคืบหน้าที่ LG ผลิต (ผลิตถึง WO ไหน กี่ชิ้น) ----------
+    const PLSK = 'lgUhtProgCache_v1';
+    function progRows() {
+        try { if (db && Array.isArray(db.lgLineProgress) && db.lgLineProgress.length) return db.lgLineProgress; } catch (e) { }
+        try { return JSON.parse(localStorage.getItem(PLSK) || '[]') || []; } catch (e) { return []; }
+    }
+    function progOf(line, date) {
+        const r = progRows().filter(x => String(x.line).trim() === String(line).trim() && String(x.planDate).trim().slice(0, 10) === date);
+        return r.length ? r[r.length - 1] : null;
+    }
+    function canProg() {
+        try {
+            const u = typeof currentUser !== 'undefined' ? currentUser : null;
+            if (!u) return false;
+            if (u.username === 'admin' || u.role === 'admin') return true;
+            return canEdit() || u.canReceiveLG === true || String(u.canReceiveLG).toUpperCase() === 'TRUE';
+        } catch (e) { return false; }
+    }
+    // กุญแจของแถวแพลน (WO + พาร์ท) ใช้จำว่า WO ไหนผลิตครบแล้ว
+    const rk = (r) => String(r.WO).trim() + '|' + String(r.partNo == null ? '' : r.partNo).trim();
+    // อ่านความคืบหน้ารูปแบบใหม่ (ติ๊กหลาย WO) — ถ้าเป็นข้อมูลรูปแบบเก่า (ผลิตถึง WO เดียว) จะคืน nv:false
+    function progParse(pg) {
+        const raw = pg && pg.partial != null ? String(pg.partial).trim() : '';
+        if (!raw || raw.charAt(0) !== '{') return { nv: false, done: new Set(), part: {} };
+        const done = new Set(String(pg.doneWOs == null ? '' : pg.doneWOs).split(',').map(x => x.trim()).filter(Boolean));
+        let part = {}; try { const o = JSON.parse(raw); if (o && typeof o === 'object') part = o; } catch (e) { }
+        return { nv: true, done, part };
+    }
+    // รวมสถานะของไลน์หนึ่งในวันแพลนหนึ่ง: ส่งเข้า / ผลิตแล้ว / เหลือให้ผลิต (เรียงตามลำดับแพลนของไลน์นั้น)
+    function lineState(line, date, pgOverride) {
+        let rows = [];
+        try { rows = lgSortPlans(computeLGMatchStatus().filter(r => lgPlanDateOf(r) === date && lineOfPlan(r) === line)); } catch (e) { }
+        const pg = pgOverride !== undefined ? pgOverride : progOf(line, date);
+        const pp = progParse(pg);
+        let idx = -1;
+        if (!pp.nv && pg && String(pg.WO).trim() !== '-') idx = rows.findIndex(r => String(r.WO).trim() === String(pg.WO).trim());
+        const hasProg = !!pg && (pp.nv || String(pg.WO).trim() === '-' || idx >= 0);
+        let sent = 0, produced = 0, rem = 0, planTotal = 0, planLeft = 0, doneN = 0;
+        const partRows = [];
+        rows.forEach((r, i) => {
+            const sRow = parseFloat(r.scanned) || 0, o = parseFloat(r.orderQty) || 0;
+            let pr = 0;
+            if (pp.nv) {
+                const k = rk(r);
+                if (pp.done.has(k)) { pr = o; doneN++; }
+                else { pr = Math.min(o, parseFloat(pp.part[k]) || 0); if (pr > 0) partRows.push({ r, q: pr }); }
+            } else if (hasProg && idx >= 0) pr = i < idx ? o : (i === idx ? Math.min(o, parseFloat(pg.producedQty) || 0) : 0);
+            sent += sRow; produced += Math.min(sRow, pr); planTotal += o;
+            rem += Math.max(0, sRow - pr); planLeft += Math.max(0, o - pr);
+        });
+        return { rows, pg, idx, hasProg, nv: pp.nv, doneN, partRows, sent, produced, rem, planTotal, planLeft, cur: idx >= 0 ? rows[idx] : null };
+    }
+    // ข้อความ "LG ผลิตถึงไหน" (html)
+    function whereHtml(st) {
+        if (!st.hasProg) return '';
+        if (st.nv) {
+            if (!st.doneN && !st.partRows.length) return 'ยังไม่เริ่มผลิต';
+            const bits = [];
+            if (st.doneN) bits.push(`ผลิตครบ <b>${st.doneN}/${st.rows.length}</b> WO`);
+            st.partRows.slice(0, 2).forEach(x => bits.push(`กำลังผลิต <b>${esc(x.r.WO)}</b> (${num(x.q)}/${num(x.r.orderQty)})`));
+            return bits.join(' · ');
+        }
+        return String(st.pg.WO).trim() === '-' ? 'ยังไม่เริ่มผลิต' : `ผลิตถึง <b>${esc(st.pg.WO)}</b> (${num(st.pg.producedQty)}/${num(st.cur ? st.cur.orderQty : 0)})`;
+    }
+    const hm2 = (t) => { const d = new Date(t); return isNaN(d) ? '' : `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+    const agoMin = (t) => { const x = msOf(t); return x ? Math.max(0, Math.round((Date.now() - x) / 60000)) : null; };
+
+    function planLines() {
+        const s = new Set();
+        (db.lgPlan || []).forEach(p => { if (p && !p.planCancelledAt) s.add(lineOfPlan(p)); });
+        allRows().forEach(r => { const l = String(r.line).trim(); if (l && l !== MINKEY) s.add(l); });
+        s.delete('-');
+        return Array.from(s).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    }
+
+    // ---------- CSS ----------
+    const st = document.createElement('style');
+    st.textContent = `
+    .lgu-chip{display:inline-flex;align-items:center;gap:6px;border-radius:20px;padding:4px 12px;font-size:.78rem;font-weight:800;border:1.5px solid transparent;line-height:1.25}
+    .lgu-chip small{font-weight:600;opacity:.75}
+    .lgu-ok{background:#dcfce7;color:#15803d;border-color:#86efac}
+    .lgu-warn{background:#fef3c7;color:#92580a;border-color:#fcd34d}
+    .lgu-bad{background:#fee2e2;color:#b91c1c;border-color:#fca5a5}
+    .lgu-none{background:#f1f5f9;color:#64748b;border-color:#e2e8f0}
+    #lgu-strip{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 14px}
+    #lgu-strip .lb{font-size:.78rem;font-weight:800;color:#475569}
+    .lgu-ln{margin-top:4px;font-size:.72rem;font-weight:700;display:flex;align-items:center;gap:6px}
+    .lgu-ln b{font-size:.8rem}
+    .lgu-ln.ok{color:#15803d}.lgu-ln.warn{color:#92580a}.lgu-ln.bad{color:#b91c1c}.lgu-ln.none{color:#8a97ab}
+    .lgu-banner{border-radius:14px;padding:10px 14px;margin-bottom:12px;font-size:.85rem;font-weight:700;display:flex;gap:10px;align-items:flex-start;background:#fef2f2;border:1.5px solid #fca5a5;color:#991b1b}
+    .lgu-banner i{margin-top:2px}
+    .lgu-recv{background:#f7f9fc;border-radius:16px;padding:12px 14px;margin-bottom:12px}
+    .lgu-recv .h{display:flex;align-items:center;gap:8px;font-weight:800;font-size:.8rem;color:#4a5a70;margin-bottom:8px}
+    .lgu-recv .h button{margin-left:auto;border:0;background:#e2e8f0;border-radius:10px;padding:2px 10px;font-size:.72rem;font-weight:800;color:#334155;cursor:pointer}
+    .lgu-recv .r{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:6px 0;border-top:1px dashed #dbe3ee;font-size:.78rem}
+    .lgu-recv .r:first-of-type{border-top:0}
+    .lgu-recv .r .nm{font-weight:800;color:#0b1b33;min-width:54px}
+    .lgu-recv .hint{font-size:.76rem;color:#8a97ab}
+    .swal2-popup.lgu-pop{width:34em;max-width:94vw;border-radius:24px;padding:0;overflow:hidden;text-align:left}
+    .lgu-pop .swal2-html-container{margin:0;padding:0;text-align:left}
+    .lgu-pop .swal2-actions{margin:0;padding:6px 22px 20px;width:100%;box-sizing:border-box;gap:10px}
+    .lgu-hd{display:flex;gap:14px;align-items:center;padding:20px 24px;color:#fff;background:linear-gradient(135deg,#2563eb,#6366f1)}
+    .lgu-hd.warn{background:linear-gradient(135deg,#f59e0b,#dc2626)}
+    .lgu-hd .ic{width:48px;height:48px;border-radius:16px;background:rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex:none}
+    .lgu-hd h3{margin:0;font-size:1.15rem;font-weight:800;color:#fff}.lgu-hd p{margin:3px 0 0;font-size:.82rem;opacity:.92;color:#fff}
+    .lgu-bd{padding:16px 24px 6px}
+    .lgu-tb{width:100%;border-collapse:collapse;font-size:.88rem}
+    .lgu-tb th{font-size:.72rem;color:#64748b;font-weight:800;text-align:left;padding:4px 6px}
+    .lgu-tb td{padding:6px;border-top:1px solid #eef2f7;vertical-align:middle}
+    .lgu-tb input{width:100%;border:1.5px solid #cbd5e1;border-radius:10px;padding:6px 10px;font-weight:800;text-align:right;outline:0}
+    .lgu-tb input:focus{border-color:#4f46e5;box-shadow:0 0 0 3px rgba(79,70,229,.15)}
+    .lgu-note{font-size:.76rem;color:#64748b;margin:10px 0 0;line-height:1.5}
+    .lgu-add{display:flex;gap:8px;margin-top:10px}
+    .lgu-add input{flex:1;border:1.5px dashed #cbd5e1;border-radius:10px;padding:6px 10px;outline:0}
+    .lgu-add button{border:0;background:#eef2ff;color:#4338ca;font-weight:800;border-radius:10px;padding:6px 14px;cursor:pointer}
+    .lgu-wl{display:flex;justify-content:space-between;align-items:center;background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:8px 12px;margin-bottom:6px;font-size:.88rem;color:#7f1d1d}
+    .lgu-wl b{font-size:1rem}
+    .lgu-wo{display:flex;align-items:center;gap:10px;border:1.5px solid #e2e8f0;border-radius:12px;padding:8px 12px;margin-bottom:6px;cursor:pointer;font-size:.86rem}
+    .lgu-wo:hover{border-color:#6366f1}
+    .lgu-wo.on{border-color:#4f46e5;background:#eef2ff}
+    .lgu-wo input{accent-color:#4f46e5}
+    .lgu-wo .m{margin-left:auto;font-size:.74rem;color:#64748b;text-align:right}
+    .lgu-wos{max-height:230px;overflow-y:auto;padding-right:2px}
+    .lgu-pv{margin-top:12px;border-radius:14px;padding:10px 14px;font-weight:800;font-size:.9rem;text-align:center}
+    .lgu-pv small{display:block;font-weight:600;font-size:.74rem;opacity:.8;margin-top:2px}
+    .lgu-mini{border:0;background:#e0e7ff;color:#3730a3;font-weight:800;font-size:.7rem;border-radius:10px;padding:2px 9px;cursor:pointer}
+    .lgu-stale{color:#b91c1c;font-weight:800}
+    .swal2-popup.lgu-sm{width:25em}
+    .lgu-sv{display:flex;align-items:center;gap:16px;padding:26px 28px}
+    .lgu-sv b{display:block;font-size:1.05rem;color:#0b1b33}.lgu-sv small{color:#64748b;font-size:.8rem}
+    .lgu-sv .sp{width:38px;height:38px;border-radius:50%;border:4px solid #e0e7ff;border-top-color:#4f46e5;animation:lgu-spin .8s linear infinite;flex:none}
+    @keyframes lgu-spin{to{transform:rotate(360deg)}}
+    .lgu-dn{text-align:center;padding:26px 24px 8px;background:linear-gradient(180deg,#ecfdf5,#fff)}
+    .lgu-dn h3{margin:10px 0 2px;font-size:1.2rem;font-weight:800;color:#0b1b33}
+    .lgu-dn p{margin:0;color:#64748b;font-size:.82rem}
+    .lgu-dn svg{width:62px;height:62px}
+    .lgu-dn svg circle{fill:#22c55e;opacity:.15;stroke:none}
+    .lgu-dn svg .c2{fill:none;stroke:#16a34a;stroke-width:3;stroke-dasharray:151;stroke-dashoffset:151;animation:lgu-dr .55s .05s ease forwards;opacity:1}
+    .lgu-dn svg path{fill:none;stroke:#16a34a;stroke-width:4.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:40;stroke-dashoffset:40;animation:lgu-dr .4s .5s ease forwards}
+    @keyframes lgu-dr{to{stroke-dashoffset:0}}
+    .lgu-rs{display:flex;align-items:center;gap:10px;border-radius:14px;padding:10px 14px;margin:0 0 8px;text-align:left}
+    .lgu-rs .nm{font-weight:800;color:#0b1b33;min-width:52px}
+    .lgu-rs .hr{margin-left:auto;font-weight:800;font-size:1.05rem}
+    .lgu-rs small{display:block;font-weight:600;color:#64748b;font-size:.72rem}
+    .lgu-rs.ok{background:#dcfce7}.lgu-rs.ok .hr{color:#15803d}
+    .lgu-rs.warn{background:#fef3c7}.lgu-rs.warn .hr{color:#92580a}
+    .lgu-rs.bad{background:#fee2e2}.lgu-rs.bad .hr{color:#b91c1c}
+    .lgu-rs.none{background:#f1f5f9}.lgu-rs.none .hr{color:#64748b}
+    .lgu-tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:2px 0 8px}
+    .lgu-tools .lgu-mini{padding:3px 11px}
+    .lgu-tools .hint{margin-left:auto;font-size:.7rem;color:#8a97ab}
+    .lgu-w2{display:flex;align-items:center;gap:12px;border:1.5px solid #e2e8f0;border-radius:14px;padding:9px 12px;margin-bottom:6px;font-size:.86rem;background:#fff;transition:.12s}
+    .lgu-w2.done{background:#f0fdf4;border-color:#86efac}
+    .lgu-w2 .ck{width:22px;height:22px;accent-color:#16a34a;cursor:pointer;flex:none}
+    .lgu-w2 .tx{flex:1;min-width:0;cursor:pointer}
+    .lgu-w2 .tx small{display:block;color:#64748b;font-size:.72rem;font-weight:600}
+    .lgu-w2 .qt{display:flex;align-items:center;gap:6px;font-size:.72rem;color:#64748b;flex:none}
+    .lgu-w2 .qt input{width:84px;border:1.5px solid #cbd5e1;border-radius:10px;padding:4px 8px;font-weight:800;text-align:right;outline:0}
+    .lgu-w2 .qt input:focus{border-color:#4f46e5;box-shadow:0 0 0 3px rgba(79,70,229,.15)}
+    .lgu-w2 .okb{font-weight:800;color:#15803d;font-size:.78rem;white-space:nowrap}
+    .lgu-w2 .qt input:disabled{display:none}`;
+    document.head.appendChild(st);
+
+
+    // ---------- ภาษาไทย / อังกฤษ (ตามปุ่มเปลี่ยนภาษาของระบบ) ----------
+    function isEn() { try { return currentLanguage === 'en'; } catch (e) { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e2) { return false; } } }
+    const THAI = /[฀-๿]/;
+    // [ไทย, อังกฤษ] เรียงจากวลียาวไปสั้น (ตัวสั้นๆ ที่เป็นปุ่มล้วนใช้ ^...$)
+    const TT = [
+        [/ระบบเอา "ยอดชิ้น ÷ UHT" = อยู่ได้กี่ชั่วโมง เช่น UHT 400 ส่งเข้า 800 ชิ้น = 2\.0 ชม\. ถ้าต่ำกว่าขั้นต่ำจะเตือนที่แดชบอร์ด หน้าแพลน ตอนปริ้นแท็ก และหน้ารับแท็ก \(เว้นว่าง = ไม่ตั้ง ไม่เตือน\)/g, 'The system divides pieces by UHT to get how many hours the work lasts, e.g. UHT 400 with 800 pcs sent = 2.0 h. Below the minimum it warns on the dashboard, plan page, when printing tags and on the receive page (blank = not set, no warning).'],
+        [/Google Script ยังไม่ได้อัปเดต \(ยังไม่รู้จักคำสั่งบันทึก UHT\) ให้วางไฟล์ Google Script ตัวใหม่แล้ว Deploy เวอร์ชันใหม่ก่อน/g, 'Google Script is not updated yet (it does not know the save-UHT command). Paste the new Google Script file and deploy a new version first.'],
+        [/Google Script ยังไม่ได้อัปเดต \(ยังไม่รู้จักคำสั่งบันทึกความคืบหน้า\) ให้วางไฟล์ Google Script ตัวใหม่แล้ว Deploy เวอร์ชันใหม่ก่อน/g, 'Google Script is not updated yet (it does not know the save-progress command). Paste the new Google Script file and deploy a new version first.'],
+        [/ต้องมีสิทธิ์ "แก้ไขยอด \/ ยกเลิกแพลน LG" ถึงจะตั้งค่า UHT ได้/g, 'You need the "edit qty / cancel LG plan" permission to set UHT.'],
+        [/ต้องเป็นผู้ดูแล หรือมีสิทธิ์รับแท็ก LG \/ แก้ไขแพลน LG ถึงจะอัปเดตได้/g, 'Only admins or users allowed to receive LG tags / edit LG plans can update this.'],
+        [/ยังไม่ได้ตั้ง UHT ของไลน์นี้ จึงยังคำนวณชั่วโมงไม่ได้/g, 'UHT is not set for this line, so hours cannot be calculated'],
+        [/ยังไม่ได้เปลี่ยนอะไร ติ๊ก WO ที่ผลิตครบก่อน/g, 'Nothing changed yet. Tick the fully produced WOs first.'],
+        [/ยังไม่มีไลน์ในแพลน เพิ่มชื่อไลน์ด้านล่างได้เลย/g, 'No lines in the plan yet. Add a line name below.'],
+        [/ถ้ายอดนี้ถูกต้องแล้ว กด "ปริ้นต่อ" ได้เลย/g, 'If this quantity is correct, press "Print anyway".'],
+        [/UHT = จำนวนชิ้นที่ไลน์รันได้ต่อชั่วโมง/g, 'UHT = pieces per hour the line can run'],
+        [/กด Shift ค้างแล้วติ๊ก = ติ๊กเป็นช่วง/g, 'Hold Shift and tick = tick a range'],
+        [/ติ๊ก WO ที่ผลิตครบ \(ติ๊กได้หลายอัน\)/g, 'tick the WOs that are fully produced (several allowed)'],
+        [/บันทึกความคืบหน้าการผลิต (\d+) ไลน์/g, 'Production progress saved for $1 line(s)'],
+        [/งานที่เหลือที่ LG อยู่ได้กี่ชั่วโมง \(ขั้นต่ำ /g, 'How long LG’s remaining work lasts (min '],
+        [/งานที่เหลือที่ LG อยู่ได้ต่ำกว่า /g, 'LG’s remaining work lasts less than '],
+        [/แพลนที่เหลืออยู่ได้ \(ขั้นต่ำ /g, 'Plan remaining lasts (min '],
+        [/งานในแพลนอยู่ได้ไม่ถึง /g, 'Plan work lasts less than '],
+        [/ยังไม่ได้ตั้ง UHT ของไลน์ใดเลย/g, 'No line has a UHT set yet'],
+        [/ยังไม่มีแพลนของวันที่เลือก/g, 'No plan for the selected date'],
+        [/ยังไม่มีแพลนของไลน์ใดเลย/g, 'has no plan for any line'],
+        [/ยังไม่ระบุว่า LG ผลิตถึงไหน/g, 'LG production progress not specified'],
+        [/ยังไม่ระบุว่าผลิตถึงไหน/g, 'progress not specified'],
+        [/แพลนที่ LG ยังไม่ได้ผลิต/g, 'Plan not yet produced by LG'],
+        [/WO ไหนที่ LG ผลิตแล้ว\?/g, 'Which WOs has LG produced?'],
+        [/ตั้งค่า UHT ของแต่ละไลน์/g, 'UHT settings per line'],
+        [/เพิ่มไลน์ใหม่ เช่น A7/g, 'Add a new line, e.g. A7'],
+        [/ขั้นต่ำต้องมากกว่า 0 ชั่วโมง/g, 'Minimum must be greater than 0 hours'],
+        [/รอสักครู่ อย่าเพิ่งปิดหน้านี้/g, 'Please wait, do not close this page'],
+        [/กำลังบันทึกความคืบหน้า\.\.\./g, 'Saving progress...'],
+        [/กำลังบันทึก UHT\.\.\./g, 'Saving UHT...'],
+        [/กำลังบันทึก\.\.\./g, 'Saving...'],
+        [/ตรวจสอบก่อนปริ้นแท็ก/g, 'Check before printing tags'],
+        [/กลับไปเพิ่มยอดแพลน/g, 'Back to add plan qty'],
+        [/ติ๊ก WO ที่ LG ผลิตแล้ว/g, 'Tick WOs LG has produced'],
+        [/ขั้นต่ำที่ต้องอยู่ได้/g, 'Minimum it must last'],
+        [/\(ให้หัวหน้าตั้งค่าให้\)/g, '(ask your supervisor to set it)'],
+        [/ — กด "ตั้งค่า UHT"/g, ' — press "UHT settings"'],
+        [/เหลืองานอยู่ได้ /g, 'Remaining work lasts '],
+        [/อัปเดตนานแล้ว/g, 'Not updated for'],
+        [/ไลน์นี้ไม่มี WO/g, 'No WOs on this line'],
+        [/ติ๊กครบทุก WO/g, 'Tick all WOs'],
+        [/แพลนวันที่ /g, 'Plan date '],
+        [/ยังไม่เริ่มผลิต/g, 'Not started'],
+        [/ยังไม่ตั้ง UHT/g, 'UHT not set'],
+        [/ยังไม่มีแพลน/g, 'No plan'],
+        [/บันทึกไม่สำเร็จ/g, 'Save failed'],
+        [/บันทึก UHT แล้ว/g, 'UHT saved'],
+        [/เหลืองาน /g, 'Remaining '],
+        [/ล้างทั้งหมด/g, 'Clear all'],
+        [/กำลังผลิต /g, 'in production '],
+        [/ส่งเพิ่ม ~/g, 'add ~'],
+        [/ควรเพิ่มอีก ~/g, 'add about ~'],
+        [/เหลือ ([\d,]+) ชิ้น/g, '$1 pcs left'],
+        [/ชิ้น\/ชม\./g, 'pcs/h'],
+        [/ต่อชม\./g, 'per h'],
+        [/ผลิตถึง /g, 'produced up to '],
+        [/LG ผลิตแล้ว/g, 'LG produced'],
+        [/ผลิตครบ/g, 'Completed'],
+        [/ผลิตแล้ว/g, 'produced '],
+        [/ส่งเข้า /g, 'Sent in '],
+        [/ส่งแล้ว /g, 'sent '],
+        [/ยอดแพลน/g, 'Plan qty'],
+        [/แพลน /g, 'Plan '],
+        [/ไม่มีสิทธิ์/g, 'No permission'],
+        [/\+ เพิ่ม/g, '+ Add'],
+        [/เช่น 400/g, 'e.g. 400'],
+        [/ตั้งค่า UHT/g, 'UHT settings'],
+        [/^\s*อัปเดตแล้ว\s*$/g, 'Updated'],
+        [/^\s*อัปเดตผลิต\s*$/g, 'Update production'],
+        [/^\s*อัปเดต\s*$/g, 'Update'],
+        [/อัปเดต /g, 'updated '],
+        [/^\s*ปริ้นต่อ\s*$/g, 'Print anyway'],
+        [/^\s*บันทึก\s*$/g, 'Save'],
+        [/^\s*ยกเลิก\s*$/g, 'Cancel'],
+        [/^\s*ตกลง\s*$/g, 'OK'],
+        [/^\s*ปิด\s*$/g, 'Close'],
+        [/ไลน์ /g, 'Line '],
+        [/ไลน์/g, 'Line'],
+        [/ชั่วโมง/g, 'hours'],
+        [/ชม\./g, 'h'],
+        [/ชิ้น/g, 'pcs'],
+        [/วันที่ /g, 'Date ']
+    ];
+    function tr(s) {
+        if (!isEn() || s == null) return s;
+        let t = String(s);
+        if (!THAI.test(t)) return t;
+        for (let i = 0; i < TT.length; i++) t = t.replace(TT[i][0], TT[i][1]);
+        return t;
+    }
+    function trDom(root) {
+        if (!isEn() || !root) return;
+        const nodes = [];
+        const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        while (w.nextNode()) nodes.push(w.currentNode);
+        nodes.forEach(n => { const v = n.nodeValue; if (v && THAI.test(v)) { const t = tr(v); if (t !== v) n.nodeValue = t; } });
+        if (root.querySelectorAll) root.querySelectorAll('[placeholder],[title]').forEach(e => ['placeholder', 'title'].forEach(a => { const v = e.getAttribute(a); if (v && THAI.test(v)) e.setAttribute(a, tr(v)); }));
+    }
+    const MINE = '.lgu-pop,#lgu-strip,.lgu-recv,.lgu-ln,.lgu-banner';
+    new MutationObserver((muts) => {
+        if (!isEn()) return;
+        for (const m of muts) {
+            for (const n of m.addedNodes) {
+                const el = n.nodeType === 1 ? n : n.parentElement;
+                if (!el) continue;
+                if ((el.closest && el.closest(MINE)) || (el.querySelector && el.querySelector(MINE))) trDom(el);
+            }
+        }
+    }).observe(document.body, { childList: true, subtree: true });
+
+    // ---------- คำนวณ ----------
+    function planRowsFor(date) {
+        let rows = [];
+        try { rows = computeLGMatchStatus().filter(r => lgPlanDateOf(r) === date); } catch (e) { }
+        return rows;
+    }
+    function byLine(date) {
+        const m = {};
+        planRowsFor(date).forEach(r => {
+            const l = lineOfPlan(r), o = m[l] = m[l] || { plan: 0, sent: 0 };
+            o.plan += parseFloat(r.orderQty) || 0; o.sent += parseFloat(r.scanned) || 0;
+        });
+        return m;
+    }
+    function chipHtml(line, qty, label) {
+        const u = uhtOf(line);
+        if (!u) return `<span class="lgu-chip lgu-none">ไลน์ ${esc(line)} <small>ยังไม่ตั้ง UHT</small></span>`;
+        const h = qty / u, s = status(h);
+        return `<span class="lgu-chip lgu-${s}" title="${esc(label || '')} ${num(qty)} ÷ UHT ${num(u)} ต่อชม.">ไลน์ ${esc(line)} <b>${hh(h)} ชม.</b> <small>${num(qty)} / ${num(u)}</small></span>`;
+    }
+
+
+    // ---------- ป๊อบอัพ กำลังบันทึก / บันทึกแล้ว (ดีไซน์ใหม่) ----------
+    function popSaving(t) {
+        Swal.fire({ customClass: { popup: 'lgu-pop lgu-sm' }, showConfirmButton: false, allowOutsideClick: false, allowEscapeKey: false,
+            html: tr(`<div class="lgu-sv"><div class="sp"></div><div><b>${esc(t || 'กำลังบันทึก...')}</b><small>รอสักครู่ อย่าเพิ่งปิดหน้านี้</small></div></div>`) });
+    }
+    function popDone(title, sub, bodyHtml) {
+        Swal.fire({ customClass: { popup: 'lgu-pop lgu-sm' }, showConfirmButton: true, confirmButtonText: tr('ตกลง'), timer: 4000, timerProgressBar: true,
+            html: `<div class="lgu-dn"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="25"/><circle class="c2" cx="26" cy="26" r="24"/><path d="M15 27l8 8 15-17"/></svg><h3>${esc(title)}</h3>${sub ? `<p>${esc(sub)}</p>` : ''}</div>${bodyHtml ? `<div class="lgu-bd" style="padding-top:14px">${bodyHtml}</div>` : ''}` });
+    }
+    function popErr(m) {
+        Swal.fire({ customClass: { popup: 'lgu-pop lgu-sm' }, confirmButtonText: tr('ปิด'),
+            html: `<div class="lgu-hd warn"><div class="ic"><i class="bi bi-x-octagon-fill"></i></div><div><h3>บันทึกไม่สำเร็จ</h3></div></div><div class="lgu-bd" style="padding-bottom:10px;font-size:.88rem;color:#475569">${esc(m)}</div>` });
+    }
+
+    // ---------- หน้าต่างตั้งค่า UHT ----------
+    async function openSettings() {
+        if (!canEdit()) { Swal.fire(tr('ไม่มีสิทธิ์'), tr('ต้องมีสิทธิ์ "แก้ไขยอด / ยกเลิกแพลน LG" ถึงจะตั้งค่า UHT ได้'), 'warning'); return; }
+        const lines = planLines();
+        const row = (l) => `<tr data-l="${esc(l)}"><td style="font-weight:800">ไลน์ ${esc(l)}</td><td style="width:42%"><input type="number" min="0" step="1" inputmode="numeric" placeholder="เช่น 400" value="${uhtOf(l) || ''}"></td><td style="color:#64748b;font-size:.78rem">ชิ้น/ชม.</td></tr>`;
+        const res = await Swal.fire({
+            customClass: { popup: 'lgu-pop' }, showCancelButton: true, confirmButtonText: tr('บันทึก'), cancelButtonText: tr('ยกเลิก'), buttonsStyling: true,
+            html: `<div class="lgu-hd"><div class="ic"><i class="bi bi-speedometer2"></i></div><div><h3>ตั้งค่า UHT ของแต่ละไลน์</h3><p>UHT = จำนวนชิ้นที่ไลน์รันได้ต่อชั่วโมง</p></div></div>
+            <div class="lgu-bd"><table class="lgu-tb"><thead><tr><th>ไลน์</th><th style="text-align:right">UHT</th><th></th></tr></thead><tbody id="lgu-rows">${lines.map(row).join('') || '<tr><td colspan="3" style="color:#8a97ab;padding:12px 6px">ยังไม่มีไลน์ในแพลน เพิ่มชื่อไลน์ด้านล่างได้เลย</td></tr>'}</tbody></table>
+            <div class="lgu-add"><input id="lgu-new" placeholder="เพิ่มไลน์ใหม่ เช่น A7"><button type="button" id="lgu-addbtn">+ เพิ่ม</button></div>
+            <table class="lgu-tb" style="margin-top:12px"><tbody><tr><td style="font-weight:800">ขั้นต่ำที่ต้องอยู่ได้</td><td style="width:42%"><input id="lgu-min" type="number" min="0.5" step="0.5" value="${minH()}"></td><td style="color:#64748b;font-size:.78rem">ชั่วโมง</td></tr></tbody></table>
+            <p class="lgu-note">ระบบเอา "ยอดชิ้น ÷ UHT" = อยู่ได้กี่ชั่วโมง เช่น UHT 400 ส่งเข้า 800 ชิ้น = 2.0 ชม. ถ้าต่ำกว่าขั้นต่ำจะเตือนที่แดชบอร์ด หน้าแพลน ตอนปริ้นแท็ก และหน้ารับแท็ก (เว้นว่าง = ไม่ตั้ง ไม่เตือน)</p></div>`,
+            didOpen: () => {
+                const tb = document.getElementById('lgu-rows');
+                document.getElementById('lgu-addbtn').addEventListener('click', () => {
+                    const inp = document.getElementById('lgu-new'), v = inp.value.trim();
+                    if (!v) return;
+                    if (tb.querySelector(`tr[data-l="${CSS.escape(v)}"]`)) { inp.value = ''; return; }
+                    if (tb.querySelector('td[colspan]')) tb.innerHTML = '';
+                    tb.insertAdjacentHTML('beforeend', row(v)); inp.value = ''; tb.lastElementChild.querySelector('input').focus();
+                });
+            },
+            preConfirm: () => {
+                const out = [];
+                document.querySelectorAll('#lgu-rows tr[data-l]').forEach(tr => { const v = parseFloat(tr.querySelector('input').value); if (v > 0) out.push({ line: tr.getAttribute('data-l'), uht: v }); });
+                const m = parseFloat(document.getElementById('lgu-min').value);
+                if (!(m > 0)) { Swal.showValidationMessage(tr('ขั้นต่ำต้องมากกว่า 0 ชั่วโมง')); return false; }
+                out.push({ line: MINKEY, uht: m });
+                return out;
+            }
+        });
+        if (!res.isConfirmed || !res.value) return;
+        try {
+            popSaving('กำลังบันทึก UHT...');
+            const by = (typeof currentUser !== 'undefined' && currentUser && currentUser.username) || '';
+            await callAppsScript('saveLGLineUHT', { rows: res.value, by });
+            db.lgLineUHT = res.value.map(r => ({ line: r.line, uht: r.uht, updatedBy: by, updatedAt: new Date().toISOString() }));
+            try { localStorage.setItem(LSK, JSON.stringify(db.lgLineUHT)); } catch (e) { }
+            popDone('บันทึก UHT แล้ว', 'ขั้นต่ำที่ต้องอยู่ได้ ' + res.value.find(x => x.line === MINKEY).uht + ' ชั่วโมง', res.value.filter(x => x.line !== MINKEY).map(x => `<div class="lgu-rs none"><span class="nm">ไลน์ ${esc(x.line)}</span><span class="hr">${num(x.uht)} <small style="display:inline">ชิ้น/ชม.</small></span></div>`).join(''));
+            refreshAll();
+        } catch (e) {
+            const m = String((e && e.message) || e);
+            popErr(/ไม่รู้จัก|unknown|Invalid action|action/i.test(m) ? 'Google Script ยังไม่ได้อัปเดต (ยังไม่รู้จักคำสั่งบันทึก UHT) ให้วางไฟล์ Google Script ตัวใหม่แล้ว Deploy เวอร์ชันใหม่ก่อน' : m);
+        }
+    }
+    window.lgUhtSettings = openSettings;
+
+    async function openProgress(line0, date0) {
+        if (!canProg()) { Swal.fire(tr('ไม่มีสิทธิ์'), tr('ต้องเป็นผู้ดูแล หรือมีสิทธิ์รับแท็ก LG / แก้ไขแพลน LG ถึงจะอัปเดตได้'), 'warning'); return; }
+        const date = date0 || lgTodayStr();
+        let lines = [];
+        try { lines = Array.from(new Set(computeLGMatchStatus().filter(r => lgPlanDateOf(r) === date).map(lineOfPlan))).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })); } catch (e) { }
+        if (!lines.length) { Swal.fire(tr('ยังไม่มีแพลน'), tr('วันที่ ' + date + ' ยังไม่มีแพลนของไลน์ใดเลย'), 'info'); return; }
+        let cur = lines.indexOf(line0) >= 0 ? line0 : lines[0];
+        const [py, pm, pd] = date.split('-');
+        const edits = {};   // ไลน์ -> { done:Set, part:{}, dirty }
+        function getEd(line) {
+            if (edits[line]) return edits[line];
+            const st = lineState(line, date), pp = progParse(st.pg), ed = { done: new Set(), part: {}, dirty: false };
+            if (pp.nv) { pp.done.forEach(k => ed.done.add(k)); Object.keys(pp.part).forEach(k => { ed.part[k] = pp.part[k]; }); }
+            else if (st.hasProg && st.idx >= 0) {   // แปลงข้อมูลแบบเก่า (ผลิตถึง WO เดียว) มาเป็นติ๊ก
+                st.rows.forEach((r, i) => { if (i < st.idx) ed.done.add(rk(r)); else if (i === st.idx) { const q = parseFloat(st.pg.producedQty) || 0; if (q >= (parseFloat(r.orderQty) || 0)) ed.done.add(rk(r)); else if (q > 0) ed.part[rk(r)] = q; } });
+            }
+            return (edits[line] = ed);
+        }
+        function toPg(line) {
+            const ed = getEd(line), st = lineState(line, date);
+            const keys = st.rows.map(rk), done = keys.filter(k => ed.done.has(k)), part = {};
+            keys.forEach(k => { const q = parseFloat(ed.part[k]) || 0; if (!ed.done.has(k) && q > 0) part[k] = q; });
+            let last = -1; st.rows.forEach((r, i) => { const k = rk(r); if (ed.done.has(k) || part[k] > 0) last = i; });
+            const lr = last >= 0 ? st.rows[last] : null, lk = lr ? rk(lr) : '';
+            return { line, planDate: date, doneWOs: done.join(','), partial: JSON.stringify(part), WO: lr ? String(lr.WO).trim() : '-', producedQty: lr ? (ed.done.has(lk) ? (parseFloat(lr.orderQty) || 0) : part[lk]) : 0 };
+        }
+        const res = await Swal.fire({
+            customClass: { popup: 'lgu-pop' }, showCancelButton: true, confirmButtonText: tr('บันทึก'), cancelButtonText: tr('ยกเลิก'),
+            html: `<div class="lgu-hd"><div class="ic"><i class="bi bi-gear-wide-connected"></i></div><div><h3>WO ไหนที่ LG ผลิตแล้ว?</h3><p>แพลนวันที่ ${pd}/${pm}/${py} · ติ๊ก WO ที่ผลิตครบ (ติ๊กได้หลายอัน)</p></div></div>
+            <div class="lgu-bd"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="lgu-lns">${lines.map(l => `<button type="button" class="lgu-chip ${l === cur ? 'lgu-ok' : 'lgu-none'}" data-l="${esc(l)}" style="cursor:pointer">ไลน์ ${esc(l)}</button>`).join('')}</div>
+            <div class="lgu-tools"><button type="button" class="lgu-mini" id="lgu-all">ติ๊กครบทุก WO</button><button type="button" class="lgu-mini" id="lgu-clr" style="background:#f1f5f9;color:#475569">ล้างทั้งหมด</button><span class="hint">กด Shift ค้างแล้วติ๊ก = ติ๊กเป็นช่วง</span></div>
+            <div class="lgu-wos" id="lgu-wos"></div>
+            <div class="lgu-pv" id="lgu-pv"></div></div>`,
+            didOpen: () => {
+                const wos = document.getElementById('lgu-wos');
+                let lastTick = -1;
+                function draw() {
+                    const st = lineState(cur, date), ed = getEd(cur);
+                    wos.innerHTML = st.rows.map((r, i) => {
+                        const k = rk(r), dn = ed.done.has(k), o = parseFloat(r.orderQty) || 0, pq = ed.part[k] != null && ed.part[k] !== '' ? ed.part[k] : '';
+                        return `<div class="lgu-w2 ${dn ? 'done' : ''}" data-i="${i}" data-k="${esc(k)}"><input type="checkbox" class="ck" ${dn ? 'checked' : ''}><div class="tx"><b>${esc(r.WO)}</b> · ${esc(r.partNo)}<small>แพลน ${num(o)} · ส่งแล้ว ${num(r.scanned)}</small></div>${dn ? `<span class="okb"><i class="bi bi-check-circle-fill"></i> ผลิตครบ ${num(o)}</span>` : `<span class="qt">ผลิตแล้ว<input type="number" min="0" max="${o}" step="1" inputmode="numeric" class="pq" placeholder="0" value="${esc(pq)}">ชิ้น</span>`}</div>`;
+                    }).join('') || '<div class="hint" style="padding:10px">ไลน์นี้ไม่มี WO</div>';
+                    preview();
+                }
+                function preview() {
+                    const pv = document.getElementById('lgu-pv'), pg = toPg(cur), st = lineState(cur, date, pg), u = uhtOf(cur);
+                    if (!u) { pv.className = 'lgu-pv lgu-none'; pv.innerHTML = `ผลิตครบ ${st.doneN}/${st.rows.length} WO · ส่งเข้า ${num(st.sent)} · เหลือ ${num(st.rem)} ชิ้น<small>ยังไม่ได้ตั้ง UHT ของไลน์นี้ จึงยังคำนวณชั่วโมงไม่ได้</small>`; return; }
+                    const h = st.rem / u, s = status(h);
+                    pv.className = 'lgu-pv lgu-' + s;
+                    pv.innerHTML = `เหลืองานอยู่ได้ ${hh(h)} ชม.<small>ส่งเข้า ${num(st.sent)} − LG ผลิตแล้ว ${num(st.produced)} = เหลือ ${num(st.rem)} ชิ้น ÷ UHT ${num(u)}</small>`;
+                }
+                wos.addEventListener('click', (e) => {
+                    const ck = e.target.closest && e.target.closest('input.ck'), tx = e.target.closest && e.target.closest('.tx');
+                    const row = e.target.closest && e.target.closest('.lgu-w2');
+                    if (!row || (!ck && !tx)) return;
+                    const ed = getEd(cur), i = parseInt(row.getAttribute('data-i'), 10), k = row.getAttribute('data-k');
+                    const on = ck ? ck.checked : !ed.done.has(k);
+                    const list = Array.from(wos.querySelectorAll('.lgu-w2'));
+                    if (e.shiftKey && lastTick >= 0) { const a = Math.min(lastTick, i), b = Math.max(lastTick, i); for (let j = a; j <= b; j++) { const kk = list[j].getAttribute('data-k'); if (on) ed.done.add(kk); else ed.done.delete(kk); } }
+                    else if (on) ed.done.add(k); else ed.done.delete(k);
+                    lastTick = i; ed.dirty = true; draw();
+                });
+                wos.addEventListener('input', (e) => {
+                    if (!e.target.classList || !e.target.classList.contains('pq')) return;
+                    const row = e.target.closest('.lgu-w2'), ed = getEd(cur), k = row.getAttribute('data-k');
+                    const mx = parseFloat(e.target.getAttribute('max')) || 0; let v = parseFloat(e.target.value);
+                    if (v > mx) { v = mx; e.target.value = mx; }
+                    ed.part[k] = e.target.value === '' ? '' : v; ed.dirty = true; preview();
+                });
+                document.getElementById('lgu-all').addEventListener('click', () => { const ed = getEd(cur); lineState(cur, date).rows.forEach(r => ed.done.add(rk(r))); ed.dirty = true; draw(); });
+                document.getElementById('lgu-clr').addEventListener('click', () => { const ed = getEd(cur); ed.done.clear(); ed.part = {}; ed.dirty = true; draw(); });
+                document.getElementById('lgu-lns').addEventListener('click', (e) => { const b = e.target.closest('button[data-l]'); if (!b) return; cur = b.getAttribute('data-l'); lastTick = -1; document.querySelectorAll('#lgu-lns button').forEach(x => { x.className = 'lgu-chip ' + (x.getAttribute('data-l') === cur ? 'lgu-ok' : 'lgu-none'); }); draw(); });
+                draw();
+            },
+            preConfirm: () => {
+                const out = Object.keys(edits).filter(l => edits[l].dirty).map(toPg);
+                if (!out.length) { Swal.showValidationMessage(tr('ยังไม่ได้เปลี่ยนอะไร ติ๊ก WO ที่ผลิตครบก่อน')); return false; }
+                return out;
+            }
+        });
+        if (!res.isConfirmed || !res.value) return;
+        const list = res.value;
+        try {
+            popSaving('กำลังบันทึกความคืบหน้า...');
+            const by = (typeof currentUser !== 'undefined' && currentUser && currentUser.username) || '';
+            for (const v of list) await callAppsScript('saveLGLineProgress', { line: v.line, planDate: v.planDate, WO: v.WO, producedQty: v.producedQty, doneWOs: v.doneWOs, partial: v.partial, by });
+            const stamp = new Date().toISOString();
+            let base = (Array.isArray(db.lgLineProgress) ? db.lgLineProgress : progRows());
+            list.forEach(v => {
+                base = base.filter(x => !(String(x.line).trim() === v.line && String(x.planDate).trim().slice(0, 10) === v.planDate)).concat([{ line: v.line, planDate: v.planDate, WO: v.WO, producedQty: v.producedQty, doneWOs: v.doneWOs, partial: v.partial, updatedBy: by, updatedAt: stamp }]);
+            });
+            db.lgLineProgress = base;
+            try { localStorage.setItem(PLSK, JSON.stringify(db.lgLineProgress)); } catch (e) { }
+            const body = list.map(v => {
+                const st = lineState(v.line, date), u = uhtOf(v.line), h = u ? st.rem / u : 0, s = u ? status(h) : 'none';
+                return `<div class="lgu-rs ${s}"><span class="nm">ไลน์ ${esc(v.line)}</span><span style="font-size:.78rem;color:#475569;flex:1">ผลิตครบ <b>${st.doneN}/${st.rows.length}</b> WO<small>เหลือ ${num(st.rem)} ชิ้น${u ? ' ÷ UHT ' + num(u) : ''}</small></span><span class="hr">${u ? hh(h) + ' ชม.' : 'ยังไม่ตั้ง UHT'}</span></div>`;
+            }).join('');
+            popDone('อัปเดตแล้ว', 'บันทึกความคืบหน้าการผลิต ' + list.length + ' ไลน์', body);
+            refreshAll();
+        } catch (e) {
+            const m = String((e && e.message) || e);
+            popErr(/ไม่รู้จัก|unknown|Invalid action|action/i.test(m) ? 'Google Script ยังไม่ได้อัปเดต (ยังไม่รู้จักคำสั่งบันทึกความคืบหน้า) ให้วางไฟล์ Google Script ตัวใหม่แล้ว Deploy เวอร์ชันใหม่ก่อน' : m);
+        }
+    }
+    window.lgUhtProgress = openProgress;
+
+    // ---------- 1) หน้าแพลน LG: แถบอยู่ได้ + ปุ่มตั้งค่า + เตือนก่อนปริ้นแท็ก ----------
+    function planDateNow() { const dt = document.getElementById('lg-plan-date'); return (dt && dt.value) || lgTodayStr(); }
+    function planLineStates(date) {
+        const set = new Set();
+        (db.lgPlan || []).forEach(p => { if (p && !p.planCancelledAt && lgPlanDateOf(p) === date) set.add(lineOfPlan(p)); });
+        return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).map(l => ({ line: l, st: lineState(l, date) }));
+    }
+    function drawPlanStrip() {
+        const dt = document.getElementById('lg-plan-date');
+        if (!dt) return;
+        let strip = document.getElementById('lgu-strip');
+        if (!strip) {
+            strip = document.createElement('div'); strip.id = 'lgu-strip';
+            const host = dt.closest('.d-flex') || dt.parentElement;
+            host.insertAdjacentElement('afterend', strip);
+        }
+        const date = planDateNow();
+        const L = planLineStates(date);
+        const btn = (canEdit() ? `<button type="button" class="btn btn-sm btn-outline-primary fw-bold" id="lgu-set-btn"><i class="bi bi-gear-fill me-1"></i>ตั้งค่า UHT</button>` : '')
+            + (canProg() && L.length ? ` <button type="button" class="btn btn-sm btn-outline-success fw-bold" id="lgu-prog-btn"><i class="bi bi-check2-square me-1"></i>ติ๊ก WO ที่ LG ผลิตแล้ว</button>` : '');
+        const sig = date + '|' + L.map(x => x.line + ':' + x.st.planLeft + ':' + x.st.planTotal + ':' + uhtOf(x.line) + ':' + (x.st.hasProg ? x.st.produced : 'n')).join(',') + '|' + minH() + '|' + btn.length;
+        if (strip.getAttribute('data-sig') === sig) return;
+        strip.setAttribute('data-sig', sig);
+        strip.innerHTML = L.length
+            ? `<span class="lb"><i class="bi bi-speedometer2"></i> แพลนที่เหลืออยู่ได้ (ขั้นต่ำ ${minH()} ชม.):</span>${L.map(x => chipHtml(x.line, x.st.planLeft, x.st.hasProg ? 'แพลนที่ LG ยังไม่ได้ผลิต' : 'ยอดแพลน')).join('')}${btn}`
+            : `<span class="lb text-muted">ยังไม่มีแพลนของวันที่เลือก</span>${btn}`;
+        const b = document.getElementById('lgu-set-btn'); if (b) b.addEventListener('click', openSettings);
+        const p = document.getElementById('lgu-prog-btn'); if (p) p.addEventListener('click', () => openProgress('', date));
+    }
+    function planWarnings() {
+        const date = planDateNow();
+        return planLineStates(date).filter(x => uhtOf(x.line) > 0 && x.st.planLeft / uhtOf(x.line) < minH())
+            .map(x => ({ line: x.line, qty: x.st.planLeft, uht: uhtOf(x.line), h: x.st.planLeft / uhtOf(x.line), need: Math.ceil(minH() * uhtOf(x.line) - x.st.planLeft), prog: x.st.hasProg }));
+    }
+    if (typeof window.printLGTags === 'function') {
+        const _pt = window.printLGTags;
+        window.printLGTags = async function () {
+            try {
+                const w = planWarnings();
+                if (w.length) {
+                    const r = await Swal.fire({
+                        customClass: { popup: 'lgu-pop' }, showCancelButton: true, confirmButtonText: tr('ปริ้นต่อ'), cancelButtonText: tr('กลับไปเพิ่มยอดแพลน'), reverseButtons: true,
+                        html: `<div class="lgu-hd warn"><div class="ic"><i class="bi bi-exclamation-triangle-fill"></i></div><div><h3>งานในแพลนอยู่ได้ไม่ถึง ${minH()} ชั่วโมง</h3><p>ตรวจสอบก่อนปริ้นแท็ก</p></div></div>
+                        <div class="lgu-bd">${w.map(x => `<div class="lgu-wl"><span>ไลน์ <b>${esc(x.line)}</b> · ${x.prog ? 'แพลนที่ LG ยังไม่ได้ผลิต ' : ''}${num(x.qty)} ÷ UHT ${num(x.uht)}</span><span><b>${hh(x.h)} ชม.</b> · ควรเพิ่มอีก ~${num(x.need)} ชิ้น</span></div>`).join('')}
+                        <p class="lgu-note">ถ้ายอดนี้ถูกต้องแล้ว กด "ปริ้นต่อ" ได้เลย</p></div>`
+                    });
+                    if (!r.isConfirmed) return;
+                }
+            } catch (e) { console.warn('LG-UHT print check', e); }
+            return _pt.apply(this, arguments);
+        };
+    }
+
+    // ---------- 2) แดชบอร์ด LG Delivery Status ----------
+    function decorateDash() {
+        const root = document.getElementById('view-dash-lg');
+        if (!root) return;
+        const ring = document.getElementById('lgd-ring');
+        if (!ring) return;
+        const dt = document.getElementById('lgd-date');
+        const date = (dt && dt.value) || lgTodayStr();
+        const low = [];
+        ring.querySelectorAll('.lgd-ln').forEach(ln => {
+            if (ln.querySelector('.lgu-ln')) return;
+            const sp = ln.querySelector('.t span');
+            const mm = sp ? /^(?:ไลน์|Line)\s+(.+)$/.exec(sp.textContent.trim()) : null;
+            if (!mm) return;
+            const l = mm[1].trim(), st = lineState(l, date), u = uhtOf(l);
+            let html;
+            if (!u) html = `<div class="lgu-ln none"><i class="bi bi-speedometer2"></i> ยังไม่ตั้ง UHT</div>`;
+            else {
+                const h = st.rem / u, s = (st.sent > 0 || st.hasProg) ? status(h) : 'none';
+                const age = st.hasProg ? agoMin(st.pg.updatedAt) : null;
+                const where = whereHtml(st);
+                const stale = age !== null && age > 60 ? ` <span class="lgu-stale">· อัปเดตนานแล้ว ${Math.floor(age / 60)} ชม.</span>` : '';
+                const upd = st.hasProg && st.pg.updatedAt ? ` · อัปเดต ${hm2(st.pg.updatedAt)}` : '';
+                html = `<div class="lgu-ln ${s}"><i class="bi bi-speedometer2"></i> เหลืองานอยู่ได้ <b>${hh(h)} ชม.</b> <span style="opacity:.75">(ส่งเข้า ${num(st.sent)} − LG ผลิตแล้ว ${num(st.produced)} = ${num(st.rem)} ÷ UHT ${num(u)}${where ? ' · ' + where : ' · ยังไม่ระบุว่าผลิตถึงไหน'}${upd})</span>${stale}${canProg() ? ` <button type="button" class="lgu-mini" data-lgu-prog="${esc(l)}">อัปเดต</button>` : ''}</div>`;
+                if ((st.sent > 0 || st.hasProg) && h < minH()) low.push({ l, h, need: Math.ceil(minH() * u - st.rem) });
+            }
+            const bar = ln.querySelector('.lgd-bar');
+            (bar || ln).insertAdjacentHTML(bar ? 'afterend' : 'beforeend', html);
+        });
+        ring.querySelectorAll('[data-lgu-prog]').forEach(b => b.addEventListener('click', () => openProgress(b.getAttribute('data-lgu-prog'), date)));
+        if (low.length && !ring.querySelector('.lgu-banner')) {
+            ring.insertAdjacentHTML('afterbegin', `<div class="lgu-banner"><i class="bi bi-exclamation-triangle-fill"></i><div>งานที่เหลือที่ LG อยู่ได้ต่ำกว่า ${minH()} ชม.: ${low.map(x => `<b>ไลน์ ${esc(x.l)}</b> ${hh(x.h)} ชม. (ส่งเพิ่ม ~${num(Math.max(0, x.need))} ชิ้น)`).join(' · ')}</div></div>`);
+        }
+    }
+    if (typeof window.renderLGDashboard === 'function') {
+        const _rd = window.renderLGDashboard;
+        window.renderLGDashboard = function () {
+            const x = _rd.apply(this, arguments);
+            try { decorateDash(); } catch (e) { console.warn('LG-UHT dash', e); }
+            return x;
+        };
+    }
+
+    // ---------- 3) หน้ารับแท็ก LG ----------
+    function decorateRecv() {
+        const box = document.getElementById('lgr3');
+        if (!box || box.querySelector('.lgu-recv')) return;
+        const hero = box.querySelector('.lgr3-hero');
+        if (!hero) return;
+        const on = box.querySelector('.lgr3-chip.on'), sel = on ? on.getAttribute('data-line') : '';
+        const date = lgTodayStr();
+        const set = new Set();
+        (db.lgPlan || []).forEach(p => { if (p && !p.planCancelledAt && lgPlanDateOf(p) === date) set.add(lineOfPlan(p)); });
+        let lines = sel ? [sel] : Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+        if (!sel) lines = lines.filter(l => uhtOf(l) > 0);
+        const rows = lines.map(l => {
+            const u = uhtOf(l), st = lineState(l, date);
+            if (!u) return `<div class="r"><span class="nm">ไลน์ ${esc(l)}</span><span class="lgu-chip lgu-none">ยังไม่ตั้ง UHT</span></div>`;
+            const h = st.rem / u, s = (st.sent > 0 || st.hasProg) ? status(h) : 'none';
+            const age = st.hasProg ? agoMin(st.pg.updatedAt) : null;
+            const where = whereHtml(st) || 'ยังไม่ระบุว่า LG ผลิตถึงไหน';
+            const stale = age !== null && age > 60 ? `<span class="lgu-stale">อัปเดตนานแล้ว ${Math.floor(age / 60)} ชม.</span>` : (age !== null ? `<span style="font-size:.7rem;color:#8a97ab">อัปเดต ${hm2(st.pg.updatedAt)}</span>` : '');
+            return `<div class="r"><span class="nm">ไลน์ ${esc(l)}</span>
+                <span class="lgu-chip lgu-${s}" title="ส่งเข้า ${num(st.sent)} − ผลิตแล้ว ${num(st.produced)}">เหลืองาน <b>${hh(h)} ชม.</b> <small>${num(st.rem)} ชิ้น</small></span>
+                <span style="font-size:.74rem;color:#475569">${where}</span>${stale}
+                <span style="font-size:.7rem;color:#8a97ab">ส่งเข้า ${num(st.sent)} · UHT ${num(u)}/ชม.</span>
+                ${canProg() ? `<button type="button" class="lgu-mini" data-lgu-prog="${esc(l)}">อัปเดตผลิต</button>` : ''}</div>`;
+        }).join('') || `<div class="hint">ยังไม่ได้ตั้ง UHT ของไลน์ใดเลย${canEdit() ? ' — กด "ตั้งค่า UHT"' : ' (ให้หัวหน้าตั้งค่าให้)'}</div>`;
+        const div = document.createElement('div');
+        div.className = 'lgu-recv';
+        div.innerHTML = `<div class="h"><i class="bi bi-speedometer2"></i> งานที่เหลือที่ LG อยู่ได้กี่ชั่วโมง (ขั้นต่ำ ${minH()} ชม.)${canEdit() ? '<button type="button" data-lgu-set="1">ตั้งค่า UHT</button>' : ''}</div>${rows}`;
+        hero.insertAdjacentElement('afterend', div);
+        const b = div.querySelector('[data-lgu-set]'); if (b) b.addEventListener('click', openSettings);
+        div.querySelectorAll('[data-lgu-prog]').forEach(x => x.addEventListener('click', () => openProgress(x.getAttribute('data-lgu-prog'), date)));
+    }
+    let moRecv = null;
+    function watchRecv() {
+        const box = document.getElementById('lgr3');
+        if (!box || moRecv === box) return;
+        moRecv = box;
+        new MutationObserver(() => { try { decorateRecv(); } catch (e) { console.warn('LG-UHT recv', e); } }).observe(box, { childList: true });
+        try { decorateRecv(); } catch (e) { }
+    }
+
+    function refreshAll() {
+        try { const s = document.getElementById('lgu-strip'); if (s) s.removeAttribute('data-sig'); drawPlanStrip(); } catch (e) { }
+        try { if (typeof window.renderLGDashboard === 'function') window.renderLGDashboard(); } catch (e) { }
+        try { const b = document.getElementById('lgr3'); if (b) { const o = b.querySelector('.lgu-recv'); if (o) o.remove(); decorateRecv(); } } catch (e) { }
+    }
+
+    if (typeof window.renderLGMatchTable === 'function') {
+        const _rm = window.renderLGMatchTable;
+        window.renderLGMatchTable = function () { const x = _rm.apply(this, arguments); try { drawPlanStrip(); } catch (e) { } return x; };
+    }
+    let lastLang = isEn();
+    if (typeof window.setLanguage === 'function') {
+        const _sl = window.setLanguage;
+        window.setLanguage = function () { try { return _sl.apply(this, arguments); } finally { setTimeout(() => { try { lastLang = isEn(); refreshAll(); } catch (e) { } }, 60); } };
+    }
+    setInterval(() => { try { if (lastLang !== isEn()) { lastLang = isEn(); refreshAll(); } drawPlanStrip(); watchRecv(); } catch (e) { } }, 1500);
+})();
+// ===== จบ LG-UHT =====
+(function () {
+    if (window.__lgUht) return; window.__lgUht = true;
+
+    const LSK = 'lgUhtCache_v1';
+    const MINKEY = '_MIN_HOURS';
+    const PANE_PLAN = 'pills-lg-matching', PANE_RECV = 'pills-lg-receive';
+    const pad = (n) => String(n).padStart(2, '0');
+    const up = (s) => String(s == null ? '' : s).trim().toUpperCase();
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const num = (n) => (Number(n) || 0).toLocaleString('en-US');
+    const dayKey = (t) => { const d = new Date(t); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+    const lineOfPlan = (p) => String(p && p.line != null ? p.line : '').trim() || '-';
+    const msOf = (v) => { if (!v) return null; const t = new Date(String(v)).getTime(); return isNaN(t) ? null : t; };
+    const hh = (h) => (Math.round(h * 10) / 10).toFixed(1);
+
+    // ---------- ข้อมูล UHT ----------
+    function allRows() {
+        try { if (db && Array.isArray(db.lgLineUHT) && db.lgLineUHT.length) return db.lgLineUHT; } catch (e) { }
+        try { return JSON.parse(localStorage.getItem(LSK) || '[]') || []; } catch (e) { return []; }
+    }
+    function uhtOf(line) {
+        const r = allRows().find(x => String(x.line).trim() === String(line).trim());
+        const v = r ? parseFloat(r.uht) : 0;
+        return v > 0 ? v : 0;
+    }
+    function minH() {
+        const r = allRows().find(x => String(x.line).trim() === MINKEY);
+        const v = r ? parseFloat(r.uht) : 0;
+        return v > 0 ? v : 2;
+    }
+    function status(h) { const m = minH(); return h >= m ? 'ok' : (h >= m * 0.5 ? 'warn' : 'bad'); }
+    function canEdit() {
+        try { return !!(window.lgPlanEditAllowed && window.lgPlanEditAllowed()); } catch (e) { return false; }
+    }
+    function planLines() {
+        const s = new Set();
+        (db.lgPlan || []).forEach(p => { if (p && !p.planCancelledAt) s.add(lineOfPlan(p)); });
+        allRows().forEach(r => { const l = String(r.line).trim(); if (l && l !== MINKEY) s.add(l); });
+        s.delete('-');
+        return Array.from(s).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    }
+
+    // ---------- CSS ----------
+    const st = document.createElement('style');
+    st.textContent = `
+    .lgu-chip{display:inline-flex;align-items:center;gap:6px;border-radius:20px;padding:4px 12px;font-size:.78rem;font-weight:800;border:1.5px solid transparent;line-height:1.25}
+    .lgu-chip small{font-weight:600;opacity:.75}
+    .lgu-ok{background:#dcfce7;color:#15803d;border-color:#86efac}
+    .lgu-warn{background:#fef3c7;color:#92580a;border-color:#fcd34d}
+    .lgu-bad{background:#fee2e2;color:#b91c1c;border-color:#fca5a5}
+    .lgu-none{background:#f1f5f9;color:#64748b;border-color:#e2e8f0}
+    #lgu-strip{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 14px}
+    #lgu-strip .lb{font-size:.78rem;font-weight:800;color:#475569}
+    .lgu-ln{margin-top:4px;font-size:.72rem;font-weight:700;display:flex;align-items:center;gap:6px}
+    .lgu-ln b{font-size:.8rem}
+    .lgu-ln.ok{color:#15803d}.lgu-ln.warn{color:#92580a}.lgu-ln.bad{color:#b91c1c}.lgu-ln.none{color:#8a97ab}
+    .lgu-banner{border-radius:14px;padding:10px 14px;margin-bottom:12px;font-size:.85rem;font-weight:700;display:flex;gap:10px;align-items:flex-start;background:#fef2f2;border:1.5px solid #fca5a5;color:#991b1b}
+    .lgu-banner i{margin-top:2px}
+    .lgu-recv{background:#f7f9fc;border-radius:16px;padding:12px 14px;margin-bottom:12px}
+    .lgu-recv .h{display:flex;align-items:center;gap:8px;font-weight:800;font-size:.8rem;color:#4a5a70;margin-bottom:8px}
+    .lgu-recv .h button{margin-left:auto;border:0;background:#e2e8f0;border-radius:10px;padding:2px 10px;font-size:.72rem;font-weight:800;color:#334155;cursor:pointer}
+    .lgu-recv .r{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:6px 0;border-top:1px dashed #dbe3ee;font-size:.78rem}
+    .lgu-recv .r:first-of-type{border-top:0}
+    .lgu-recv .r .nm{font-weight:800;color:#0b1b33;min-width:54px}
+    .lgu-recv .hint{font-size:.76rem;color:#8a97ab}
+    .swal2-popup.lgu-pop{width:34em;max-width:94vw;border-radius:24px;padding:0;overflow:hidden;text-align:left}
+    .lgu-pop .swal2-html-container{margin:0;padding:0;text-align:left}
+    .lgu-pop .swal2-actions{margin:0;padding:6px 22px 20px;width:100%;box-sizing:border-box;gap:10px}
+    .lgu-hd{display:flex;gap:14px;align-items:center;padding:20px 24px;color:#fff;background:linear-gradient(135deg,#2563eb,#6366f1)}
+    .lgu-hd.warn{background:linear-gradient(135deg,#f59e0b,#dc2626)}
+    .lgu-hd .ic{width:48px;height:48px;border-radius:16px;background:rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex:none}
+    .lgu-hd h3{margin:0;font-size:1.15rem;font-weight:800;color:#fff}.lgu-hd p{margin:3px 0 0;font-size:.82rem;opacity:.92;color:#fff}
+    .lgu-bd{padding:16px 24px 6px}
+    .lgu-tb{width:100%;border-collapse:collapse;font-size:.88rem}
+    .lgu-tb th{font-size:.72rem;color:#64748b;font-weight:800;text-align:left;padding:4px 6px}
+    .lgu-tb td{padding:6px;border-top:1px solid #eef2f7;vertical-align:middle}
+    .lgu-tb input{width:100%;border:1.5px solid #cbd5e1;border-radius:10px;padding:6px 10px;font-weight:800;text-align:right;outline:0}
+    .lgu-tb input:focus{border-color:#4f46e5;box-shadow:0 0 0 3px rgba(79,70,229,.15)}
+    .lgu-note{font-size:.76rem;color:#64748b;margin:10px 0 0;line-height:1.5}
+    .lgu-add{display:flex;gap:8px;margin-top:10px}
+    .lgu-add input{flex:1;border:1.5px dashed #cbd5e1;border-radius:10px;padding:6px 10px;outline:0}
+    .lgu-add button{border:0;background:#eef2ff;color:#4338ca;font-weight:800;border-radius:10px;padding:6px 14px;cursor:pointer}
+    .lgu-wl{display:flex;justify-content:space-between;align-items:center;background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:8px 12px;margin-bottom:6px;font-size:.88rem;color:#7f1d1d}
+    .lgu-wl b{font-size:1rem}`;
+    document.head.appendChild(st);
+
+    // ---------- คำนวณ ----------
+    function planRowsFor(date) {
+        let rows = [];
+        try { rows = computeLGMatchStatus().filter(r => lgPlanDateOf(r) === date); } catch (e) { }
+        return rows;
+    }
+    function byLine(date) {
+        const m = {};
+        planRowsFor(date).forEach(r => {
+            const l = lineOfPlan(r), o = m[l] = m[l] || { plan: 0, sent: 0 };
+            o.plan += parseFloat(r.orderQty) || 0; o.sent += parseFloat(r.scanned) || 0;
+        });
+        return m;
+    }
+    function chipHtml(line, qty, label) {
+        const u = uhtOf(line);
+        if (!u) return `<span class="lgu-chip lgu-none">ไลน์ ${esc(line)} <small>ยังไม่ตั้ง UHT</small></span>`;
+        const h = qty / u, s = status(h);
+        return `<span class="lgu-chip lgu-${s}" title="${esc(label || '')} ${num(qty)} ÷ UHT ${num(u)} ต่อชม.">ไลน์ ${esc(line)} <b>${hh(h)} ชม.</b> <small>${num(qty)} / ${num(u)}</small></span>`;
+    }
+
+    // ---------- หน้าต่างตั้งค่า UHT ----------
+    async function openSettings() {
+        if (!canEdit()) { Swal.fire('ไม่มีสิทธิ์', 'ต้องมีสิทธิ์ "แก้ไขยอด / ยกเลิกแพลน LG" ถึงจะตั้งค่า UHT ได้', 'warning'); return; }
+        const lines = planLines();
+        const row = (l) => `<tr data-l="${esc(l)}"><td style="font-weight:800">ไลน์ ${esc(l)}</td><td style="width:42%"><input type="number" min="0" step="1" inputmode="numeric" placeholder="เช่น 400" value="${uhtOf(l) || ''}"></td><td style="color:#64748b;font-size:.78rem">ชิ้น/ชม.</td></tr>`;
+        const res = await Swal.fire({
+            customClass: { popup: 'lgu-pop' }, showCancelButton: true, confirmButtonText: 'บันทึก', cancelButtonText: 'ยกเลิก', buttonsStyling: true,
+            html: `<div class="lgu-hd"><div class="ic"><i class="bi bi-speedometer2"></i></div><div><h3>ตั้งค่า UHT ของแต่ละไลน์</h3><p>UHT = จำนวนชิ้นที่ไลน์รันได้ต่อชั่วโมง</p></div></div>
+            <div class="lgu-bd"><table class="lgu-tb"><thead><tr><th>ไลน์</th><th style="text-align:right">UHT</th><th></th></tr></thead><tbody id="lgu-rows">${lines.map(row).join('') || '<tr><td colspan="3" style="color:#8a97ab;padding:12px 6px">ยังไม่มีไลน์ในแพลน เพิ่มชื่อไลน์ด้านล่างได้เลย</td></tr>'}</tbody></table>
+            <div class="lgu-add"><input id="lgu-new" placeholder="เพิ่มไลน์ใหม่ เช่น A7"><button type="button" id="lgu-addbtn">+ เพิ่ม</button></div>
+            <table class="lgu-tb" style="margin-top:12px"><tbody><tr><td style="font-weight:800">ขั้นต่ำที่ต้องอยู่ได้</td><td style="width:42%"><input id="lgu-min" type="number" min="0.5" step="0.5" value="${minH()}"></td><td style="color:#64748b;font-size:.78rem">ชั่วโมง</td></tr></tbody></table>
+            <p class="lgu-note">ระบบเอา "ยอดชิ้น ÷ UHT" = อยู่ได้กี่ชั่วโมง เช่น UHT 400 ส่งเข้า 800 ชิ้น = 2.0 ชม. ถ้าต่ำกว่าขั้นต่ำจะเตือนที่แดชบอร์ด หน้าแพลน ตอนปริ้นแท็ก และหน้ารับแท็ก (เว้นว่าง = ไม่ตั้ง ไม่เตือน)</p></div>`,
+            didOpen: () => {
+                const tb = document.getElementById('lgu-rows');
+                document.getElementById('lgu-addbtn').addEventListener('click', () => {
+                    const inp = document.getElementById('lgu-new'), v = inp.value.trim();
+                    if (!v) return;
+                    if (tb.querySelector(`tr[data-l="${CSS.escape(v)}"]`)) { inp.value = ''; return; }
+                    if (tb.querySelector('td[colspan]')) tb.innerHTML = '';
+                    tb.insertAdjacentHTML('beforeend', row(v)); inp.value = ''; tb.lastElementChild.querySelector('input').focus();
+                });
+            },
+            preConfirm: () => {
+                const out = [];
+                document.querySelectorAll('#lgu-rows tr[data-l]').forEach(tr => { const v = parseFloat(tr.querySelector('input').value); if (v > 0) out.push({ line: tr.getAttribute('data-l'), uht: v }); });
+                const m = parseFloat(document.getElementById('lgu-min').value);
+                if (!(m > 0)) { Swal.showValidationMessage('ขั้นต่ำต้องมากกว่า 0 ชั่วโมง'); return false; }
+                out.push({ line: MINKEY, uht: m });
+                return out;
+            }
+        });
+        if (!res.isConfirmed || !res.value) return;
+        try {
+            Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            const by = (typeof currentUser !== 'undefined' && currentUser && currentUser.username) || '';
+            await callAppsScript('saveLGLineUHT', { rows: res.value, by });
+            db.lgLineUHT = res.value.map(r => ({ line: r.line, uht: r.uht, updatedBy: by, updatedAt: new Date().toISOString() }));
+            try { localStorage.setItem(LSK, JSON.stringify(db.lgLineUHT)); } catch (e) { }
+            Swal.fire({ icon: 'success', title: 'บันทึก UHT แล้ว', timer: 1200, showConfirmButton: false });
+            refreshAll();
+        } catch (e) {
+            const m = String((e && e.message) || e);
+            Swal.fire('บันทึกไม่สำเร็จ', /ไม่รู้จัก|unknown|Invalid action|action/i.test(m) ? 'Google Script ยังไม่ได้อัปเดต (ยังไม่รู้จักคำสั่งบันทึก UHT) ให้วางแพตช์ฝั่ง Google Script แล้ว Deploy เวอร์ชันใหม่ก่อน' : m, 'error');
+        }
+    }
+    window.lgUhtSettings = openSettings;
+
+    // ---------- 1) หน้าแพลน LG: แถบอยู่ได้ + ปุ่มตั้งค่า + เตือนก่อนปริ้นแท็ก ----------
+    function drawPlanStrip() {
+        const dt = document.getElementById('lg-plan-date');
+        if (!dt) return;
+        let strip = document.getElementById('lgu-strip');
+        if (!strip) {
+            strip = document.createElement('div'); strip.id = 'lgu-strip';
+            const host = dt.closest('.d-flex') || dt.parentElement;
+            host.insertAdjacentElement('afterend', strip);
+        }
+        const date = (dt.value) || lgTodayStr();
+        const m = {};
+        (db.lgPlan || []).forEach(p => { if (p && !p.planCancelledAt && lgPlanDateOf(p) === date) { const l = lineOfPlan(p); m[l] = (m[l] || 0) + (parseFloat(p.orderQty) || 0); } });
+        const lines = Object.keys(m).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+        const btn = canEdit() ? `<button type="button" class="btn btn-sm btn-outline-primary fw-bold" id="lgu-set-btn"><i class="bi bi-gear-fill me-1"></i>ตั้งค่า UHT</button>` : '';
+        const sig = date + '|' + lines.map(l => l + ':' + m[l] + ':' + uhtOf(l)).join(',') + '|' + minH() + '|' + (btn ? 1 : 0);
+        if (strip.getAttribute('data-sig') === sig) return;
+        strip.setAttribute('data-sig', sig);
+        strip.innerHTML = lines.length
+            ? `<span class="lb"><i class="bi bi-speedometer2"></i> ยอดแพลนอยู่ได้ (ขั้นต่ำ ${minH()} ชม.):</span>${lines.map(l => chipHtml(l, m[l], 'ยอดแพลน')).join('')}${btn}`
+            : `<span class="lb text-muted">ยังไม่มีแพลนของวันที่เลือก</span>${btn}`;
+        const b = document.getElementById('lgu-set-btn'); if (b) b.addEventListener('click', openSettings);
+    }
+    function planWarnings() {
+        const dt = document.getElementById('lg-plan-date');
+        const date = (dt && dt.value) || lgTodayStr();
+        const m = {};
+        (db.lgPlan || []).forEach(p => { if (p && !p.planCancelledAt && lgPlanDateOf(p) === date) { const l = lineOfPlan(p); m[l] = (m[l] || 0) + (parseFloat(p.orderQty) || 0); } });
+        return Object.keys(m).filter(l => uhtOf(l) > 0 && m[l] / uhtOf(l) < minH()).map(l => ({ line: l, qty: m[l], uht: uhtOf(l), h: m[l] / uhtOf(l), need: Math.ceil(minH() * uhtOf(l) - m[l]) }));
+    }
+    if (typeof window.printLGTags === 'function') {
+        const _pt = window.printLGTags;
+        window.printLGTags = async function () {
+            try {
+                const w = planWarnings();
+                if (w.length) {
+                    const r = await Swal.fire({
+                        customClass: { popup: 'lgu-pop' }, showCancelButton: true, confirmButtonText: 'ปริ้นต่อ', cancelButtonText: 'กลับไปเพิ่มยอดแพลน', reverseButtons: true,
+                        html: `<div class="lgu-hd warn"><div class="ic"><i class="bi bi-exclamation-triangle-fill"></i></div><div><h3>ยอดแพลนอยู่ได้ไม่ถึง ${minH()} ชั่วโมง</h3><p>ตรวจสอบก่อนปริ้นแท็ก</p></div></div>
+                        <div class="lgu-bd">${w.map(x => `<div class="lgu-wl"><span>ไลน์ <b>${esc(x.line)}</b> · ${num(x.qty)} ÷ UHT ${num(x.uht)}</span><span><b>${hh(x.h)} ชม.</b> · ควรเพิ่มอีก ~${num(x.need)} ชิ้น</span></div>`).join('')}
+                        <p class="lgu-note">ถ้ายอดนี้ถูกต้องแล้ว กด "ปริ้นต่อ" ได้เลย</p></div>`
+                    });
+                    if (!r.isConfirmed) return;
+                }
+            } catch (e) { console.warn('LG-UHT print check', e); }
+            return _pt.apply(this, arguments);
+        };
+    }
+
+    // ---------- 2) แดชบอร์ด LG Delivery Status ----------
+    function decorateDash() {
+        const root = document.getElementById('view-dash-lg');
+        if (!root) return;
+        const ring = document.getElementById('lgd-ring');
+        if (!ring) return;
+        const dt = document.getElementById('lgd-date');
+        const date = (dt && dt.value) || lgTodayStr();
+        const m = byLine(date);
+        const low = [];
+        ring.querySelectorAll('.lgd-ln').forEach(ln => {
+            if (ln.querySelector('.lgu-ln')) return;
+            const sp = ln.querySelector('.t span');
+            const mm = sp ? /^(?:ไลน์|Line)\s+(.+)$/.exec(sp.textContent.trim()) : null;
+            if (!mm) return;
+            const l = mm[1].trim(), o = m[l] || { plan: 0, sent: 0 }, u = uhtOf(l);
+            let html;
+            if (!u) html = `<div class="lgu-ln none"><i class="bi bi-speedometer2"></i> ยังไม่ตั้ง UHT</div>`;
+            else {
+                const h = o.sent / u, s = o.sent > 0 ? status(h) : 'none';
+                html = `<div class="lgu-ln ${s}"><i class="bi bi-speedometer2"></i> ส่งแล้วอยู่ได้ <b>${hh(h)} ชม.</b> <span style="opacity:.7">(${num(o.sent)} ÷ UHT ${num(u)}${s === 'bad' || s === 'warn' ? ` · ขั้นต่ำ ${minH()} ชม.` : ''})</span></div>`;
+                if (o.sent > 0 && h < minH()) low.push({ l, h, need: Math.ceil(minH() * u - o.sent) });
+            }
+            const bar = ln.querySelector('.lgd-bar');
+            (bar || ln).insertAdjacentHTML(bar ? 'afterend' : 'beforeend', html);
+        });
+        if (low.length && !ring.querySelector('.lgu-banner')) {
+            ring.insertAdjacentHTML('afterbegin', `<div class="lgu-banner"><i class="bi bi-exclamation-triangle-fill"></i><div>ของที่ส่งไป อยู่ได้ต่ำกว่า ${minH()} ชม.: ${low.map(x => `<b>ไลน์ ${esc(x.l)}</b> ${hh(x.h)} ชม. (ส่งเพิ่ม ~${num(x.need)} ชิ้น)`).join(' · ')}</div></div>`);
+        }
+    }
+    if (typeof window.renderLGDashboard === 'function') {
+        const _rd = window.renderLGDashboard;
+        window.renderLGDashboard = function () {
+            const x = _rd.apply(this, arguments);
+            try { decorateDash(); } catch (e) { console.warn('LG-UHT dash', e); }
+            return x;
+        };
+    }
+
+    // ---------- 3) หน้ารับแท็ก LG ----------
+    function decorateRecv() {
+        const box = document.getElementById('lgr3');
+        if (!box || box.querySelector('.lgu-recv')) return;
+        const hero = box.querySelector('.lgr3-hero');
+        if (!hero) return;
+        const on = box.querySelector('.lgr3-chip.on'), sel = on ? on.getAttribute('data-line') : '';
+        const today = dayKey(Date.now());
+        const planLine = new Map();
+        (db.lgPlan || []).forEach(p => { if (p && !p.planCancelledAt) planLine.set(up(p.WO) + '|' + up(p.partNo), lineOfPlan(p)); });
+        const sent = {}, recv = {};
+        (db.lgScanLog || []).forEach(s => { const t = msOf(s.scannedAt); if (!t || dayKey(t) !== today) return; const l = planLine.get(up(s.WO) + '|' + up(s.partNo)) || '-'; sent[l] = (sent[l] || 0) + (parseFloat(s.rackQty) || 0); });
+        (db.lgReceiveLog || []).forEach(r => { const t = msOf(r.receivedAt); if (!t || dayKey(t) !== today) return; const l = planLine.get(up(r.WO) + '|' + up(r.partNo)) || '-'; recv[l] = (recv[l] || 0) + (parseFloat(r.qty) || 0); });
+        let lines = sel ? [sel] : planLines().filter(l => uhtOf(l) > 0 || sent[l] || recv[l]);
+        const rows = lines.map(l => {
+            const u = uhtOf(l);
+            if (!u) return `<div class="r"><span class="nm">ไลน์ ${esc(l)}</span><span class="lgu-chip lgu-none">ยังไม่ตั้ง UHT</span></div>`;
+            const hs = (sent[l] || 0) / u, hr = (recv[l] || 0) / u;
+            return `<div class="r"><span class="nm">ไลน์ ${esc(l)}</span>
+                <span class="lgu-chip lgu-${(sent[l] || 0) > 0 ? status(hs) : 'none'}" title="ยิงออกวันนี้ ${num(sent[l] || 0)} ชิ้น">ยิงออก <b>${hh(hs)} ชม.</b> <small>${num(sent[l] || 0)} ชิ้น</small></span>
+                <span class="lgu-chip lgu-${(recv[l] || 0) > 0 ? status(hr) : 'none'}" title="LG รับแล้ววันนี้ ${num(recv[l] || 0)} ชิ้น">LG รับแล้ว <b>${hh(hr)} ชม.</b> <small>${num(recv[l] || 0)} ชิ้น</small></span>
+                <span style="font-size:.7rem;color:#8a97ab">UHT ${num(u)}/ชม.</span></div>`;
+        }).join('') || `<div class="hint">ยังไม่ได้ตั้ง UHT ของไลน์ใดเลย${canEdit() ? ' — กด "ตั้งค่า UHT"' : ' (ให้หัวหน้าตั้งค่าให้)'}</div>`;
+        const div = document.createElement('div');
+        div.className = 'lgu-recv';
+        div.innerHTML = `<div class="h"><i class="bi bi-speedometer2"></i> ของวันนี้ อยู่ได้กี่ชั่วโมง (ขั้นต่ำ ${minH()} ชม.)${canEdit() ? '<button type="button" data-lgu-set="1">ตั้งค่า UHT</button>' : ''}</div>${rows}`;
+        hero.insertAdjacentElement('afterend', div);
+        const b = div.querySelector('[data-lgu-set]'); if (b) b.addEventListener('click', openSettings);
+    }
+    let moRecv = null;
+    function watchRecv() {
+        const box = document.getElementById('lgr3');
+        if (!box || moRecv === box) return;
+        moRecv = box;
+        new MutationObserver(() => { try { decorateRecv(); } catch (e) { console.warn('LG-UHT recv', e); } }).observe(box, { childList: true });
+        try { decorateRecv(); } catch (e) { }
+    }
+
+    function refreshAll() {
+        try { const s = document.getElementById('lgu-strip'); if (s) s.removeAttribute('data-sig'); drawPlanStrip(); } catch (e) { }
+        try { if (typeof window.renderLGDashboard === 'function') window.renderLGDashboard(); } catch (e) { }
+        try { const b = document.getElementById('lgr3'); if (b) { const o = b.querySelector('.lgu-recv'); if (o) o.remove(); decorateRecv(); } } catch (e) { }
+    }
+
+    if (typeof window.renderLGMatchTable === 'function') {
+        const _rm = window.renderLGMatchTable;
+        window.renderLGMatchTable = function () { const x = _rm.apply(this, arguments); try { drawPlanStrip(); } catch (e) { } return x; };
+    }
+    setInterval(() => { try { drawPlanStrip(); watchRecv(); } catch (e) { } }, 1500);
+})();
+// ===== จบ LG-UHT =====
+(function () {
+    if (window.__lgRecvLine) return; window.__lgRecvLine = true;
+
+    const PANE = 'pills-lg-receive';
+    const STUCK_MS = 3 * 3600 * 1000;
+    const LSK = 'lgrLineSel_v1';
+    const pad = (n) => String(n).padStart(2, '0');
+    const up = (s) => String(s == null ? '' : s).trim().toUpperCase();
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const dayKey = (t) => { const d = new Date(t); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+    const hm = (t) => { const d = new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+    const dmy = (t) => { const d = new Date(t); return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`; };
+    const num = (n) => (Number(n) || 0).toLocaleString('en-US');
+    function ms(v) {
+        if (!v) return null;
+        if (v instanceof Date) return isNaN(v) ? null : v.getTime();
+        const s = String(v).trim();
+        const t = new Date(s).getTime();
+        if (!isNaN(t) && /^\d{4}-\d{2}-\d{2}/.test(s)) return t;
+        const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ ,T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+        if (m) { let y = +m[3]; if (y > 2400) y -= 543; return new Date(y, +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0)).getTime(); }
+        return isNaN(t) ? null : t;
+    }
+    const ago = (t, now) => { const m = Math.max(0, Math.round((now - t) / 60000)); return m < 60 ? `${m} น.` : `${Math.floor(m / 60)} ชม. ${m % 60} น.`; };
+
+    let selLine = '';
+    try { selLine = localStorage.getItem(LSK) || ''; } catch (e) { }
+    let tab = 'pend';
+
+    const parsedCache = new Map();
+    function parsedOf(raw) {
+        raw = String(raw || '');
+        if (!raw) return null;
+        if (parsedCache.has(raw)) return parsedCache.get(raw);
+        let p = null;
+        try { if (typeof parseLGBarcode === 'function') p = parseLGBarcode(raw); } catch (e) { }
+        if (parsedCache.size > 20000) parsedCache.clear();
+        parsedCache.set(raw, p);
+        return p;
+    }
+
+    // ---------- คำนวณ ----------
+    function compute() {
+        const now = Date.now(), today = dayKey(now);
+        const planLine = new Map(), todayLines = new Set();
+        (db.lgPlan || []).forEach(p => {
+            if (!p || p.planCancelledAt) return;
+            const ln = String(p.line == null ? '' : p.line).trim();
+            if (!ln) return;
+            planLine.set(up(p.WO) + '|' + up(p.partNo), ln);
+            try { if (lgPlanDateOf(p) === today) todayLines.add(ln); } catch (e) { }
+        });
+        const lineOfDoc = (rows, raw) => {
+            for (const r of rows) { const l = planLine.get(r.k); if (l) return l; }
+            const p = parsedOf(raw); const l = p && p.line ? String(p.line).trim() : '';
+            return l || '-';
+        };
+
+        const recDocs = new Map();
+        (db.lgReceiveLog || []).forEach(r => {
+            const d = up(r.docNumber); if (!d) return;
+            const t = ms(r.receivedAt);
+            let g = recDocs.get(d);
+            if (!g) { g = { doc: d, t, by: r.receivedBy, flag: false, part: up(r.partNo), rows: [], wos: [], qty: 0, raw: '' }; recDocs.set(d, g); }
+            if (t && (!g.t || t < g.t)) { g.t = t; g.by = r.receivedBy; }
+            if (r.flag) g.flag = true;
+            if (!g.raw && r.rawBarcode) g.raw = r.rawBarcode;
+            const w = up(r.WO); if (w && g.wos.indexOf(w) < 0) g.wos.push(w);
+            g.rows.push({ k: up(r.WO) + '|' + up(r.partNo) });
+            g.qty += Number(r.qty) || 0;
+        });
+        recDocs.forEach(g => { g.line = lineOfDoc(g.rows, g.raw); });
+
+        const outDocs = new Map();
+        (db.lgScanLog || []).forEach((s, i) => {
+            const p = parsedOf(s.rawBarcode);
+            const d = (p && p.docNumber) ? up(p.docNumber) : ('#' + (s.id || i));
+            const t = ms(s.scannedAt);
+            let g = outDocs.get(d);
+            if (!g) { g = { doc: d, t, by: s.scannedBy, part: up(s.partNo), rows: [], wos: [], qty: 0, raw: s.rawBarcode || '' }; outDocs.set(d, g); }
+            if (t && (!g.t || t < g.t)) { g.t = t; g.by = s.scannedBy; }
+            const w = up(s.WO); if (w && g.wos.indexOf(w) < 0) g.wos.push(w);
+            g.rows.push({ k: up(s.WO) + '|' + up(s.partNo) });
+            g.qty += Number(s.rackQty) || 0;
+        });
+        outDocs.forEach(g => { g.line = lineOfDoc(g.rows, g.raw); });
+
+        let first = null;
+        recDocs.forEach(g => { if (g.t && (!first || g.t < first)) first = g.t; });
+        let trackFrom = null;
+        if (first) { const d = new Date(first); trackFrom = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
+
+        const pendAll = [], lineSet = new Set(todayLines);
+        outDocs.forEach(g => {
+            const rec = recDocs.has(g.doc);
+            const isToday = g.t && dayKey(g.t) === today;
+            g.rec = rec; g.isToday = isToday;
+            g.pending = !rec && trackFrom !== null && (!g.t || g.t >= trackFrom);
+            g.stuck = g.pending && g.t && (now - g.t) > STUCK_MS;
+            if (g.pending) pendAll.push(g);
+            if (isToday || g.pending) lineSet.add(g.line);
+        });
+        const recToday = [];
+        recDocs.forEach(g => { if (g.t && dayKey(g.t) === today) { recToday.push(g); lineSet.add(g.line); } });
+        const lines = Array.from(lineSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+        if (selLine && lines.indexOf(selLine) < 0) selLine = '';
+
+        const okL = (g) => !selLine || g.line === selLine;
+        const outToday = [], pend = pendAll.filter(okL), recL = recToday.filter(okL);
+        outDocs.forEach(g => { if (g.isToday && okL(g)) outToday.push(g); });
+        const outTodayRecv = outToday.filter(g => g.rec).length;
+        pend.sort((a, b) => (a.t || 0) - (b.t || 0));
+        recL.sort((a, b) => (b.t || 0) - (a.t || 0));
+        const hours = new Array(24).fill(0);
+        recL.forEach(g => { hours[new Date(g.t).getHours()]++; });
+        const wos = new Set(); recL.forEach(g => g.wos.forEach(w => wos.add(w)));
+        const perLine = {}; // จำนวนค้างรับต่อไลน์ (ไว้โชว์บนปุ่มเลือกไลน์)
+        pendAll.forEach(g => { const o = perLine[g.line] = perLine[g.line] || { n: 0, s: 0 }; o.n++; if (g.stuck) o.s++; });
+        return {
+            now, today, lines, perLine, trackFrom, pendAllN: pendAll.length,
+            outN: outToday.length, outRecvN: outTodayRecv,
+            pend, pendN: pend.length, pendQty: pend.reduce((a, g) => a + g.qty, 0), stuckN: pend.filter(g => g.stuck).length, pendOld: pend.filter(g => !g.isToday).length,
+            recL, recN: recL.length, recQty: recL.reduce((a, g) => a + g.qty, 0), recWo: wos.size, noOut: recL.filter(g => g.flag).length, hours
+        };
+    }
+
+    const CSS = `
+    #lgr3{font-size:.85rem}
+    #lgr3 .lgr3-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+    #lgr3 .ttl{display:flex;align-items:center;gap:10px;font-weight:800;font-size:1rem;color:#0b1b33}
+    #lgr3 .ttl .ic{width:34px;height:34px;border-radius:11px;background:linear-gradient(135deg,#4ade80,#16a34a);color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.05rem;box-shadow:0 4px 10px rgba(22,163,74,.3)}
+    #lgr3 .live{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:.7rem;color:#6b7a90;background:#f1f5fa;border-radius:20px;padding:3px 10px}
+    #lgr3 .live i{width:7px;height:7px;border-radius:50%;background:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.2);animation:lgr3p 1.8s infinite}
+    @keyframes lgr3p{50%{box-shadow:0 0 0 6px rgba(22,163,74,0)}}
+    #lgr3 .lgr3-hero{display:flex;align-items:center;gap:16px;background:linear-gradient(135deg,#f3fbf6,#eef5ff);border-radius:16px;padding:14px 16px;margin-bottom:12px}
+    #lgr3 .lgr3-ring{width:92px;height:92px;flex:none}
+    #lgr3 .lgr3-hero .big{font-size:1.9rem;font-weight:800;line-height:1;color:#0b1b33}
+    #lgr3 .lgr3-hero .big small{font-size:.8rem;font-weight:700;color:#6b7a90}
+    #lgr3 .lgr3-hero .sub{font-size:.75rem;color:#6b7a90;margin-top:4px}
+    #lgr3 .chs{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+    #lgr3 .ch{border-radius:20px;padding:3px 10px;font-size:.7rem;font-weight:700;white-space:nowrap}
+    #lgr3 .ch-b{background:#e0ecff;color:#1d4ed8}#lgr3 .ch-r{background:#fee2e2;color:#b91c1c}
+    #lgr3 .ch-a{background:#fef3c7;color:#92580a}#lgr3 .ch-g{background:#dcfce7;color:#15803d}
+    #lgr3 .lgr3-kp{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+    #lgr3 .k{border-radius:14px;padding:10px 6px 9px;text-align:center;position:relative}
+    #lgr3 .k .i{width:30px;height:30px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:.95rem;margin-bottom:5px}
+    #lgr3 .k b{display:block;font-size:1.45rem;line-height:1.1;font-weight:800;color:#0b1b33}
+    #lgr3 .k .l{font-size:.72rem;color:#6b7a90;font-weight:600}
+    #lgr3 .k1{background:#eaf2ff}#lgr3 .k1 .i{background:linear-gradient(135deg,#6ea8fe,#0d6efd)}
+    #lgr3 .k2{background:#e9f9ef}#lgr3 .k2 .i{background:linear-gradient(135deg,#4ade80,#16a34a)}
+    #lgr3 .k3{background:#fff4dc}#lgr3 .k3 .i{background:linear-gradient(135deg,#fcd34d,#f59e0b)}
+    #lgr3 .lgr3-sec{margin-top:14px}
+    #lgr3 .lgr3-st{display:flex;align-items:center;gap:6px;font-weight:800;font-size:.8rem;color:#4a5a70;margin-bottom:8px}
+    #lgr3 .lgr3-st i{color:#0d6efd}#lgr3 .lgr3-st span{margin-left:auto;font-weight:500;font-size:.7rem;color:#8a97ab}
+    #lgr3 .lgr3-bars{display:flex;align-items:flex-end;gap:4px;height:64px;padding-bottom:14px;position:relative}
+    #lgr3 .lgr3-bars .b{flex:1;height:100%;position:relative;display:flex;align-items:flex-end}
+    #lgr3 .lgr3-bars .b i{display:block;width:100%;border-radius:5px 5px 2px 2px;background:linear-gradient(180deg,#86efac,#22c55e);min-height:3px}
+    #lgr3 .lgr3-bars .b.z i{background:#e3e9f2}
+    #lgr3 .lgr3-bars .b.cur i{background:linear-gradient(180deg,#60a5fa,#0d6efd)}
+    #lgr3 .lgr3-bars .b u{position:absolute;left:0;right:0;bottom:-14px;text-align:center;font-size:.62rem;color:#8a97ab;text-decoration:none}
+    #lgr3 .lgr3-list{display:flex;flex-direction:column;gap:7px;max-height:300px;overflow-y:auto}
+    #lgr3 .lgr3-row{display:flex;align-items:center;gap:10px;background:#f7f9fc;border-radius:12px;padding:8px 10px;border-left:4px solid #22c55e}
+    #lgr3 .lgr3-row.new{animation:lgr3n 1.2s ease-out}
+    @keyframes lgr3n{0%{background:#bbf7d0;transform:scale(1.02)}100%{background:#f7f9fc;transform:none}}
+    #lgr3 .tm{width:46px;text-align:center;flex:none;line-height:1.15}
+    #lgr3 .tm b{display:block;font-size:.9rem;color:#0b1b33}#lgr3 .tm small{font-size:.62rem;color:#8a97ab}
+    #lgr3 .mid{flex:1;min-width:0}
+    #lgr3 .wo{font-weight:800;color:#0b1b33;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #lgr3 .pn{font-size:.7rem;color:#6b7a90;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #lgr3 .rt{text-align:right;flex:none}
+    #lgr3 .rt .q{display:inline-block;background:#dcfce7;color:#15803d;font-weight:800;border-radius:20px;padding:2px 10px;font-size:.85rem}
+    #lgr3 .rt .q small{font-weight:600;font-size:.65rem}
+    #lgr3 .rt .fl{display:block;margin-top:3px;font-size:.62rem;font-weight:700;color:#b91c1c}
+    #lgr3 .lgr3-row:has(.fl){border-left-color:#f59e0b}
+    #lgr3 .lgr3-empty{text-align:center;color:#8a97ab;padding:18px 0}
+    #lgr3 .lgr3-empty i{display:block;font-size:1.8rem;margin-bottom:4px}`;
+
+    // ---------- วาด ----------
+    function ring(pct, done) {
+        const R = 38, C = 2 * Math.PI * R, off = C * (1 - Math.min(100, Math.max(0, pct)) / 100);
+        return `<svg viewBox="0 0 96 96" class="lgr3-ring"><defs><linearGradient id="lgr3g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4ade80"/><stop offset="1" stop-color="#16a34a"/></linearGradient></defs>
+            <circle cx="48" cy="48" r="${R}" fill="none" stroke="#e6ecf4" stroke-width="10"/>
+            <circle cx="48" cy="48" r="${R}" fill="none" stroke="url(#lgr3g)" stroke-width="10" stroke-linecap="round" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 48 48)"/>
+            ${done ? '<text x="48" y="58" text-anchor="middle" font-size="30" fill="#16a34a">✓</text>' : `<text x="48" y="55" text-anchor="middle" font-size="22" font-weight="800" fill="#0b1b33">${Math.round(pct)}<tspan font-size="12" dy="-5">%</tspan></text>`}
+        </svg>`;
+    }
+
+    function hoursHtml(c) {
+        if (!c.recN) return '';
+        const cur = new Date(c.now).getHours();
+        const hs = c.recL.map(g => new Date(g.t).getHours());
+        let lo = Math.max(0, Math.min(7, ...hs)), hi = Math.min(23, Math.max(17, cur, ...hs));
+        let max = 1; for (let h = lo; h <= hi; h++) if (c.hours[h] > max) max = c.hours[h];
+        let bars = '';
+        for (let h = lo; h <= hi; h++) {
+            const n = c.hours[h], ht = n ? Math.max(14, Math.round(n / max * 100)) : 6;
+            bars += `<div class="b ${h === cur ? 'cur' : ''} ${n ? '' : 'z'}" title="${pad(h)}:00 — ${n} แท็ก"><i style="height:${ht}%"></i><u>${(h % 2 === 0) ? h : ''}</u></div>`;
+        }
+        return `<div class="lgr3-sec"><div class="lgr3-st"><i class="bi bi-bar-chart-line-fill"></i> รับต่อชั่วโมง<span>สูงสุด ${max} แท็ก/ชม.</span></div><div class="lgr3-bars">${bars}</div></div>`;
+    }
+
+    function pendRow(g, now) {
+        const wos = g.wos.join(', ');
+        const when = g.t ? `<b>${esc(hm(g.t))}</b>${g.isToday ? '' : `<small>${esc(dmy(g.t))}</small>`}` : '<b>-</b>';
+        return `<div class="lgr3-row pend ${g.stuck ? 'stuck' : ''}">
+            <div class="tm">${when}</div>
+            <div class="mid"><div class="wo">${esc(wos)}</div><div class="pn">${esc(g.part)} · ไลน์ ${esc(g.line)} · ${esc(g.doc)}</div></div>
+            <div class="rt"><span class="q amber">${num(g.qty)}<small> ชิ้น</small></span><span class="el ${g.stuck ? 'red' : ''}">${g.t ? '<i class="bi bi-clock-history"></i> ' + esc(ago(g.t, now)) : ''}</span></div>
+        </div>`;
+    }
+    function recRow(g, today) {
+        return `<div class="lgr3-row">
+            <div class="tm"><b>${g.t ? esc(hm(g.t)) : '-'}</b></div>
+            <div class="mid"><div class="wo">${esc(g.wos.join(', '))}</div><div class="pn">${esc(g.part)} · ไลน์ ${esc(g.line)}${g.by ? ` · <i class="bi bi-person-fill"></i> ${esc(g.by)}` : ''}</div></div>
+            <div class="rt"><span class="q">${num(g.qty)}<small> ชิ้น</small></span>${g.flag ? '<span class="fl"><i class="bi bi-exclamation-triangle-fill"></i> ไม่มีสแกนออก</span>' : ''}</div>
+        </div>`;
+    }
+
+    let lastSig = '';
+    function renderCore(force) {
+        const box = document.getElementById('lgr3');
+        if (!box) return;
+        const c = compute();
+        const sig = [selLine, tab, c.lines.join(','), c.outN, c.outRecvN, c.pendN, c.stuckN, c.pendAllN, c.recN, c.recQty, c.noOut, Math.floor(c.now / 60000), JSON.stringify(c.perLine)].join('|');
+        if (!force && sig === lastSig) return;
+        lastSig = sig;
+        const oldList = box.querySelector('.lgr3-list'), keepTop = oldList ? oldList.scrollTop : 0;
+
+        const pct = c.outN ? c.outRecvN / c.outN * 100 : 0;
+        const done = c.outN > 0 && c.outRecvN >= c.outN;
+        const lbl = selLine ? `ไลน์ ${esc(selLine)}` : 'ทุกไลน์';
+
+        const chips = [`<button type="button" class="lgr3-chip ${selLine ? '' : 'on'}" data-line="">ทุกไลน์${c.pendAllN ? `<em>${c.pendAllN}</em>` : ''}</button>`]
+            .concat(c.lines.map(l => { const o = c.perLine[l]; return `<button type="button" class="lgr3-chip ${selLine === l ? 'on' : ''}" data-line="${esc(l)}">${esc(l)}${o && o.n ? `<em class="${o.s ? 'red' : ''}">${o.n}</em>` : ''}</button>`; })).join('');
+
+        const stat = (cls, ic, n, lab, sub) => `<div class="k ${cls}"><span class="i"><i class="bi ${ic}"></i></span><b>${n}</b><span class="l">${lab}</span>${sub ? `<span class="s">${sub}</span>` : ''}</div>`;
+        const pendSub = c.pendN ? `${num(c.pendQty)} ชิ้น${c.stuckN ? ` · <span class="r">ค้าง &gt;3 ชม. ${c.stuckN}</span>` : ''}` : '';
+        const tiles = `<div class="lgr3-kp">
+            ${stat('k1', 'bi-box-arrow-up-right', c.outN, 'ยิงออกวันนี้', 'แท็ก')}
+            ${stat('k2', 'bi-check2-circle', c.outRecvN, 'LG รับแล้ว', `จาก ${c.outN} แท็ก`)}
+            ${stat('k4' + (c.stuckN ? ' hot' : ''), 'bi-hourglass-split', c.pendN, 'ค้างรับ', pendSub || 'แท็ก')}
+        </div>`;
+
+        const chipsInfo = [];
+        if (c.stuckN) chipsInfo.push(`<span class="ch ch-r"><i class="bi bi-alarm-fill"></i> ค้างเกิน 3 ชม. ${c.stuckN}</span>`);
+        if (c.pendOld) chipsInfo.push(`<span class="ch ch-b"><i class="bi bi-calendar2-week"></i> ค้างจากวันก่อน ${c.pendOld}</span>`);
+        if (c.noOut) chipsInfo.push(`<span class="ch ch-a"><i class="bi bi-exclamation-triangle-fill"></i> ไม่มีสแกนออก ${c.noOut}</span>`);
+        if (!chipsInfo.length && c.trackFrom !== null) chipsInfo.push(`<span class="ch ch-g"><i class="bi bi-check-circle-fill"></i> ไม่มีแท็กค้างรับ</span>`);
+        const hero = c.outN
+            ? `<div class="big">${c.outRecvN}<small> / ${c.outN} แท็ก</small></div><div class="sub">${lbl} · LG รับแล้ว จากที่ ATECH ยิงออกวันนี้</div>`
+            : `<div class="big">${c.recN}<small> แท็ก</small></div><div class="sub">${lbl} · ยังไม่มีแท็กที่ ATECH ยิงออกวันนี้ให้เทียบ %</div>`;
+
+        let body;
+        if (tab === 'pend') {
+            if (c.trackFrom === null) body = `<div class="lgr3-empty"><i class="bi bi-info-circle"></i>ระบบเริ่มนับ "ค้างรับ" ตั้งแต่วันที่ LG รับแท็กใบแรก<br><small>ยังไม่มีการรับ จึงยังไม่แสดงรายการ</small></div>`;
+            else if (!c.pend.length) body = `<div class="lgr3-empty ok"><i class="bi bi-emoji-smile"></i>${lbl}: ไม่มีแท็กค้างรับ<br><small>ที่ ATECH ยิงออกมาแล้ว LG รับครบหมด</small></div>`;
+            else body = `<div class="lgr3-list">${c.pend.map(g => pendRow(g, c.now)).join('')}</div>`;
+        } else {
+            body = (c.recL.length ? hoursHtml(c) + `<div class="lgr3-list" style="margin-top:12px">${c.recL.map(g => recRow(g, c.today)).join('')}</div>` : `<div class="lgr3-empty"><i class="bi bi-inbox"></i>${lbl}: ยังไม่มีแท็กที่รับวันนี้<br><small>สแกนแท็กใบแรกได้เลย</small></div>`);
+        }
+
+        box.innerHTML = `
+        <div class="lgr3-head"><div class="ttl"><span class="ic"><i class="bi bi-box-arrow-in-down"></i></span>สถานะรับแท็ก LG</div><span class="live"><i></i>อัปเดตสด</span></div>
+        <div class="lgr3-lines" title="เลือกไลน์ที่ต้องการดู"><span class="lb"><i class="bi bi-funnel-fill"></i> ไลน์</span>${chips}</div>
+        <div class="lgr3-hero">${ring(pct, done)}<div class="tx">${hero}<div class="chs">${chipsInfo.join('')}</div></div></div>
+        ${tiles}
+        <div class="lgr3-tabs"><button type="button" data-tab="pend" class="${tab === 'pend' ? 'on' : ''}"><i class="bi bi-hourglass-split"></i> ค้างรับ<em>${c.pendN}</em></button><button type="button" data-tab="rec" class="${tab === 'rec' ? 'on' : ''}"><i class="bi bi-check2-circle"></i> รับแล้ววันนี้<em>${c.recN}</em></button></div>
+        <div class="lgr3-sec" style="margin-top:10px">${body}</div>`;
+        const nl = box.querySelector('.lgr3-list'); if (nl && keepTop) nl.scrollTop = keepTop;
+    }
+
+
+    // ถ้ามีอะไรผิดพลาด: โชว์ข้อความแจ้งในกล่อง (เอาไปแคปให้ผู้พัฒนาได้) และเปิดกล่องสถิติเดิมกลับมาให้ใช้งานต่อได้
+    function render(force) {
+        try { renderCore(force); }
+        catch (err) {
+            try { console.error('LG-RECV-LINE', err); } catch (e) { }
+            const box = document.getElementById('lgr3');
+            if (box) box.innerHTML = `<div style="border:2px solid #dc2626;background:#fef2f2;color:#991b1b;border-radius:14px;padding:12px 14px;font-size:.85rem;font-weight:700"><i class="bi bi-exclamation-triangle-fill"></i> กล่องเลือกไลน์ทำงานไม่ได้ — ${esc((err && (err.name + ': ' + err.message)) || err)}</div>`;
+            const old = document.getElementById('lgr2'); if (old) old.style.setProperty('display', 'block', 'important');
+        }
+    }
+
+    const EXTRA = `
+    #lgr2{display:none !important}
+    #lgr3 .lgr3-lines{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:12px}
+    #lgr3 .lgr3-lines .lb{font-size:.72rem;font-weight:800;color:#6b7a90;margin-right:2px}
+    #lgr3 .lgr3-chip{border:1.5px solid #d5dce8;background:#fff;color:#1b2a41;border-radius:20px;padding:5px 12px;font-weight:800;font-size:.82rem;cursor:pointer;display:inline-flex;align-items:center;gap:6px;line-height:1.2;transition:transform .1s}
+    #lgr3 .lgr3-chip:hover{border-color:#0d6efd;color:#0d6efd}
+    #lgr3 .lgr3-chip:active{transform:scale(.96)}
+    #lgr3 .lgr3-chip.on{background:linear-gradient(135deg,#3b82f6,#0d6efd);border-color:#0d6efd;color:#fff;box-shadow:0 4px 10px rgba(13,110,253,.3)}
+    #lgr3 .lgr3-chip em{font-style:normal;background:#fef3c7;color:#92580a;border-radius:10px;padding:0 7px;font-size:.7rem;min-width:18px;text-align:center}
+    #lgr3 .lgr3-chip em.red{background:#fee2e2;color:#b91c1c}
+    #lgr3 .lgr3-chip.on em{background:rgba(255,255,255,.28);color:#fff}
+    #lgr3 .lgr3-kp .k4{background:#fff4dc}#lgr3 .lgr3-kp .k4 .i{background:linear-gradient(135deg,#fcd34d,#f59e0b)}
+    #lgr3 .lgr3-kp .k4.hot{background:#fee2e2}#lgr3 .lgr3-kp .k4.hot .i{background:linear-gradient(135deg,#fb7185,#dc2626)}
+    #lgr3 .lgr3-kp .k .s{display:block;font-size:.66rem;color:#8a97ab;margin-top:1px}
+    #lgr3 .lgr3-kp .k .s .r{color:#b91c1c;font-weight:800}
+    #lgr3 .lgr3-tabs{display:flex;gap:6px;margin-top:14px;background:#f1f5fa;border-radius:14px;padding:4px}
+    #lgr3 .lgr3-tabs button{flex:1;border:0;background:transparent;border-radius:11px;padding:8px 6px;font-weight:800;font-size:.8rem;color:#6b7a90;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+    #lgr3 .lgr3-tabs button.on{background:#fff;color:#0b1b33;box-shadow:0 2px 8px rgba(15,23,42,.1)}
+    #lgr3 .lgr3-tabs em{font-style:normal;background:#e2e8f0;color:#334155;border-radius:10px;padding:0 7px;font-size:.7rem}
+    #lgr3 .lgr3-tabs button.on em{background:#0d6efd;color:#fff}
+    #lgr3 .lgr3-row.pend{border-left-color:#f59e0b}
+    #lgr3 .lgr3-row.pend.stuck{border-left-color:#dc2626;background:#fff5f5}
+    #lgr3 .rt .q.amber{background:#fef3c7;color:#92580a}
+    #lgr3 .rt .el{display:block;margin-top:3px;font-size:.66rem;font-weight:700;color:#6b7a90}
+    #lgr3 .rt .el.red{color:#b91c1c}
+    #lgr3 .lgr3-empty.ok i{color:#16a34a}
+    #lgr3 .lgr3-list{max-height:340px}
+    .lgr3-hide{display:none !important}`;
+
+    // ---------- ติดตั้ง ----------
+    function install() {
+        const kp = document.getElementById('lgr-kp');
+        if (!kp) return false;
+        if (document.getElementById('lgr3')) return true;
+        const label = kp.nextElementSibling, wrap = label && label.nextElementSibling, title = kp.previousElementSibling;
+        [kp, label, wrap, title].forEach(el => { if (el && el.id !== 'lgr2') el.classList.add('lgr3-hide'); });
+        const st = document.createElement('style'); st.id = 'lgr3-style'; st.textContent = CSS + EXTRA;
+        document.head.appendChild(st);
+        const box = document.createElement('div'); box.id = 'lgr3';
+        kp.parentElement.insertBefore(box, kp);
+        box.addEventListener('click', (e) => {
+            const chip = e.target.closest && e.target.closest('.lgr3-chip');
+            if (chip) { selLine = chip.getAttribute('data-line') || ''; try { localStorage.setItem(LSK, selLine); } catch (x) { } render(true); return; }
+            const tb = e.target.closest && e.target.closest('.lgr3-tabs button');
+            if (tb) { tab = tb.getAttribute('data-tab'); render(true); }
+        });
+        render(true);
+        const rc = document.getElementById('lgr-recent');
+        if (rc) { const mo = new MutationObserver(() => { render(); mo.takeRecords(); }); mo.observe(rc, { childList: true, subtree: true }); }
+        document.body.addEventListener('shown.bs.tab', (e) => { if (e.target && e.target.dataset && e.target.dataset.bsTarget === '#' + PANE) render(true); });
+        setInterval(() => { const pane = document.getElementById(PANE); if (pane && pane.classList.contains('active')) render(); }, 10000);
+        return true;
+    }
+    if (!install()) { const iv = setInterval(() => { if (install()) clearInterval(iv); }, 600); setTimeout(() => clearInterval(iv), 120000); }
+})();
+// ===== จบ LG-RECV-LINE =====
 (function () {
     if (window.__userMgmtA2) return; window.__userMgmtA2 = true; window.__userMgmtA = true;   // __userMgmtA = ปิดตัวเก่าถ้ามันยังไม่ได้ทำงาน
     const pane = document.getElementById('pills-users');
