@@ -4427,6 +4427,14 @@ function handleLogin(e) {
 
                 function logoutDueToInactivity() {
                     // 🟢 เช็คว่าตอนนี้ผู้ใช้กำลังเปิดแท็บ "แดชบอร์ด" อยู่หรือไม่?
+                    // 🔓 หน้า "รับแท็กเข้า LG" ใช้งานค้างไว้ทั้งวัน: ถ้าเปิดหน้านี้อยู่ ให้ต่ออายุอัตโนมัติ ไม่ล็อกหน้าจอ
+                    const lgReceivePane = document.getElementById('pills-lg-receive');
+                    const lgReceiveBtn = document.getElementById('nav-lg-receive-item');
+                    if ((lgReceivePane && lgReceivePane.classList.contains('active')) ||
+                        (lgReceiveBtn && lgReceiveBtn.classList.contains('active'))) {
+                        resetInactivityTimer();
+                        return;
+                    }
                     const dashboardTab = document.getElementById('pills-dashboard');
                     const dashboardBtn = document.getElementById('pills-dashboard-tab');
                     
@@ -4742,6 +4750,8 @@ async function loadDataFromSheet(isInitialLoad = false) {
         newData.vehicles = newData.vehicles || []; // 🟢 รองรับข้อมูลทะเบียนรถ
 
         if (newData.users) newData.users = newData.users.map(normalizeBooleanFields);
+        // 🔤 ซ่อมรหัสสินค้าที่ชีตตัดเลข 0 ข้างหน้าทิ้ง (เช่น 851007 → 0851007) โดยเทียบกับรหัสในฐานข้อมูลสินค้า
+        (function () { const fix = {}, ids = new Set(newData.products.map(p => String(p.id).trim())); newData.products.forEach(p => { const id = String(p.id).trim(), s = id.replace(/^0+/, ''); if (id !== s && s && !ids.has(s)) fix[s] = fix[s] === undefined ? id : null; }); ['history', 'deliveryPlans', 'stockCounts', 'rackHistory', 'forecast', 'lotHolds'].forEach(k => (newData[k] || []).forEach(r => { if (r && r.productId !== undefined && r.productId !== '') { const v = String(r.productId).trim(); if (!ids.has(v) && fix[v]) r.productId = fix[v]; else r.productId = v; } })); })();
         if (Array.isArray(newData.products)) newData.products.forEach(p => { if (p) { ['name', 'customer', 'erpCode', 'customerGroup'].forEach(k => { if (p[k] !== undefined && typeof p[k] !== 'string') p[k] = (p[k] === null) ? '' : String(p[k]); }); if (p.name === undefined) p.name = ''; } }); // แก้บัค: ชื่อสินค้าเป็นตัวเลขล้วน ทำให้ช่องค้นหาพังทุกช่อง
         // 🟢 แปลงชื่อฟิลด์ Cleared (ชื่อคอลัมน์จริงในชีต) กลับเป็น erpStatus (ชื่อที่โค้ดหน้าเว็บใช้อยู่เดิม)
         if (newData.history) {
