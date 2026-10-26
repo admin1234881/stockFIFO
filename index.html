@@ -24730,8 +24730,10 @@ renderLGTagPrintWindow = function(tags, printWin) {
             .map(x => ({ line: x.line, qty: x.st.planLeft, uht: uhtOf(x.line), h: x.st.planLeft / uhtOf(x.line), need: Math.ceil(minH() * uhtOf(x.line) - x.st.planLeft), prog: x.st.hasProg }));
     }
     if (typeof window.printLGTags === 'function') {
-        const _pt = window.printLGTags;
-        window.printLGTags = async function () {
+        const _d = Object.getOwnPropertyDescriptor(window, 'printLGTags');
+        const _acc = !!(_d && (_d.get || _d.set));
+        const _plain = window.printLGTags;
+        const _mine = async function () {
             try {
                 const w = planWarnings();
                 if (w.length) {
@@ -24744,8 +24746,11 @@ renderLGTagPrintWindow = function(tags, printWin) {
                     if (!r.isConfirmed) return;
                 }
             } catch (e) { console.warn('LG-UHT print check', e); }
-            return _pt.apply(this, arguments);
+return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
         };
+        if (_acc) {
+            Object.defineProperty(window, 'printLGTags', { configurable: true, enumerable: true, get: function () { return _mine; }, set: function (v) { if (typeof v === 'function' && v !== _mine && _d.set) { try { _d.set.call(window, v); } catch (e) { } } } });
+        } else window.printLGTags = _mine;
     }
 
     // ---------- 2) แดชบอร์ด LG Delivery Status ----------
@@ -25035,8 +25040,10 @@ renderLGTagPrintWindow = function(tags, printWin) {
         return Object.keys(m).filter(l => uhtOf(l) > 0 && m[l] / uhtOf(l) < minH()).map(l => ({ line: l, qty: m[l], uht: uhtOf(l), h: m[l] / uhtOf(l), need: Math.ceil(minH() * uhtOf(l) - m[l]) }));
     }
     if (typeof window.printLGTags === 'function') {
-        const _pt = window.printLGTags;
-        window.printLGTags = async function () {
+        const _d = Object.getOwnPropertyDescriptor(window, 'printLGTags');
+        const _acc = !!(_d && (_d.get || _d.set));
+        const _plain = window.printLGTags;
+        const _mine = async function () {
             try {
                 const w = planWarnings();
                 if (w.length) {
