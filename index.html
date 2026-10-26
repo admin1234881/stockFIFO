@@ -24271,13 +24271,13 @@ renderLGTagPrintWindow = function(tags, printWin) {
             let pr = 0;
             if (pp.nv) {
                 const k = rk(r);
-                if (pp.done.has(k)) { pr = o; doneN++; }
+                if (pp.done.has(k)) { pr = Math.max(o, sRow); doneN++; }
                 else { pr = Math.min(o, parseFloat(pp.part[k]) || 0); if (pr > 0) partRows.push({ r, q: pr }); }
             } else if (hasProg && idx >= 0) pr = i < idx ? o : (i === idx ? Math.min(o, parseFloat(pg.producedQty) || 0) : 0);
             sent += sRow; produced += Math.min(sRow, pr); planTotal += o;
             rem += Math.max(0, sRow - pr); planLeft += Math.max(0, o - pr);
         });
-        return { rows, pg, idx, hasProg, nv: pp.nv, doneN, partRows, sent, produced, rem, planTotal, planLeft, cur: idx >= 0 ? rows[idx] : null };
+        return { rows, pg, idx, hasProg, nv: pp.nv, doneN, partRows, sent, produced, rem, planTotal, planLeft, cur: idx >= 0 ? rows[idx] : null, complete: pp.nv && rows.length > 0 && doneN === rows.length };
     }
     // ข้อความ "LG ผลิตถึงไหน" (html)
     function whereHtml(st) {
@@ -24635,6 +24635,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
                 }
                 function preview() {
                     const pv = document.getElementById('lgu-pv'), pg = toPg(cur), st = lineState(cur, date, pg), u = uhtOf(cur);
+                     if (st.complete) { pv.className = 'lgu-pv lgu-ok'; pv.innerHTML = `ผลิตครบ ${st.doneN}/${st.rows.length} WO<small>ส่งเข้า ${num(st.sent)} · LG ผลิตแล้ว ${num(st.produced)}</small>`; return; }
                     if (!u) { pv.className = 'lgu-pv lgu-none'; pv.innerHTML = `ผลิตครบ ${st.doneN}/${st.rows.length} WO · ส่งเข้า ${num(st.sent)} · เหลือ ${num(st.rem)} ชิ้น<small>ยังไม่ได้ตั้ง UHT ของไลน์นี้ จึงยังคำนวณชั่วโมงไม่ได้</small>`; return; }
                     const h = st.rem / u, s = status(h);
                     pv.className = 'lgu-pv lgu-' + s;
@@ -24719,14 +24720,14 @@ renderLGTagPrintWindow = function(tags, printWin) {
         if (strip.getAttribute('data-sig') === sig) return;
         strip.setAttribute('data-sig', sig);
         strip.innerHTML = L.length
-            ? `<span class="lb"><i class="bi bi-speedometer2"></i> แพลนที่เหลืออยู่ได้ (ขั้นต่ำ ${minH()} ชม.):</span>${L.map(x => chipHtml(x.line, x.st.planLeft, x.st.hasProg ? 'แพลนที่ LG ยังไม่ได้ผลิต' : 'ยอดแพลน')).join('')}${btn}`
+            ? `<span class="lb"><i class="bi bi-speedometer2"></i> แพลนที่เหลืออยู่ได้ (ขั้นต่ำ ${minH()} ชม.):</span>${L.map(x => x.st.complete ? `<span class="lgu-chip lgu-ok">ไลน์ ${esc(x.line)} <b>ผลิตครบ ${x.st.doneN}/${x.st.rows.length}</b></span>` : chipHtml(x.line, x.st.planLeft, x.st.hasProg ? 'แพลนที่ LG ยังไม่ได้ผลิต' : 'ยอดแพลน')).join('')}${btn}`
             : `<span class="lb text-muted">ยังไม่มีแพลนของวันที่เลือก</span>${btn}`;
         const b = document.getElementById('lgu-set-btn'); if (b) b.addEventListener('click', openSettings);
         const p = document.getElementById('lgu-prog-btn'); if (p) p.addEventListener('click', () => openProgress('', date));
     }
     function planWarnings() {
         const date = planDateNow();
-        return planLineStates(date).filter(x => uhtOf(x.line) > 0 && x.st.planLeft / uhtOf(x.line) < minH())
+        return planLineStates(date).filter(x => uhtOf(x.line) > 0 && !x.st.complete && x.st.planLeft / uhtOf(x.line) < minH())
             .map(x => ({ line: x.line, qty: x.st.planLeft, uht: uhtOf(x.line), h: x.st.planLeft / uhtOf(x.line), need: Math.ceil(minH() * uhtOf(x.line) - x.st.planLeft), prog: x.st.hasProg }));
     }
     if (typeof window.printLGTags === 'function') {
@@ -24769,7 +24770,8 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
             if (!mm) return;
             const l = mm[1].trim(), st = lineState(l, date), u = uhtOf(l);
             let html;
-            if (!u) html = `<div class="lgu-ln none"><i class="bi bi-speedometer2"></i> ยังไม่ตั้ง UHT</div>`;
+             if (st.complete) html = `<div class="lgu-ln ok"><i class="bi bi-check-circle-fill"></i> ผลิตครบ <b>${st.doneN}/${st.rows.length}</b> WO</div>`;
+            else if (!u) html = `<div class="lgu-ln none"><i class="bi bi-speedometer2"></i> ยังไม่ตั้ง UHT</div>`;
             else {
                 const h = st.rem / u, s = (st.sent > 0 || st.hasProg) ? status(h) : 'none';
                 const age = st.hasProg ? agoMin(st.pg.updatedAt) : null;
@@ -24810,6 +24812,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
         if (!sel) lines = lines.filter(l => uhtOf(l) > 0);
         const rows = lines.map(l => {
             const u = uhtOf(l), st = lineState(l, date);
+            if (st.complete) return `<div class="r"><span class="nm">ไลน์ ${esc(l)}</span><span class="lgu-chip lgu-ok"><i class="bi bi-check-circle-fill"></i> ผลิตครบ <b>${st.doneN}/${st.rows.length}</b> WO</span></div>`;
             if (!u) return `<div class="r"><span class="nm">ไลน์ ${esc(l)}</span><span class="lgu-chip lgu-none">ยังไม่ตั้ง UHT</span></div>`;
             const h = st.rem / u, s = (st.sent > 0 || st.hasProg) ? status(h) : 'none';
             const age = st.hasProg ? agoMin(st.pg.updatedAt) : null;
