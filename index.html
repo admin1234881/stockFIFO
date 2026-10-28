@@ -4850,6 +4850,50 @@ async function loadUsersOnly() {
 }
 // 🟢 แคปซูลแจ้ง "ข้อมูลอัปเดตแล้ว" มุมขวาบน (ใช้ตอนซิงค์เบื้องหลังเจอข้อมูลใหม่)
 function showSyncPill() {
+    const en = (typeof currentLanguage !== 'undefined' && currentLanguage === 'en');
+    if (!document.getElementById('sync-chip-style')) {
+        const st = document.createElement('style');
+        st.id = 'sync-chip-style';
+        st.textContent = `
+        #sync-chip { display:inline-flex; align-items:center; gap:8px; height:34px; min-width:138px; padding:0 14px 0 4px; margin-right:12px; border-radius:999px; flex:none;
+            background:#f1f5f9; border:1px solid #e2e8f0; color:#64748b; font-size:.74rem; font-weight:700; white-space:nowrap; user-select:none;
+            transition:background .3s, border-color .3s, color .3s; }
+        #sync-chip .sc-ic { width:26px; height:26px; border-radius:50%; background:#cbd5e1; color:#fff; display:flex; align-items:center; justify-content:center; font-size:.85rem; transition:background .3s; }
+        #sync-chip .sc-ic i { display:block; }
+        #sync-chip.on { background:#ecfdf5; border-color:#86efac; color:#166534; }
+        #sync-chip.on .sc-ic { background:#16a34a; }
+        #sync-chip.on .sc-ic i { animation:scSpin .9s ease-out; }
+        @keyframes scSpin { from { transform:rotate(-270deg); } to { transform:none; } }
+        `;
+        document.head.appendChild(st);
+    }
+    const old = document.getElementById('sync-pill'); if (old) old.remove();
+    let el = document.getElementById('sync-chip');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'sync-chip';
+        el.innerHTML = '<div class="sc-ic"><i class="bi bi-arrow-repeat"></i></div><span class="sc-tx"></span>';
+        const cw = document.querySelector('#main-dashboard .header-contact-widget');
+        const lg = document.getElementById('language-switcher');
+        const host = cw || (lg && lg.closest('.dropdown'));
+        if (!host || !host.parentNode) return;
+        host.parentNode.insertBefore(el, host);
+    }
+    const t = new Date();
+    const hhmmss = [t.getHours(), t.getMinutes(), t.getSeconds()].map(n => String(n).padStart(2, '0')).join(':');
+    const title = (typeof translations !== 'undefined' && translations[currentLanguage] && translations[currentLanguage].data_updated)
+        ? translations[currentLanguage].data_updated.replace(/!$/, '') : 'ข้อมูลอัปเดตแล้ว';
+    const tx = el.querySelector('.sc-tx');
+    el.title = (en ? 'Last sync ' : 'ซิงค์ล่าสุด ') + hhmmss;
+    tx.textContent = title;
+    el.classList.remove('on'); void el.offsetWidth; el.classList.add('on');
+    clearTimeout(showSyncPill._t);
+    showSyncPill._t = setTimeout(() => {
+        el.classList.remove('on');
+        tx.textContent = (en ? 'Synced ' : 'ซิงค์ ') + hhmmss;
+    }, 2500);
+}
+function showSyncPillOld() {
     if (!document.getElementById('sync-pill-style')) {
         const st = document.createElement('style');
         st.id = 'sync-pill-style';
@@ -6363,7 +6407,7 @@ clearInterval(window.mascotLoopTimer);
         if (document.getElementById('nav-support-item')) document.getElementById('nav-support-item').style.display = canManageSupport ? '' : 'none';
         const canCheckLGTags = isMasterAdmin || currentUser.canCheckLGTags === true || String(currentUser.canCheckLGTags).toUpperCase() === 'TRUE';
         if (document.getElementById('lg-tagcheck-btn')) document.getElementById('lg-tagcheck-btn').style.display = canCheckLGTags ? '' : 'none';
-        if (document.getElementById('nav-archive-item')) document.getElementById('nav-archive-item').style.display = isMasterAdmin ? '' : 'none';
+         if (document.getElementById('nav-archive-item')) document.getElementById('nav-archive-item').style.display = (isMasterAdmin || currentUser.canManageArchive === true || String(currentUser.canManageArchive).toUpperCase() === 'TRUE') ? '' : 'none';
  // 3. จัดการปุ่มดาวน์โหลดสำรองข้อมูลแบบใหม่ (Dropdown)
         const backupDropdown = document.getElementById('backup-dropdown-container');
         if (backupDropdown) backupDropdown.style.display = (canManageProducts || canManageUsers) ? 'block' : 'none';
@@ -11088,7 +11132,582 @@ window.resolveLotHoldFixQty = async function(holdId) {
         Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกได้: ' + error.message, 'error');
     }
 };
-// 🟢 หน้าแอดมิน: รายชื่อห้องสนทนาทั้งหมด (จัดกลุ่มตาม username)
+// 🟢 หน้าแอดมิน: รายชื่อห้องสนทนาทั้งหมด
+(function () {
+    if (window.__lotHoldA) return; window.__lotHoldA = true;
+    const pane = document.getElementById('pills-lot-hold');
+    if (!pane) { console.warn('LOT-HOLD-A: ไม่พบหน้ารอตรวจสอบ (Q) — แพตช์นี้ไม่ทำงาน (วางผิดตำแหน่ง?)'); return; }
+ 
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const fmt = (n) => Number(n || 0).toLocaleString('en-US');
+    const pid = (v) => String(v == null ? '' : v).trim();
+    let filter = 'all', q = '', dlg = null, busy = false;
+    const posted = {};   // ส่วนต่างที่บันทึกปรับยอดไปแล้วของแต่ละรายการ (กันบันทึกซ้ำถ้ากดยืนยันใหม่หลังเน็ตหลุดครึ่งทาง)
+ 
+    // ---------- สไตล์ ----------
+    const css = document.createElement('style');
+    css.textContent = `
+#pills-lot-hold > .card{display:none!important}
+#qh-root{width:100%;max-width:none;box-sizing:border-box;margin:0;padding:0 12px 24px;color:#0f172a}
+#qh-root .qh-top{display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;align-items:center;margin-bottom:16px}
+#qh-root .qh-ti{display:flex;gap:14px;align-items:center}
+#qh-root .qh-ic{width:48px;height:48px;border-radius:14px;background:#b91c1c;color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex:none}
+#qh-root h1{font-size:1.5rem;font-weight:700;margin:0}
+#qh-root .qh-sub{font-size:.9rem;color:#475569;margin-top:2px;max-width:640px}
+#qh-root .qh-btn{height:44px;padding:0 18px;border-radius:12px;border:1px solid #cbd5e1;background:#fff;color:#334155;font:inherit;font-size:.9rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+#qh-root .qh-btn:hover{background:#f1f5f9}
+#qh-root .qh-kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px}
+#qh-root .qh-k{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:14px 18px}
+#qh-root .qh-k .l{font-size:.8rem;color:#475569;font-weight:500}
+#qh-root .qh-k .v{font-size:1.75rem;font-weight:700;margin-top:2px}#qh-root .qh-k .v small{font-size:.9rem;font-weight:500;color:inherit;opacity:.8}
+#qh-root .qh-k.red{background:#fef2f2;border-color:#fecaca;color:#991b1b}#qh-root .qh-k.red .l{color:#991b1b}
+#qh-root .qh-k.amb{background:#fffbeb;border-color:#fde68a;color:#92400e}#qh-root .qh-k.amb .l{color:#92400e}
+#qh-root .qh-bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:14px}
+#qh-root .qh-chips{display:flex;flex-wrap:wrap;gap:8px}
+#qh-root .qh-chip{height:44px;padding:0 16px;border-radius:99px;border:1px solid #cbd5e1;background:#fff;color:#334155;font:inherit;font-size:.9rem;font-weight:600;cursor:pointer}
+#qh-root .qh-chip.on{background:#1e40af;border-color:#1e40af;color:#fff}#qh-root .qh-chip span{opacity:.8;margin-left:4px}
+#qh-root .qh-search{display:flex;align-items:center;gap:10px;height:44px;min-width:260px;padding:0 14px;border-radius:12px;border:1px solid #cbd5e1;background:#fff;color:#475569}
+#qh-root .qh-search input{border:0;outline:0;background:transparent;font:inherit;font-size:.9rem;width:100%;color:#0f172a}
+#qh-root .qh-list{display:flex;flex-direction:column;gap:12px}
+#qh-root .qc{background:#fff;border:1px solid #e2e8f0;border-radius:18px;padding:16px 20px;display:flex;flex-wrap:wrap;gap:16px 26px;align-items:center}
+#qh-root .qc-p{flex:1 1 220px;min-width:0}
+#qh-root .qc-id{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:1.1rem;font-weight:700;color:#1e40af}
+#qh-root .qc-cu{font-size:.75rem;font-weight:600;padding:3px 10px;border-radius:99px;background:#f1f5f9;color:#334155}
+#qh-root .qc-nm{font-size:.9rem;color:#334155;margin-top:2px}
+#qh-root .qc-lot{font-size:.82rem;color:#475569;margin-top:6px}
+#qh-root .qc-b{flex:1 1 250px;min-width:0}
+#qh-root .qc-bl{display:flex;justify-content:space-between;gap:10px;font-size:.82rem;color:#334155;margin-bottom:6px}
+#qh-root .qc-held{color:#b91c1c;font-size:.95rem}
+#qh-root .qc-track{height:10px;border-radius:99px;background:#fca5a5;overflow:hidden}#qh-root .qc-track i{display:block;height:100%;background:#15803d;border-radius:99px}
+#qh-root .qc-note{font-size:.82rem;color:#475569}
+#qh-root .qc-r{flex:1 1 180px;display:flex;align-items:center;gap:10px;min-width:0}
+#qh-root .qc-av{width:38px;height:38px;border-radius:50%;background:#dbeafe;color:#1e40af;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none}
+#qh-root .qc-rn{font-size:.9rem;font-weight:600}#qh-root .qc-rd{font-size:.75rem;color:#475569}
+#qh-root .qc-age{margin-left:auto;font-size:.75rem;font-weight:700;padding:4px 10px;border-radius:99px;white-space:nowrap}
+#qh-root .qc-age.g{background:#dcfce7;color:#166534}#qh-root .qc-age.a{background:#fef3c7;color:#92400e}#qh-root .qc-age.r{background:#fee2e2;color:#991b1b}
+#qh-root .qc-act{display:flex;gap:8px;flex:none}
+#qh-root .qb{height:44px;padding:0 16px;border-radius:12px;font:inherit;font-size:.9rem;font-weight:600;cursor:pointer}
+#qh-root .qb.ok{border:1px solid #86efac;background:#f0fdf4;color:#166534}#qh-root .qb.ok:hover{background:#dcfce7}
+#qh-root .qb.warn{border:1px solid #fcd34d;background:#fffbeb;color:#92400e}#qh-root .qb.warn:hover{background:#fef3c7}
+#qh-root .qh-empty{background:#fff;border:1px solid #e2e8f0;border-radius:18px;padding:40px 20px;text-align:center;color:#64748b}
+#qh-root .qh-empty i{display:block;font-size:2.2rem;opacity:.5;margin-bottom:6px}
+#qh-root .qh-foot{font-size:.78rem;color:#475569;margin-top:10px}
+#qh-dlg{position:fixed;inset:0;z-index:2100;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto}
+#qh-dlg .qd{width:520px;max-width:100%;box-sizing:border-box;background:#fff;border-radius:22px;padding:26px 28px 24px;box-shadow:0 24px 60px rgba(15,23,42,.4);display:flex;flex-direction:column;gap:14px;color:#0f172a;animation:qdIn .25s cubic-bezier(.2,.9,.3,1.2)}
+@keyframes qdIn{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
+#qh-dlg .qd-h{display:flex;align-items:center;gap:12px}
+#qh-dlg .qd-ic{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex:none}
+#qh-dlg .qd-ic.amb{background:#fef3c7;color:#92400e}#qh-dlg .qd-ic.grn{background:#dcfce7;color:#15803d}
+#qh-dlg .qd-t{font-size:1.2rem;font-weight:700}#qh-dlg .qd-s{font-size:.88rem;color:#475569}
+#qh-dlg .qd-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+#qh-dlg .qd-3>div{border-radius:14px;padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0}
+#qh-dlg .qd-3 .l{font-size:.75rem;color:#475569}#qh-dlg .qd-3 .v{font-size:1.35rem;font-weight:700;margin-top:2px}
+#qh-dlg .qd-3 .g{background:#f0fdf4;border-color:#bbf7d0}#qh-dlg .qd-3 .g .l,#qh-dlg .qd-3 .g .v{color:#166534}
+#qh-dlg .qd-3 .r{background:#fef2f2;border-color:#fecaca}#qh-dlg .qd-3 .r .l,#qh-dlg .qd-3 .r .v{color:#991b1b}
+#qh-dlg label{font-size:.9rem;font-weight:600}
+#qh-dlg .qd-in{display:flex;align-items:center;gap:10px;margin-top:6px}
+#qh-dlg .qd-in input{flex:1;min-width:0;height:54px;box-sizing:border-box;border-radius:14px;border:2px solid #1e40af;padding:0 16px;font:inherit;font-size:1.6rem;font-weight:700;color:#0f172a;outline:0}
+#qh-dlg .qd-in span{font-size:.95rem;color:#475569;white-space:nowrap}
+#qh-dlg .qd-res{background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:12px 16px;display:flex;flex-direction:column;gap:7px}
+#qh-dlg .qd-res .h{font-size:.8rem;font-weight:600;color:#334155}
+#qh-dlg .qd-res .ro{display:flex;justify-content:space-between;gap:12px;font-size:.95rem}
+#qh-dlg .qd-res .g{color:#166534}#qh-dlg .qd-res .r{color:#991b1b}#qh-dlg .qd-res .m{font-size:.8rem;color:#475569}
+#qh-dlg .qd-rows{background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:4px 16px}
+#qh-dlg .qd-rows>div{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid #e2e8f0;font-size:.95rem}#qh-dlg .qd-rows>div:last-child{border:0}
+#qh-dlg .qd-rows span{color:#475569}
+#qh-dlg .qd-gn{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:11px 16px;font-size:.9rem;color:#166534;text-align:center}
+#qh-dlg .qd-err{color:#b91c1c;font-size:.85rem;display:none}
+#qh-dlg .qd-b{display:flex;gap:10px;margin-top:2px}
+#qh-dlg .qd-b button{height:50px;border-radius:14px;font:inherit;font-size:1rem;font-weight:600;cursor:pointer}
+#qh-dlg .qd-go{flex:1;border:0;color:#fff}#qh-dlg .qd-go.blu{background:#1e40af}#qh-dlg .qd-go.grn{background:#15803d}#qh-dlg .qd-go:disabled{opacity:.6;cursor:default}
+#qh-dlg .qd-no{padding:0 22px;border:1px solid #cbd5e1;background:#fff;color:#334155}
+`;
+    document.head.appendChild(css);
+ 
+    // ---------- โครงหน้า ----------
+    const root = document.createElement('div'); root.id = 'qh-root';
+    root.innerHTML = '<div class="qh-top"><div class="qh-ti"><div class="qh-ic"><i class="bi bi-shield-exclamation"></i></div><div><h1>รายการรอตรวจสอบ (Q)</h1><div class="qh-sub">ล็อตที่พนักงานแจ้งว่าของจริงน้อยกว่าในระบบ ส่วนที่ขาดถูกล็อกไว้ ไม่ให้หยิบ จนกว่าแอดมินจะตรวจสอบ</div></div></div>' +
+        '<button type="button" class="qh-btn" data-qr="1"><i class="bi bi-arrow-clockwise"></i> รีเฟรช</button></div>' +
+        '<div class="qh-kpi" id="qh-kpi"></div>' +
+        '<div class="qh-bar"><div class="qh-chips" id="qh-chips"></div><label class="qh-search"><i class="bi bi-search"></i><input id="qh-q" placeholder="ค้นหา รหัสสินค้า / ชื่อ / ผู้แจ้ง" autocomplete="off"></label></div>' +
+        '<div class="qh-list" id="qh-list"></div><div class="qh-foot">เรียงตามค้างนานที่สุดก่อน</div>';
+    pane.insertBefore(root, pane.firstChild);
+ 
+    // ---------- ข้อมูล ----------
+    const pending = () => (db.lotHolds || []).filter((h) => h.status !== 'Resolved');
+    const findHold = (id) => (db.lotHolds || []).find((h) => String(h.id) === String(id));
+    const dayStart = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime(); };
+    const ageDays = (h) => { const t = h.reportedDate ? new Date(h.reportedDate) : null; if (!t || isNaN(t)) return 0; return Math.max(0, Math.round((dayStart(new Date()) - dayStart(t)) / 86400000)); };
+    const when = (h) => { const t = h.reportedDate ? new Date(h.reportedDate) : null; return t && !isNaN(t) ? t.toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-'; };
+    const prodOf = (h) => (db.products || []).find((p) => pid(p.id) === pid(h.productId)) || null;
+    const nums = (h) => { const m = /เจอจริง\s*([\d,]+)\s*\/\s*([\d,]+)/.exec(String(h.adminNote || '')); if (!m) return null; const a = parseFloat(m[1].replace(/,/g, '')), b = parseFloat(m[2].replace(/,/g, '')); return (b > 0 && a >= 0) ? { found: a, total: b } : null; };
+    const lotTxt = (h) => { try { return typeof formatDate === 'function' ? formatDate(h.productionDate) : h.productionDate; } catch (e) { return h.productionDate; } };
+    const held = (h) => parseFloat(h.systemQty) || 0;
+ 
+    function render() {
+        const all = pending().slice().sort((a, b) => (new Date(a.reportedDate || 0)) - (new Date(b.reportedDate || 0)));
+        const badge = document.getElementById('lot-hold-badge-count');
+        if (badge) { if (all.length > 0) { badge.style.display = ''; badge.innerText = all.length; } else { badge.style.display = 'none'; } }
+        const qq = q.trim().toLowerCase();
+        const match = (h) => { if (!qq) return true; const p = prodOf(h); return (pid(h.productId) + ' ' + (p ? p.name : '') + ' ' + (h.reportedBy || '')).toLowerCase().indexOf(qq) >= 0; };
+        const nOld = all.filter((h) => ageDays(h) >= 3).length, nToday = all.filter((h) => ageDays(h) === 0).length;
+        const rows = all.filter((h) => match(h) && (filter === 'all' || (filter === 'old' && ageDays(h) >= 3) || (filter === 'today' && ageDays(h) === 0)));
+        const maxAge = all.reduce((m, h) => Math.max(m, ageDays(h)), 0);
+        const totalHeld = all.reduce((s, h) => s + held(h), 0);
+        const nProd = new Set(all.map((h) => pid(h.productId))).size;
+        document.getElementById('qh-kpi').innerHTML =
+            '<div class="qh-k"><div class="l">รอตรวจสอบ</div><div class="v">' + fmt(all.length) + ' <small>รายการ</small></div></div>' +
+            '<div class="qh-k red"><div class="l">ยอดที่ถูกล็อกรวม</div><div class="v">' + fmt(totalHeld) + ' <small>ชิ้น</small></div></div>' +
+            '<div class="qh-k amb"><div class="l">ค้างนานที่สุด</div><div class="v">' + fmt(maxAge) + ' <small>วัน</small></div></div>' +
+            '<div class="qh-k"><div class="l">สินค้าที่เกี่ยวข้อง</div><div class="v">' + fmt(nProd) + ' <small>รหัส</small></div></div>';
+        document.getElementById('qh-chips').innerHTML = [['all', 'ทั้งหมด', all.length], ['old', 'ค้าง 3 วันขึ้นไป', nOld], ['today', 'แจ้งวันนี้', nToday]]
+            .map((c) => '<button type="button" class="qh-chip' + (filter === c[0] ? ' on' : '') + '" data-qf="' + c[0] + '">' + c[1] + '<span>' + c[2] + '</span></button>').join('');
+        const list = document.getElementById('qh-list');
+        if (!all.length) { list.innerHTML = '<div class="qh-empty"><i class="bi bi-check-circle"></i>ไม่มีรายการค้างตรวจสอบครับ</div>'; return; }
+        if (!rows.length) { list.innerHTML = '<div class="qh-empty"><i class="bi bi-search"></i>ไม่พบรายการตามเงื่อนไข</div>'; return; }
+        list.innerHTML = rows.map((h) => {
+            const p = prodOf(h), n = nums(h), age = ageDays(h);
+            const ageCls = age >= 3 ? 'r' : (age >= 1 ? 'a' : 'g'), ageTxt = age === 0 ? 'วันนี้' : 'ค้าง ' + age + ' วัน';
+            const mid = n
+                ? '<div class="qc-bl"><span>เจอจริง <b>' + fmt(n.found) + '</b> / ระบบ ' + fmt(n.total) + '</span><b class="qc-held">ค้าง ' + fmt(held(h)) + ' ชิ้น</b></div><div class="qc-track"><i style="width:' + Math.max(0, Math.min(100, Math.round(n.found / n.total * 100))) + '%"></i></div>'
+                : '<div class="qc-bl"><b class="qc-held">ค้าง ' + fmt(held(h)) + ' ชิ้น</b></div><div class="qc-note">' + esc(h.adminNote || '') + '</div>';
+            const who = String(h.reportedBy || '-');
+            return '<div class="qc"><div class="qc-p"><div class="qc-id">' + esc(pid(h.productId)) + (p && p.customer ? '<span class="qc-cu">' + esc(p.customer) + '</span>' : '') + '</div>' +
+                '<div class="qc-nm">' + esc(p ? p.name : '') + '</div><div class="qc-lot">Lot ผลิต ' + esc(lotTxt(h)) + '</div></div>' +
+                '<div class="qc-b">' + mid + '</div>' +
+                '<div class="qc-r"><div class="qc-av">' + esc(who.charAt(0).toUpperCase()) + '</div><div><div class="qc-rn">' + esc(who) + '</div><div class="qc-rd">' + esc(when(h)) + '</div></div><span class="qc-age ' + ageCls + '">' + ageTxt + '</span></div>' +
+                '<div class="qc-act"><button type="button" class="qb ok" data-qa="unlock" data-id="' + esc(h.id) + '">เจอของแล้ว · ปลดล็อก</button><button type="button" class="qb warn" data-qa="fix" data-id="' + esc(h.id) + '">แก้ยอดจริง</button></div></div>';
+        }).join('');
+    }
+ 
+    root.addEventListener('click', (e) => {
+        const f = e.target.closest('[data-qf]'); if (f) { filter = f.dataset.qf; render(); return; }
+        if (e.target.closest('[data-qr]')) { render(); return; }
+        const a = e.target.closest('[data-qa]'); if (!a) return;
+        if (a.dataset.qa === 'unlock') openUnlock(a.dataset.id); else openFix(a.dataset.id);
+    });
+    root.querySelector('#qh-q').addEventListener('input', (e) => { q = e.target.value; render(); });
+ 
+    // ---------- หน้าต่างยืนยัน ----------
+    function openDlg(html) {
+        closeDlg();
+        dlg = document.createElement('div'); dlg.id = 'qh-dlg'; dlg.innerHTML = html;
+        dlg.addEventListener('mousedown', (e) => { if (e.target === dlg && !busy) closeDlg(); });
+        dlg.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !busy) closeDlg(); });
+        document.body.appendChild(dlg);
+        document.body.classList.add('modal-open');   // ให้ระบบซิงค์ข้อมูลทุก 30 วิ หยุดรอระหว่างกรอก (เหมือนตอนเปิดฟอร์มอื่น)
+    }
+    function closeDlg() {
+        if (dlg) { dlg.remove(); dlg = null; }
+        if (!document.querySelector('.modal.show')) document.body.classList.remove('modal-open');
+    }
+    const setErr = (m) => { const el = dlg && dlg.querySelector('.qd-err'); if (el) { el.textContent = m || ''; el.style.display = m ? 'block' : 'none'; } };
+    const setBusy = (on, txt) => { busy = on; if (!dlg) return; dlg.querySelectorAll('button').forEach((b) => { b.disabled = on; }); const go = dlg.querySelector('.qd-go'); if (go) { if (on) { go.dataset.t = go.textContent; go.textContent = txt || 'กำลังบันทึก…'; } else if (go.dataset.t) go.textContent = go.dataset.t; } };
+    const toast = (title) => { try { Swal.mixin({ toast: true, position: 'bottom-end', showConfirmButton: false, timer: 2500 }).fire({ icon: 'success', title: title }); } catch (e) { } };
+    const headInfo = (h) => { const p = prodOf(h); return esc(pid(h.productId)) + (p && p.name ? ' · ' + esc(p.name) : '') + ' · Lot ' + esc(lotTxt(h)); };
+ 
+    function openUnlock(id) {
+        const h = findHold(id); if (!h) return;
+        const p = prodOf(h);
+        openDlg('<div class="qd" role="dialog" aria-modal="true"><div class="qd-h"><div class="qd-ic grn"><i class="bi bi-unlock-fill"></i></div><div><div class="qd-t">ปลดล็อกล็อตนี้?</div><div class="qd-s">เจอของแล้ว พนักงานนับผิดพลาด ไม่ได้ขาดจริง</div></div></div>' +
+            '<div class="qd-rows"><div><span>สินค้า</span><b>' + esc(pid(h.productId)) + (p && p.name ? ' · ' + esc(p.name) : '') + '</b></div><div><span>Lot ผลิต</span><b>' + esc(lotTxt(h)) + '</b></div><div><span>จำนวนที่ถูกล็อก</span><b style="color:#b91c1c">' + fmt(held(h)) + ' ชิ้น</b></div></div>' +
+            '<div class="qd-gn">คืนเข้าสต็อกกลับเต็มจำนวน <b>+' + fmt(held(h)) + ' ชิ้น</b> ให้หยิบได้ทันที · ไม่มีการปรับยอด</div>' +
+            '<div class="qd-err"></div><div class="qd-b"><button type="button" class="qd-go grn" id="qh-ok">ยืนยันปลดล็อก</button><button type="button" class="qd-no" id="qh-no">ยกเลิก</button></div></div>');
+        dlg.querySelector('#qh-no').onclick = () => { if (!busy) closeDlg(); };
+        dlg.querySelector('#qh-ok').onclick = () => submitUnlock(id);
+        setTimeout(() => { try { dlg.querySelector('#qh-ok').focus(); } catch (e) { } }, 50);
+    }
+    async function submitUnlock(id) {
+        if (busy) return;
+        const hold = findHold(id); if (!hold) { closeDlg(); render(); return; }
+        setErr(''); setBusy(true);
+        try {
+            const payload = { id: hold.id, status: 'Resolved', resolvedQty: hold.systemQty, resolvedBy: currentUser.username, resolvedDate: new Date().toISOString() };
+            await callAppsScript('updateLotHold', payload);
+            const h2 = findHold(id) || hold; Object.assign(h2, payload);
+            setBusy(false); closeDlg();
+            if (typeof calculateStockFromHistory === 'function') calculateStockFromHistory();
+            render(); toast('ปลดล็อกและคืนสต็อกเรียบร้อยแล้วครับ');
+        } catch (err) { setBusy(false); setErr('ไม่สามารถบันทึกได้: ' + ((err && err.message) || err)); }
+    }
+ 
+    function openFix(id) {
+        const h = findHold(id); if (!h) return;
+        const n = nums(h), hq = held(h);
+        openDlg('<div class="qd" role="dialog" aria-modal="true"><div class="qd-h"><div class="qd-ic amb"><i class="bi bi-pencil-square"></i></div><div><div class="qd-t">แก้ยอดสต็อกจริง</div><div class="qd-s">' + headInfo(h) + '</div></div></div>' +
+            '<div class="qd-3">' + (n ? '<div><div class="l">ระบบคิดว่ามีในล็อต</div><div class="v">' + fmt(n.total) + '</div></div><div class="g"><div class="l">พนักงานเจอจริง</div><div class="v">' + fmt(n.found) + '</div></div>' : '') + '<div class="r"><div class="l">ถูกล็อก (ค้าง)</div><div class="v">' + fmt(hq) + '</div></div></div>' +
+            '<div><label for="qh-fv">ตรวจแล้ว เจอของจริงในส่วนที่ค้างกี่ชิ้น?</label><div class="qd-in"><input id="qh-fv" type="number" inputmode="decimal" min="0" step="any" value="' + hq + '"><span>ชิ้น จาก ' + fmt(hq) + '</span></div></div>' +
+            '<div class="qd-res" id="qh-res"></div><div class="qd-err"></div>' +
+            '<div class="qd-b"><button type="button" class="qd-go blu" id="qh-ok">ยืนยันแก้ยอด</button><button type="button" class="qd-no" id="qh-no">ยกเลิก</button></div></div>');
+        const inp = dlg.querySelector('#qh-fv'), res = dlg.querySelector('#qh-res');
+        const calc = () => {
+            const v = parseFloat(inp.value);
+            if (isNaN(v) || v < 0) { res.innerHTML = '<div class="m">กรอกจำนวนเป็นตัวเลขไม่ติดลบ</div>'; dlg.querySelector('#qh-ok').disabled = true; return; }
+            dlg.querySelector('#qh-ok').disabled = busy;
+            const d = v - hq;
+            res.innerHTML = '<div class="h">เมื่อกดยืนยัน ระบบจะ</div><div class="ro g"><span>คืนเข้าสต็อกให้หยิบได้</span><b>+' + fmt(v) + ' ชิ้น</b></div>' +
+                (d < 0 ? '<div class="ro r"><span>ตัดออกเพราะหายจริง (บันทึกเป็นปรับยอด)</span><b>−' + fmt(-d) + ' ชิ้น</b></div>'
+                    : d > 0 ? '<div class="ro g"><span>เพิ่มยอดเพราะเจอมากกว่าที่ค้าง (บันทึกเป็นปรับยอด)</span><b>+' + fmt(d) + ' ชิ้น</b></div>'
+                        : '<div class="ro"><span>ไม่มีการปรับยอด</span><b>0</b></div>') +
+                '<div class="m">รายการนี้จะหายจากหน้ารอตรวจสอบ</div>';
+        };
+        inp.addEventListener('input', calc);
+        inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submitFix(id, inp); } });
+        dlg.querySelector('#qh-no').onclick = () => { if (!busy) closeDlg(); };
+        dlg.querySelector('#qh-ok').onclick = () => submitFix(id, inp);
+        calc(); setTimeout(() => { try { inp.focus(); inp.select(); } catch (e) { } }, 50);
+    }
+    async function submitFix(id, inp) {
+        if (busy) return;
+        const hold = findHold(id); if (!hold) { closeDlg(); render(); return; }
+        const actual = parseFloat(inp.value);
+        if (isNaN(actual) || actual < 0) { setErr('กรุณากรอกจำนวนเป็นตัวเลขไม่ติดลบ'); return; }
+        const delta = actual - held(hold), need = delta - (posted[hold.id] || 0);
+        setErr(''); setBusy(true);
+        try {
+            if (need !== 0) {
+                const adjEntry = {
+                    id: 'adj-lothold-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
+                    date: new Date().toISOString(),
+                    type: 'adjustment',
+                    productId: hold.productId,
+                    productName: '',
+                    productionDate: hold.productionDate,
+                    quantity: need,
+                    packagingType: 'standard',
+                    user: currentUser.username,
+                    remarks: 'STOCK_COUNT_ADJ: แก้ไขจากรายการค้างตรวจสอบ (Q) โดยแอดมิน ' + currentUser.username + ' — ค้าง ' + hold.systemQty + ' เจอจริง ' + actual
+                };
+                await callAppsScript('appendHistory', adjEntry);
+                posted[hold.id] = (posted[hold.id] || 0) + need;
+                db.history.unshift(adjEntry);
+            }
+            const payload = { id: hold.id, status: 'Resolved', resolvedQty: actual, resolvedBy: currentUser.username, resolvedDate: new Date().toISOString() };
+            await callAppsScript('updateLotHold', payload);
+            const h2 = findHold(id) || hold; Object.assign(h2, payload); delete posted[hold.id];
+            setBusy(false); closeDlg();
+            if (typeof calculateStockFromHistory === 'function') calculateStockFromHistory();
+            render(); toast('ปรับยอดสต็อกและปลดล็อกเรียบร้อยแล้วครับ');
+        } catch (err) { setBusy(false); setErr('ไม่สามารถบันทึกได้: ' + ((err && err.message) || err)); }
+    }
+ 
+    // ทับฟังก์ชันเดิม (ที่แท็บ/ปุ่มอื่นเรียกใช้อยู่แล้ว)
+    window.populateLotHoldPage = render;
+    window.resolveLotHoldUnlock = openUnlock;
+    window.resolveLotHoldFixQty = openFix;
+    try { render(); } catch (e) { console.warn('LOT-HOLD-A first render', e); }
+})();
+// ===== ARCHIVE-A: ออกแบบหน้า "จัดการ Archive ประวัติเก่า" ใหม่ + ใช้สิทธิ์ canManageArchive =====
+// ตรรกะย้ายข้อมูลฝั่ง Google Script เดิมไม่เปลี่ยน (ย้ายเฉพาะล็อตที่ปิดจบแล้ว) · เปิดสิทธิ์รายคนได้ที่หน้า "จัดการผู้ใช้"
+// (ลบแพตช์นี้ออก = กลับเป็นหน้าเดิม HTML เดิมยังอยู่ แค่ถูกซ่อน)
+(function () {
+    if (window.__archiveA) return; window.__archiveA = true;
+    const pane = document.getElementById('pills-archive');
+    if (!pane) { console.warn('ARCHIVE-A: ไม่พบหน้า Archive — แพตช์นี้ไม่ทำงาน (วางผิดตำแหน่ง?)'); return; }
+ 
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const fmt = (n) => Number(n || 0).toLocaleString('en-US');
+    const isTrue = (v) => v === true || String(v).toUpperCase() === 'TRUE';
+    const allowed = () => { try { return !!currentUser && (currentUser.username === 'admin' || isTrue(currentUser.canManageArchive)); } catch (e) { return false; } };
+    const ICON = '<i class="bi bi-archive"></i>';
+    let days = 180, pv = null, loading = false, errMsg = '', busy = false, dlg = null, token = 0, stage = 0;
+ 
+    // ---------- สไตล์ ----------
+    const css = document.createElement('style');
+    css.textContent = `
+#pills-archive > .card{display:none!important}
+#ar-root{width:100%;max-width:none;box-sizing:border-box;margin:0;padding:0 12px 24px;color:#0f172a}
+#ar-root .ar-top{display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;align-items:center;margin-bottom:16px}
+#ar-root .ar-ti{display:flex;gap:14px;align-items:center}
+#ar-root .ar-ic{width:48px;height:48px;border-radius:14px;background:#1e40af;color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex:none}
+#ar-root h1{font-size:1.5rem;font-weight:700;margin:0}
+#ar-root .ar-sub{font-size:.9rem;color:#475569;margin-top:2px;max-width:680px}
+#ar-root .ar-perm{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 14px;border-radius:99px;background:#dcfce7;color:#166534;font-size:.82rem;font-weight:600}
+#ar-root .ar-steps{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:18px}
+#ar-root .ar-st{display:flex;align-items:center;gap:10px;height:44px;padding:0 16px 0 8px;border-radius:99px;border:1px solid #cbd5e1;background:#fff;color:#334155;font-size:.9rem;font-weight:600}
+#ar-root .ar-st b{width:28px;height:28px;border-radius:50%;background:#e2e8f0;color:#334155;display:flex;align-items:center;justify-content:center;font-size:.9rem}
+#ar-root .ar-st.on{background:#1e40af;border-color:#1e40af;color:#fff}#ar-root .ar-st.on b{background:#fff;color:#1e40af}
+#ar-root .ar-ln{width:28px;height:2px;background:#cbd5e1}
+#ar-root .ar-main{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start}
+#ar-root .ar-l{flex:1 1 340px;max-width:420px;min-width:300px;display:flex;flex-direction:column;gap:16px}
+#ar-root .ar-r{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:16px}
+#ar-root .ar-card{background:#fff;border:1px solid #e2e8f0;border-radius:18px;padding:20px 22px;display:flex;flex-direction:column;gap:14px}
+#ar-root .ar-h{font-size:1rem;font-weight:700}
+#ar-root .ar-pick{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#ar-root .ar-pk{height:52px;border-radius:14px;border:1px solid #cbd5e1;background:#fff;color:#334155;font:inherit;font-size:.95rem;font-weight:600;cursor:pointer;position:relative}
+#ar-root .ar-pk:hover{background:#f8fafc}
+#ar-root .ar-pk.on{border:2px solid #1e40af;background:#eff6ff;color:#1e40af;font-weight:700}
+#ar-root .ar-pk i{position:absolute;top:-10px;right:10px;background:#1e40af;color:#fff;border-radius:99px;padding:1px 9px;font-size:.7rem;font-weight:600;font-style:normal}
+#ar-root .ar-cu{display:flex;align-items:center;gap:10px}
+#ar-root .ar-cu label{font-size:.88rem;color:#475569;flex:none;margin:0}
+#ar-root .ar-cu input{flex:1;min-width:0;height:44px;box-sizing:border-box;border-radius:12px;border:1px solid #cbd5e1;padding:0 14px;font:inherit;font-size:1rem;font-weight:600;color:#0f172a}
+#ar-root .ar-note{font-size:.8rem;color:#475569}
+#ar-root .ar-derr{font-size:.82rem;color:#b91c1c;font-weight:600;display:none}
+#ar-root .ar-btn{height:50px;border-radius:14px;border:0;background:#1e40af;color:#fff;font:inherit;font-size:1rem;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+#ar-root .ar-btn:hover{background:#1e3a8a}#ar-root .ar-btn:disabled{opacity:.6;cursor:default}
+#ar-root .ar-btn.amb{background:#b45309;padding:0 24px}#ar-root .ar-btn.amb:hover{background:#92400e}
+#ar-root .ar-know{display:flex;flex-direction:column;gap:12px}
+#ar-root .ar-kn{display:flex;gap:10px;font-size:.88rem;color:#334155;line-height:1.45}
+#ar-root .ar-kn i{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none;font-size:.75rem;font-style:normal;font-weight:700}
+#ar-root .ar-kn i.g{background:#dcfce7;color:#166534}#ar-root .ar-kn i.a{background:#fef3c7;color:#92400e}
+#ar-root .ar-kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
+#ar-root .ar-k{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:14px 20px}
+#ar-root .ar-k .l{font-size:.8rem;color:#475569;font-weight:500}
+#ar-root .ar-k .v{font-size:1.7rem;font-weight:700;margin-top:2px}#ar-root .ar-k .v small{font-size:.9rem;font-weight:500;opacity:.8}
+#ar-root .ar-k.blu{background:#eff6ff;border-color:#bfdbfe;color:#1e40af}#ar-root .ar-k.blu .l{color:#1e40af}
+#ar-root .ar-k.grn{background:#f0fdf4;border-color:#bbf7d0;color:#166534}#ar-root .ar-k.grn .l{color:#166534}
+#ar-root .ar-prop{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:16px 20px;display:flex;flex-direction:column;gap:10px}
+#ar-root .ar-pr1{display:flex;justify-content:space-between;font-size:.82rem;color:#475569}
+#ar-root .ar-bar{display:flex;height:14px;border-radius:99px;overflow:hidden;background:#e2e8f0}
+#ar-root .ar-bar i{display:block;background:#1e40af}#ar-root .ar-bar s{display:block;background:#86efac;flex:1;text-decoration:none}
+#ar-root .ar-lg{display:flex;gap:18px;font-size:.75rem;color:#475569;flex-wrap:wrap}
+#ar-root .ar-lg span{display:flex;align-items:center;gap:6px}#ar-root .ar-lg b{width:10px;height:10px;border-radius:3px;display:inline-block}
+#ar-root .ar-tb{background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden}
+#ar-root .ar-tbh{padding:14px 20px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:1px solid #e2e8f0}
+#ar-root .ar-tbh b{font-size:.95rem}#ar-root .ar-tbh span{font-size:.8rem;color:#475569}
+#ar-root .ar-sc{overflow-x:auto}
+#ar-root .ar-row{display:grid;grid-template-columns:110px minmax(140px,1fr) 150px 100px;gap:10px;padding:12px 20px;font-size:.88rem;border-bottom:1px solid #f1f5f9;min-width:520px}
+#ar-root .ar-row:last-child{border-bottom:0}
+#ar-root .ar-row.h{background:#f8fafc;font-size:.75rem;font-weight:600;color:#475569;padding:10px 20px;border-bottom:1px solid #e2e8f0}
+#ar-root .ar-row .n{text-align:right}#ar-root .ar-row .p{font-weight:700;color:#1e40af}
+#ar-root .ar-act{background:#fff;border:1px solid #cbd5e1;border-radius:16px;padding:16px 20px;display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between}
+#ar-root .ar-act b{font-size:.95rem}#ar-root .ar-act span{display:block;font-size:.8rem;color:#475569;margin-top:2px}
+#ar-root .ar-empty{background:#fff;border:1px solid #e2e8f0;border-radius:18px;padding:44px 20px;text-align:center;color:#64748b}
+#ar-root .ar-empty i{display:block;font-size:2.2rem;opacity:.5;margin-bottom:6px}
+#ar-root .ar-empty.err{border-color:#fecaca;background:#fef2f2;color:#991b1b}
+#ar-dlg{position:fixed;inset:0;z-index:2100;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto}
+#ar-dlg .ad{width:540px;max-width:100%;box-sizing:border-box;background:#fff;border-radius:22px;padding:28px 30px 26px;box-shadow:0 24px 60px rgba(15,23,42,.4);display:flex;flex-direction:column;gap:16px;color:#0f172a;animation:adIn .25s cubic-bezier(.2,.9,.3,1)}
+@keyframes adIn{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes adSp{to{transform:rotate(360deg)}}@keyframes adInd{0%{left:-35%}100%{left:100%}}
+#ar-dlg .ad-h{display:flex;align-items:center;gap:12px}
+#ar-dlg .ad-ic{width:46px;height:46px;border-radius:12px;background:#fef3c7;color:#92400e;display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex:none}
+#ar-dlg .ad-t{font-size:1.2rem;font-weight:700}#ar-dlg .ad-s{font-size:.88rem;color:#475569}
+#ar-dlg .ad-rows{background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:6px 16px}
+#ar-dlg .ad-rows>div{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #e2e8f0;font-size:.95rem}
+#ar-dlg .ad-rows>div:last-child{border-bottom:0}#ar-dlg .ad-rows span{color:#475569}#ar-dlg .ad-rows b{text-align:right}
+#ar-dlg .ad-warn{background:#fffbeb;border:1px solid #fde68a;border-radius:14px;padding:12px 16px;font-size:.88rem;color:#92400e;line-height:1.5}
+#ar-dlg .ad-ck{display:flex;align-items:flex-start;gap:12px;cursor:pointer;font-size:.95rem;line-height:1.45;margin:0}
+#ar-dlg .ad-ck input{width:24px;height:24px;flex:none;margin:0;accent-color:#1e40af;cursor:pointer}
+#ar-dlg .ad-err{display:none;background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:10px 14px;font-size:.88rem;color:#991b1b}
+#ar-dlg .ad-b{display:flex;gap:10px}
+#ar-dlg .ad-go{flex:1;height:50px;border:0;border-radius:14px;background:#b45309;color:#fff;font:inherit;font-size:1rem;font-weight:600;cursor:pointer}
+#ar-dlg .ad-go.blu{background:#1e40af}#ar-dlg .ad-go:disabled{opacity:.45;cursor:default}
+#ar-dlg .ad-no{height:50px;padding:0 22px;border-radius:14px;border:1px solid #cbd5e1;background:#fff;color:#334155;font:inherit;font-size:1rem;font-weight:600;cursor:pointer}
+#ar-dlg .ad-c{align-items:center;text-align:center}
+#ar-dlg .ad-big{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2rem}
+#ar-dlg .ad-big.blu{background:#dbeafe;color:#1e40af}#ar-dlg .ad-big.grn{background:#dcfce7;color:#15803d}#ar-dlg .ad-big.red{background:#fee2e2;color:#b91c1c}
+#ar-dlg .ad-sp{display:inline-block;animation:adSp .9s linear infinite}
+#ar-dlg .ad-ind{position:relative;width:100%;height:10px;border-radius:6px;background:#e2e8f0;overflow:hidden}
+#ar-dlg .ad-ind i{position:absolute;top:0;bottom:0;width:35%;background:#60a5fa;border-radius:6px;animation:adInd 1.1s ease-in-out infinite}
+#ar-dlg .ad-steps{width:100%;box-sizing:border-box;background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:4px 16px;text-align:left}
+#ar-dlg .ad-sp1{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #e2e8f0}#ar-dlg .ad-sp1:last-child{border-bottom:0}
+#ar-dlg .ad-sp1 .m{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none;font-size:.8rem}
+#ar-dlg .ad-sp1 .m.p{border:2px solid #94a3b8;width:14px;height:14px;margin:6px}
+#ar-dlg .ad-sp1 .m.a{color:#1e40af;font-size:1.3rem}#ar-dlg .ad-sp1 .m.d{background:#16a34a;color:#fff}
+#ar-dlg .ad-sp1 b{display:block;font-size:.92rem}#ar-dlg .ad-sp1 span{display:block;font-size:.75rem;color:#475569}
+#ar-dlg .ad-ba{width:100%;box-sizing:border-box;background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;font-size:.88rem}
+#ar-dlg .ad-ba>div{display:flex;justify-content:space-between}
+#ar-dlg .ad-ba .tr{height:10px;border-radius:6px;background:#e2e8f0;overflow:hidden}#ar-dlg .ad-ba .tr i{display:block;height:100%;background:#16a34a;border-radius:6px}
+`;
+    document.head.appendChild(css);
+ 
+    // ---------- โครงหน้า ----------
+    const root = document.createElement('div'); root.id = 'ar-root';
+    root.innerHTML =
+        '<div class="ar-top"><div class="ar-ti"><div class="ar-ic">' + ICON + '</div><div><h1>จัดการ Archive ประวัติเก่า</h1>' +
+        '<div class="ar-sub">ย้ายประวัติของล็อตที่ปิดจบแล้ว (ยอดคงเหลือ = 0) ไปเก็บในชีต History_Archive เพื่อให้ระบบโหลดเร็วขึ้น</div></div></div>' +
+        '<div class="ar-perm" id="ar-perm"><i class="bi bi-shield-check"></i> คุณได้รับสิทธิ์ใช้งานหน้านี้</div></div>' +
+        '<div class="ar-steps" id="ar-steps"></div>' +
+        '<div class="ar-main"><div class="ar-l">' +
+        '<div class="ar-card"><div class="ar-h">ย้ายล็อตที่ไม่มีความเคลื่อนไหวมานานเกิน</div>' +
+        '<div class="ar-pick" id="ar-pick"><button type="button" class="ar-pk" data-d="90">90 วัน</button><button type="button" class="ar-pk" data-d="180">180 วัน<i>แนะนำ</i></button><button type="button" class="ar-pk" data-d="365">1 ปี</button><button type="button" class="ar-pk" data-d="730">2 ปี</button></div>' +
+        '<div class="ar-cu"><label for="ar-days">หรือกำหนดเอง</label><input id="ar-days" type="number" inputmode="numeric" min="30" max="3650" value="180"><span class="ar-note">วัน</span></div>' +
+        '<div class="ar-derr" id="ar-derr"></div>' +
+        '<div class="ar-note" id="ar-cut"></div>' +
+        '<button type="button" class="ar-btn" data-act="preview"><i class="bi bi-search"></i> ดูตัวอย่างก่อนย้าย</button></div>' +
+        '<div class="ar-card ar-know"><div class="ar-h" style="font-size:.9rem">ก่อนกดย้าย ควรรู้</div>' +
+        '<div class="ar-kn"><i class="g">&#10003;</i><div>ย้ายเฉพาะล็อตที่ปิดจบแล้ว ล็อตที่ยังมีของคงเหลือไม่ถูกแตะ</div></div>' +
+        '<div class="ar-kn"><i class="g">&#10003;</i><div>ข้อมูลไม่หาย ดูย้อนหลังได้จากปุ่ม “โหลดประวัติเก่า” ในหน้าประวัติ</div></div>' +
+        '<div class="ar-kn"><i class="a">!</i><div>ย้ายแล้วดึงกลับเข้าประวัติหลักอัตโนมัติไม่ได้ แนะนำให้สำรองข้อมูลก่อน</div></div></div>' +
+        '</div><div class="ar-r" id="ar-right"></div></div>';
+    pane.insertBefore(root, pane.firstChild);
+ 
+    const $ = (s) => root.querySelector(s);
+    const inp = $('#ar-days');
+ 
+    // ---------- ข้อมูลช่วย ----------
+    const totalRows = () => (typeof db !== 'undefined' && db.history ? db.history.length : 0);
+    const prodName = (id) => { try { const p = (db.products || []).find((x) => String(x.id).trim() === String(id).trim()); return p && p.name ? p.name : ''; } catch (e) { return ''; } };
+    const thDate = (s) => { try { const t = String(s || ''); const d = new Date(t.length === 10 ? t + 'T00:00:00' : t); if (isNaN(d)) return t || '-'; return d.toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' }); } catch (e) { return String(s || '-'); } };
+    const cutTxt = () => thDate(new Date(Date.now() - days * 86400000).toISOString());
+ 
+    // ---------- ฝั่งซ้าย ----------
+    function syncLeft() {
+        root.querySelectorAll('.ar-pk').forEach((b) => b.classList.toggle('on', parseInt(b.dataset.d, 10) === days));
+        $('#ar-cut').textContent = 'นับจากวันที่ล่าสุดที่ล็อตนั้นมีรายการเข้า-ออก (ย้อนหลังถึง ' + cutTxt() + ')';
+        $('#ar-perm').style.display = allowed() ? '' : 'none';
+        const st = [['เลือกช่วงเวลา', 1], ['ดูตัวอย่างก่อนย้าย', pv ? 2 : 0], ['ยืนยันย้าย', dlg ? 3 : 0]];
+        $('#ar-steps').innerHTML = st.map((s, i) => (i ? '<div class="ar-ln"></div>' : '') + '<div class="ar-st' + (s[1] ? ' on' : '') + '"><b>' + (i + 1) + '</b>' + s[0] + '</div>').join('');
+    }
+    function setDErr(m) { const e = $('#ar-derr'); e.textContent = m || ''; e.style.display = m ? 'block' : 'none'; }
+    function setDays(d) {
+        days = d; inp.value = d; setDErr('');
+        if (pv && pv.days !== d) { pv = null; token++; loading = false; }
+        syncLeft(); renderRight();
+    }
+    root.querySelector('#ar-pick').addEventListener('click', (e) => { const b = e.target.closest('.ar-pk'); if (b && !busy) setDays(parseInt(b.dataset.d, 10)); });
+    inp.addEventListener('input', () => {
+        const d = parseInt(inp.value, 10);
+        if (isNaN(d)) return;
+        days = d; setDErr('');
+        if (pv && pv.days !== d) { pv = null; token++; loading = false; renderRight(); }
+        syncLeft();
+    });
+ 
+    // ---------- ฝั่งขวา ----------
+    function renderRight() {
+        const el = $('#ar-right');
+        if (!allowed()) { el.innerHTML = '<div class="ar-empty err"><i class="bi bi-lock"></i>คุณไม่มีสิทธิ์ใช้งานหน้านี้ ให้แอดมินเปิดสิทธิ์ “จัดการ Archive ประวัติเก่า” ที่หน้าจัดการผู้ใช้</div>'; return; }
+        if (loading) { el.innerHTML = '<div class="ar-empty"><i class="bi bi-hourglass-split"></i>กำลังวิเคราะห์ข้อมูล… อาจใช้เวลาสักครู่ถ้าประวัติเยอะ</div>'; return; }
+        if (errMsg) { el.innerHTML = '<div class="ar-empty err"><i class="bi bi-exclamation-triangle"></i>เกิดข้อผิดพลาด: ' + esc(errMsg) + '</div>'; return; }
+        if (!pv) { el.innerHTML = '<div class="ar-empty"><i class="bi bi-archive"></i>เลือกช่วงเวลา แล้วกด “ดูตัวอย่างก่อนย้าย”<br>ระบบจะแสดงว่าจะย้ายอะไรบ้าง โดยยังไม่เปลี่ยนแปลงข้อมูลจริง</div>'; return; }
+        if (!pv.rowCount) { el.innerHTML = '<div class="ar-empty"><i class="bi bi-check2-circle"></i>ไม่พบล็อตที่ปิดจบแล้วและเก่าเกิน ' + fmt(pv.days) + ' วัน<br>ยังไม่มีอะไรต้องย้ายตอนนี้</div>'; return; }
+        const after = Math.max(0, pv.total - pv.rowCount);
+        const pct = pv.total > 0 ? Math.min(100, Math.round(pv.rowCount * 100 / pv.total)) : 0;
+        const rows = pv.sample.map((l) => '<div class="ar-row"><div class="p">' + esc(l.productId) + '</div><div>' + esc(prodName(l.productId)) + '</div><div>' + esc(thDate(l.productionDate)) + '</div><div class="n">' + fmt(l.rowCount) + '</div></div>').join('');
+        el.innerHTML =
+            '<div class="ar-kpi"><div class="ar-k"><div class="l">ประวัติหลักตอนนี้</div><div class="v">' + fmt(pv.total) + ' <small>แถว</small></div></div>' +
+            '<div class="ar-k blu"><div class="l">จะย้ายไป Archive</div><div class="v">' + fmt(pv.rowCount) + ' <small>แถว</small></div></div>' +
+            '<div class="ar-k"><div class="l">ล็อตที่ปิดจบแล้ว</div><div class="v">' + fmt(pv.lotCount) + ' <small>ล็อต</small></div></div>' +
+            '<div class="ar-k grn"><div class="l">เหลือในประวัติหลัก</div><div class="v">' + fmt(after) + ' <small>แถว</small></div></div></div>' +
+            '<div class="ar-prop"><div class="ar-pr1"><span>สัดส่วนที่จะย้าย</span><b style="color:#1e40af">' + pct + '% ของประวัติทั้งหมด</b></div>' +
+            '<div class="ar-bar"><i style="width:' + pct + '%"></i><s></s></div>' +
+            '<div class="ar-lg"><span><b style="background:#1e40af"></b>ย้ายไป Archive</span><span><b style="background:#86efac"></b>อยู่ในประวัติหลักต่อ</span></div></div>' +
+            '<div class="ar-tb"><div class="ar-tbh"><b>ตัวอย่างล็อตที่จะถูกย้าย</b><span>' + (pv.lotCount > pv.sample.length ? 'แสดง ' + fmt(pv.sample.length) + ' ล็อตแรก จากทั้งหมด ' + fmt(pv.lotCount) + ' ล็อต' : 'ทั้งหมด ' + fmt(pv.lotCount) + ' ล็อต') + '</span></div>' +
+            '<div class="ar-sc"><div class="ar-row h"><div>รหัสสินค้า</div><div>ชื่อสินค้า</div><div>วันผลิต (Lot)</div><div class="n">จำนวนแถว</div></div>' + rows + '</div></div>' +
+            '<div class="ar-act"><div><b>พร้อมย้าย ' + fmt(pv.rowCount) + ' แถว (' + fmt(pv.lotCount) + ' ล็อต)</b><span>ระบบจะให้ยืนยันอีกครั้งก่อนย้ายจริง</span></div>' +
+            '<button type="button" class="ar-btn amb" data-act="ask">' + ICON + ' ย้ายไป Archive</button></div>';
+    }
+ 
+    // ---------- ดูตัวอย่าง ----------
+    async function doPreview() {
+        if (loading || busy) return;
+        if (!allowed()) { renderRight(); return; }
+        const d = parseInt(inp.value, 10);
+        if (!(d >= 30 && d <= 3650)) { setDErr('กรอกจำนวนวันตั้งแต่ 30 ถึง 3650'); return; }
+        setDErr(''); days = d; syncLeft();
+        const my = ++token; loading = true; errMsg = ''; pv = null; renderRight();
+        try {
+            const res = await callAppsScript('previewArchiveHistory', { cutoffDays: d });
+            if (my !== token) return;
+            pv = { days: d, rowCount: parseInt(res.rowCount, 10) || 0, lotCount: parseInt(res.lotCount, 10) || 0, sample: res.sampleLots || [], total: totalRows() };
+        } catch (err) {
+            if (my !== token) return;
+            errMsg = (err && err.message) || String(err);
+        }
+        loading = false; syncLeft(); renderRight();
+    }
+    root.addEventListener('click', (e) => {
+        const a = e.target.closest('[data-act]'); if (!a) return;
+        if (a.dataset.act === 'preview') doPreview();
+        else if (a.dataset.act === 'ask') openConfirm();
+    });
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doPreview(); } });
+ 
+    // ---------- หน้าต่าง ----------
+    function openDlg(html) {
+        if (!dlg) {
+            dlg = document.createElement('div'); dlg.id = 'ar-dlg';
+            dlg.addEventListener('mousedown', (e) => { if (e.target === dlg && !busy) closeDlg(); });
+            dlg.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !busy) closeDlg(); });
+            document.body.appendChild(dlg);
+            document.body.classList.add('modal-open');   // ให้ระบบซิงค์ข้อมูลทุก 30 วิ หยุดรอระหว่างย้าย
+        }
+        dlg.innerHTML = html;
+        syncLeft();
+    }
+    function closeDlg() {
+        if (dlg) { dlg.remove(); dlg = null; }
+        if (!document.querySelector('.modal.show')) document.body.classList.remove('modal-open');
+        syncLeft();
+    }
+    const setErr = (m) => { const el = dlg && dlg.querySelector('.ad-err'); if (el) { el.textContent = m || ''; el.style.display = m ? 'block' : 'none'; } };
+ 
+    function openConfirm() {
+        if (!pv || !pv.rowCount || busy || !allowed()) return;
+        const after = Math.max(0, pv.total - pv.rowCount);
+        openDlg('<div class="ad" role="dialog" aria-modal="true"><div class="ad-h"><div class="ad-ic">' + ICON + '</div><div><div class="ad-t">ยืนยันย้ายประวัติเก่าไป Archive?</div><div class="ad-s">ตรวจสอบตัวเลขอีกครั้งก่อนย้ายจริง</div></div></div>' +
+            '<div class="ad-rows"><div><span>เงื่อนไข</span><b>ล็อตปิดจบแล้ว และเก่ากว่า ' + fmt(pv.days) + ' วัน</b></div><div><span>จำนวนล็อต</span><b>' + fmt(pv.lotCount) + ' ล็อต</b></div>' +
+            '<div><span>จำนวนแถวที่ย้าย</span><b style="color:#1e40af">' + fmt(pv.rowCount) + ' แถว</b></div><div><span>ประวัติหลักจะเหลือ</span><b>' + fmt(pv.total) + ' → ' + fmt(after) + ' แถว</b></div></div>' +
+            '<div class="ad-warn">ย้ายแล้วดึงกลับเข้าประวัติหลักอัตโนมัติไม่ได้ ข้อมูลยังเปิดดูได้จากปุ่ม “โหลดประวัติเก่า” ในหน้าประวัติ</div>' +
+            '<label class="ad-ck"><input type="checkbox" id="ar-ck"><span>ฉันสำรองข้อมูลแล้ว และเข้าใจว่าการย้ายครั้งนี้ย้อนกลับเองไม่ได้</span></label>' +
+            '<div class="ad-err"></div><div class="ad-b"><button type="button" class="ad-go" id="ar-go" disabled>ย้าย ' + fmt(pv.rowCount) + ' แถวเลย</button><button type="button" class="ad-no" id="ar-no">ยกเลิก</button></div></div>');
+        const ck = dlg.querySelector('#ar-ck'), go = dlg.querySelector('#ar-go');
+        ck.onchange = () => { go.disabled = !ck.checked; };
+        dlg.querySelector('#ar-no').onclick = () => { if (!busy) closeDlg(); };
+        go.onclick = () => { if (ck.checked) run(); };
+        setTimeout(() => { try { ck.focus(); } catch (e) { } }, 50);
+    }
+ 
+    function stepRow(i, t, s) {
+        const cls = stage > i ? 'd' : (stage === i ? 'a' : 'p');
+        const mark = cls === 'd' ? '<i class="bi bi-check-lg"></i>' : (cls === 'a' ? '<i class="bi bi-arrow-repeat ad-sp"></i>' : '');
+        return '<div class="ad-sp1"><div class="m ' + cls + '">' + mark + '</div><div><b>' + t + '</b><span>' + s + '</span></div></div>';
+    }
+    function showMoving(n, p) {
+        stage = n;
+        openDlg('<div class="ad ad-c" role="dialog" aria-modal="true"><div class="ad-big blu"><i class="bi bi-arrow-repeat ad-sp"></i></div>' +
+            '<div><div class="ad-t">กำลังโอนข้อมูลไป Archive…</div><div class="ad-s">' + fmt(p.rowCount) + ' แถว · ' + fmt(p.lotCount) + ' ล็อต · อาจใช้เวลาสักครู่</div></div>' +
+            '<div class="ad-ind"><i></i></div><div class="ad-steps">' +
+            stepRow(1, 'คัดลอกแถวไปเก็บใน History_Archive', 'เขียนลง Archive ให้ครบก่อน เพื่อไม่ให้ข้อมูลหาย') +
+            stepRow(2, 'ลบแถวที่ย้ายแล้วออกจากประวัติหลัก', 'ทำหลังจากคัดลอกสำเร็จเท่านั้น') +
+            stepRow(3, 'โหลดข้อมูลใหม่เข้าระบบ', 'อัปเดตตัวเลขสต็อกและหน้าประวัติ') + '</div>' +
+            '<div class="ad-warn" style="width:100%;box-sizing:border-box;text-align:center">อย่าปิดหน้านี้ และอย่ากดซ้ำ จนกว่าระบบจะบอกว่าเสร็จ</div></div>');
+    }
+    function showDone(res, p) {
+        const n = parseInt(res && res.archivedCount, 10) || 0;
+        const lots = parseInt(res && res.lotCount, 10) || 0;
+        const after = Math.max(0, p.total - n);
+        const pct = p.total > 0 ? Math.round(after * 100 / p.total) : 0;
+        const navH = document.getElementById('nav-history-item');
+        const canHist = navH && navH.style.display !== 'none';
+        pv = null;
+        openDlg('<div class="ad ad-c" role="dialog" aria-modal="true"><div class="ad-big grn"><i class="bi bi-check-lg"></i></div>' +
+            '<div><div class="ad-t">' + (n ? 'ย้ายเสร็จแล้ว' : 'ไม่มีรายการที่ต้องย้าย') + '</div><div class="ad-s">' + (n ? fmt(lots) + ' ล็อต · ' + fmt(n) + ' แถว ถูกย้ายไป History_Archive' : 'ไม่พบรายการที่ควรย้ายในตอนนี้ (ข้อมูลอาจถูกย้ายไปแล้ว)') + '</div></div>' +
+            (n ? '<div class="ad-ba"><div><span style="color:#475569">ประวัติหลักก่อนย้าย</span><b>' + fmt(p.total) + ' แถว</b></div><div class="tr"><i style="width:' + pct + '%"></i></div><div><span style="color:#166534">ประวัติหลักหลังย้าย</span><b style="color:#166534">' + fmt(after) + ' แถว</b></div></div>' : '') +
+            '<div class="ad-b" style="width:100%"><button type="button" class="ad-go blu" id="ar-ok">เสร็จสิ้น</button>' + (n && canHist ? '<button type="button" class="ad-no" id="ar-hist">ดูประวัติเก่า</button>' : '') + '</div></div>');
+        dlg.querySelector('#ar-ok').onclick = () => { closeDlg(); renderRight(); };
+        const hb = dlg.querySelector('#ar-hist');
+        if (hb) hb.onclick = () => { closeDlg(); renderRight(); try { navH.click(); } catch (e) { } };
+        renderRight();
+    }
+    function showFail(err) {
+        openDlg('<div class="ad ad-c" role="dialog" aria-modal="true"><div class="ad-big red"><i class="bi bi-exclamation-lg"></i></div>' +
+            '<div><div class="ad-t">ย้ายไม่สำเร็จ</div><div class="ad-s">' + esc((err && err.message) || String(err)) + '</div></div>' +
+            '<div class="ad-warn" style="width:100%;box-sizing:border-box;text-align:left">อย่าเพิ่งกดย้ายซ้ำทันที ให้ตรวจชีต History_Archive ก่อนว่าถูกคัดลอกไปแล้วหรือยัง (ระบบคัดลอกไป Archive ก่อน แล้วค่อยลบจากประวัติหลัก) ถ้าไม่แน่ใจ ให้ดูตัวอย่างใหม่อีกครั้ง</div>' +
+            '<div class="ad-b" style="width:100%"><button type="button" class="ad-go blu" id="ar-ok">ปิด</button></div></div>');
+        dlg.querySelector('#ar-ok').onclick = () => { closeDlg(); pv = null; syncLeft(); renderRight(); };
+    }
+ 
+    async function run() {
+        if (busy || !pv || !allowed()) return;
+        const p = pv;
+        busy = true; showMoving(1, p);
+        const t = setTimeout(() => { if (busy && stage === 1) showMoving(2, p); }, 3500);   // ขั้น 1→2 เป็นการประมาณเวลา (ฝั่งเซิร์ฟเวอร์ทำต่อเนื่องในคำสั่งเดียว)
+        try {
+            const res = await callAppsScript('archiveHistory', { cutoffDays: p.days });
+            clearTimeout(t); showMoving(3, p);
+            try { if (typeof loadDataFromSheet === 'function') await loadDataFromSheet(true); } catch (e) { console.warn('ARCHIVE-A reload', e); }
+            busy = false; showDone(res, p);
+        } catch (err) {
+            clearTimeout(t); busy = false; showFail(err);
+        }
+    }
+ 
+    syncLeft(); renderRight();
+    // สิทธิ์ของผู้ใช้ถูกโหลดหลังล็อกอิน จึงวาดใหม่เมื่อเปิดหน้านี้
+    document.addEventListener('shown.bs.tab', (e) => { try { if (e.target && e.target.dataset && e.target.dataset.bsTarget === '#pills-archive') { syncLeft(); if (!loading) renderRight(); } } catch (x) { } });
+})();
 let adminCurrentRoom = null;
 let adminChatPollTimer = null;
 
@@ -17847,7 +18466,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
                 label(tr);
             });
             let b = 0; root.querySelectorAll('tbody tr .plb-box').forEach((el) => { const v = parseInt(el.value, 10); if (v > 0) b += v; });
-            tot.textContent = b > 0 ? 'รวมทั้งหมด ' + fmt(b) + ' กล่อง' : '';
+            tot.textContent = window.__plbTotal ? window.__plbTotal(root) : (b > 0 ? 'รวมทั้งหมด ' + fmt(b) + ' กล่อง' : '');   // B3: แยกหน่วย กล่อง/แร็ค
         }, 120);
     }
     try {
@@ -22782,24 +23401,31 @@ renderLGTagPrintWindow = function(tags, printWin) {
 })();
 // ===== จบ LG-RECEIVE-BACKDATE-WEB =====
 // ===== จบ SYNC-CARD-A =====
-// ===== PACKING-BOX-B2: Packing List เพิ่ม "จำนวนต่อกล่อง" + "จำนวนกล่องที่ต้องส่ง" (แบบ B) =====
-// ไม่แก้ฟังก์ชัน Packing List เดิม: ครอบไว้ด้วยหน้าต่างกรอกข้อมูลกล่องก่อนพิมพ์ แล้วเติมช่อง "แพ็ค" + กล่องสรุปยอดรวมลงใน PDF
-// จำค่า "ต่อกล่อง" ของแต่ละรหัสสินค้าไว้ในเครื่องนี้ (ครั้งหน้าไม่ต้องกรอกซ้ำ) · กด "ข้ามไป" = พิมพ์แบบเดิมทุกอย่าง
-// (ลบแพตช์นี้ออก = กลับเป็นแบบเดิม)
+// ===== PACKING-BOX-B3
 (function () {
     if (window.__packingBoxB2) return; window.__packingBoxB2 = true;
-
+ 
     const LS_KEY = 'plPerBox_v1';
     // ฟังก์ชัน Packing List เดิมถูกสร้างตอนระบบเริ่มทำงาน (หลังบล็อกนี้) → ดักตอนมันถูกสร้าง และถ้าถูกสร้างซ้ำก็ครอบใหม่ให้อัตโนมัติ
     let origGen = (typeof window.generatePackingListPDF === 'function') ? window.generatePackingListPDF : null;
     const origPdf = window.html2pdf;
     const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const fmt = (n) => Number(n).toLocaleString('en-US');
+    // ประเภทแพ็คกิ้งของสินค้า (อ่านจากช่อง packagingType ในข้อมูลสินค้า): แร็ค / กล่อง (ไม่ได้ตั้ง = กล่อง)
+    const prodOf = (id) => (db.products || []).find(x => String(x.id).trim() === String(id).trim());
+    const unitOf = (id) => { const f = prodOf(id); return (f && /rack|แร็ค|แร็ก/i.test(String(f.packagingType || ''))) ? 'แร็ค' : 'กล่อง'; };
+    const sumText = (by) => Object.keys(by).filter(u => by[u] > 0).map(u => fmt(by[u]) + ' ' + u).join(' + ');
+    // ให้แพตช์ PACKING-BOX-DB / PACKING-LIST-INVOICE-PICK เรียกใช้สรุปยอดรวมแบบแยกหน่วย (กล่อง/แร็ค)
+    window.__plbTotal = (root) => {
+        const by = {};
+        root.querySelectorAll('tbody tr').forEach(tr => { const el = tr.querySelector('.plb-box'); const v = el ? parseInt(el.value, 10) : 0; if (v > 0) { const u = tr.dataset.u || 'กล่อง'; by[u] = (by[u] || 0) + v; } });
+        return sumText(by) ? 'รวมทั้งหมด ' + sumText(by) : '';
+    };
     let pending = null, pendingT = null;
-
+ 
     function loadMem() { try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}') || {}; } catch (e) { return {}; } }
     function saveMem(m) { try { localStorage.setItem(LS_KEY, JSON.stringify(m)); } catch (e) { } }
-
+ 
     // รายการในรอบนี้ (เงื่อนไขเดียวกับฟังก์ชันเดิมทุกประการ เพื่อให้ลำดับแถวตรงกัน)
     function getGroupItems(date, displayTime, customer) {
         const safeDate = typeof formatDate === 'function' ? formatDate(date) : date;
@@ -22813,7 +23439,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
         });
     }
     const isShip = (p) => p.jobType !== 'Pickup' && p.jobType !== 'Other' && Number(p.quantity) > 0 && p.productId && p.productId !== '-';
-
+ 
     // ----- ครอบ html2pdf: ตอนฟังก์ชันเดิมส่งหน้ากระดาษเข้า html2pdf ให้เติมช่องกล่องลงไปก่อน -----
     // (html2pdf ต่อคำสั่งเป็นสายแล้วสร้างตัวใหม่ทุกครั้ง จึงต้องครอบที่ Worker.prototype.from)
     try {
@@ -22830,7 +23456,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
             WP.__plBoxWrapped = true;
         }
     } catch (e) { }
-
+ 
     function decorate(el, rowsData) {
         const table = el.querySelector('table');
         if (!table) return;
@@ -22841,46 +23467,48 @@ renderLGTagPrintWindow = function(tags, printWin) {
         if (qtyIdx < 0) return;
         const W = [4, 10, 14, 11, 7, 17, 18, 11, 8];   // ลำดับ, รหัส, ชื่อ, ERP, จำนวน, [แพ็ค], Lot, Invoice, หมายเหตุ
         const nth = document.createElement('th');
-        nth.textContent = 'แพ็ค (กล่อง × ชิ้น/กล่อง)';
+        const us = Array.from(new Set(rowsData.filter(d => d && d.per > 0 && d.boxes > 0).map(d => d.unit)));
+        nth.textContent = 'แพ็ค (' + (us.length === 1 ? us[0] + ' × ชิ้น/' + us[0] : 'กล่อง/แร็ค × ชิ้น/หน่วย') + ')';
         nth.setAttribute('style', 'padding:6px;border:1px solid #f59e0b;font-size:10.5px;background:#f59e0b;color:#3b2a00;');
         ths[qtyIdx].insertAdjacentElement('afterend', nth);
         const all = table.querySelectorAll('thead th');
         all.forEach((th, i) => { if (W[i] != null) th.style.width = W[i] + '%'; });
-
+ 
         const trs = table.querySelectorAll('tbody tr');
-        let sumBox = 0, sumPcs = 0, items = 0;
+        const sumBy = {}; let sumPcs = 0, items = 0;
         trs.forEach((tr, i) => {
             const d = rowsData[i];
             const tds = tr.querySelectorAll('td');
             const td = document.createElement('td');
             td.setAttribute('style', 'padding:5px 6px;border:1px solid #dee2e6;text-align:center;background:#fff8e1;');
             if (d && d.per > 0 && d.boxes > 0) {
-                let sub = '× ' + fmt(d.per) + ' ชิ้น/กล่อง';
+                const u = d.unit || 'กล่อง';
+                let sub = '× ' + fmt(d.per) + ' ชิ้น/' + u;
                 const full = Math.floor(d.qty / d.per), rem = d.qty - full * d.per;
                 if (d.boxes === Math.ceil(d.qty / d.per) && rem > 0 && full > 0) sub = full + '×' + fmt(d.per) + ' + 1×' + fmt(rem) + ' (เศษ)';
-                else if (d.boxes === Math.ceil(d.qty / d.per) && rem > 0 && full === 0) sub = 'กล่องเดียว ' + fmt(rem) + ' ชิ้น (ไม่เต็มกล่อง)';
-                td.innerHTML = '<span style="display:inline-block;background:#fef3c7;border:1px solid #f59e0b;color:#7c4a00;border-radius:12px;padding:2px 9px;font-weight:800;font-size:12px;">' + fmt(d.boxes) + ' กล่อง</span>' +
+                else if (d.boxes === Math.ceil(d.qty / d.per) && rem > 0 && full === 0) sub = u + 'เดียว ' + fmt(rem) + ' ชิ้น (ไม่เต็ม' + u + ')';
+                td.innerHTML = '<span style="display:inline-block;background:#fef3c7;border:1px solid #f59e0b;color:#7c4a00;border-radius:12px;padding:2px 9px;font-weight:800;font-size:12px;">' + fmt(d.boxes) + ' ' + u + '</span>' +
                     '<div style="font-size:9px;color:#777;margin-top:2px;">' + esc(sub) + '</div>';
-                sumBox += d.boxes; sumPcs += d.qty; items++;
+                sumBy[u] = (sumBy[u] || 0) + d.boxes; sumPcs += d.qty; items++;
             } else {
                 td.innerHTML = '<span style="color:#aaa;">-</span>';
             }
             if (tds[qtyIdx]) tds[qtyIdx].insertAdjacentElement('afterend', td);
             else tr.appendChild(td);
         });
-
+ 
         // กล่องสรุปยอดรวมกล่อง ที่แถวข้อมูลหัวกระดาษ (ก่อนช่อง QR)
         const qr = el.querySelector('#pl-qr-box');
         if (qr && qr.parentNode) {
             const s = document.createElement('div');
             s.setAttribute('style', 'flex:none;width:130px;border:1px solid #f59e0b;border-radius:6px;padding:6px 8px;background:#fff3cd;text-align:center;');
             s.innerHTML = '<div style="font-size:10px;color:#92400e;font-weight:bold;">รวมที่ต้องส่ง</div>' +
-                '<div style="font-size:21px;font-weight:800;color:#b45309;line-height:1.25;">' + fmt(sumBox) + ' กล่อง</div>' +
+                '<div style="font-size:' + (Object.keys(sumBy).length > 1 ? 15 : 21) + 'px;font-weight:800;color:#b45309;line-height:1.25;">' + Object.keys(sumBy).filter(u => sumBy[u] > 0).map(u => fmt(sumBy[u]) + ' ' + u).join('<br>') + '</div>' +
                 '<div style="font-size:9px;color:#92400e;">' + items + ' รายการ · ' + fmt(sumPcs) + ' ชิ้น</div>';
             qr.parentNode.insertBefore(s, qr);
         }
     }
-
+ 
     // ----- หน้าต่างกรอกก่อนพิมพ์ -----
     const packingBoxWrapper = function (date, displayTime, customer) {
         let items;
@@ -22890,23 +23518,24 @@ renderLGTagPrintWindow = function(tags, printWin) {
         const args = arguments, self = this;
         const mem = loadMem();
         const prod = (id) => { const f = (db.products || []).find(x => String(x.id).trim() === String(id).trim()); return f; };
-
+ 
         const rowsHtml = ship.map((x, k) => {
             const q = Number(x.p.quantity), key = String(x.p.productId).trim();
             const per = Number(mem[key]) > 0 ? Number(mem[key]) : '';
-            return '<tr data-k="' + k + '" data-q="' + q + '">' +
-                '<td style="text-align:left;padding:7px 8px;border:1px solid #e5e7eb;"><b style="color:#0d6efd">' + esc(key) + '</b> ' + esc(x.p.productName || '') + '</td>' +
+            const un = unitOf(key), isR = un === 'แร็ค';
+            return '<tr data-k="' + k + '" data-q="' + q + '" data-u="' + un + '">' +
+                '<td style="text-align:left;padding:7px 8px;border:1px solid #e5e7eb;"><b style="color:#0d6efd">' + esc(key) + '</b> ' + esc(x.p.productName || '') + ' <span style="display:inline-block;font-size:.7rem;font-weight:800;border-radius:10px;padding:1px 8px;background:' + (isR ? '#dbeafe' : '#fef3c7') + ';color:' + (isR ? '#1d4ed8' : '#92400e') + ';">' + un + '</span></td>' +
                 '<td style="padding:7px 8px;border:1px solid #e5e7eb;font-weight:700;text-align:center;">' + fmt(q) + '</td>' +
                 '<td style="padding:7px 8px;border:1px solid #e5e7eb;text-align:center;white-space:nowrap;"><input type="number" min="1" step="1" inputmode="numeric" class="plb-per" value="' + per + '" style="width:80px;text-align:center;font-weight:800;border:2px solid ' + (per ? '#0d6efd' : '#f59e0b') + ';border-radius:6px;padding:3px 4px;"> <span class="plb-mem" style="font-size:.72rem;font-weight:700;color:' + (per ? '#16a34a' : '#b45309') + '">' + (per ? '✓ จำค่าล่าสุด' : 'ยังไม่เคยกรอก') + '</span></td>' +
-                '<td style="padding:7px 8px;border:1px solid #e5e7eb;text-align:center;white-space:nowrap;"><input type="number" min="0" step="1" inputmode="numeric" class="plb-box" value="' + (per ? Math.ceil(q / per) : '') + '" style="width:80px;text-align:center;font-weight:800;border:2px solid #cbd5e1;border-radius:6px;padding:3px 4px;background:#f1f5f9;"> <span class="plb-rem" style="font-size:.72rem;font-weight:700;color:#b45309"></span></td>' +
+                '<td style="padding:7px 8px;border:1px solid #e5e7eb;text-align:center;white-space:nowrap;"><input type="number" min="0" step="1" inputmode="numeric" class="plb-box" value="' + (per ? Math.ceil(q / per) : '') + '" style="width:80px;text-align:center;font-weight:800;border:2px solid #cbd5e1;border-radius:6px;padding:3px 4px;background:#f1f5f9;"> <span class="plb-rem" style="font-size:.72rem;font-weight:700;color:#b45309"></span> <span style="font-size:.78rem;font-weight:700;color:#475569;">' + un + '</span></td>' +
                 '</tr>';
         }).join('');
-
-        const html = '<div style="text-align:left;font-size:.82rem;color:#6b7280;margin-bottom:8px;">' + esc(String(customer).trim()) + ' · รอบ ' + esc(String(displayTime).replace(/^'+/, '').trim()) + ' น. — กรอก "ต่อกล่อง" แล้วระบบคำนวณจำนวนกล่องให้ (แก้ช่องกล่องเองได้)</div>' +
+ 
+        const html = '<div style="text-align:left;font-size:.82rem;color:#6b7280;margin-bottom:8px;">' + esc(String(customer).trim()) + ' · รอบ ' + esc(String(displayTime).replace(/^'+/, '').trim()) + ' น. — ระบบดึงประเภท (กล่อง/แร็ค) และจำนวนต่อกล่อง/แร็คจากข้อมูลสินค้าให้แล้ว (แก้จำนวนต่อกล่อง/แร็คได้) · จำนวนที่ต้องส่งคำนวณให้อัตโนมัติ</div>' +
             '<div style="max-height:52vh;overflow:auto;"><table style="width:100%;border-collapse:collapse;font-size:.85rem;"><thead><tr style="background:#0d6efd;color:#fff;">' +
-            '<th style="padding:7px;">สินค้า</th><th style="padding:7px;width:12%">จำนวน</th><th style="padding:7px;width:30%">จำนวนต่อกล่อง</th><th style="padding:7px;width:30%">กล่องที่ต้องส่ง</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div>' +
+            '<th style="padding:7px;">สินค้า</th><th style="padding:7px;width:12%">จำนวน</th><th style="padding:7px;width:30%">จำนวนต่อกล่อง/แร็ค</th><th style="padding:7px;width:30%">จำนวนที่ต้องส่ง</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div>' +
             '<div id="plb-total" style="margin-top:10px;font-weight:800;color:#b45309;text-align:right;"></div>';
-
+ 
         function recalc(tr, fromPer) {
             const q = Number(tr.dataset.q), perEl = tr.querySelector('.plb-per'), boxEl = tr.querySelector('.plb-box'), rem = tr.querySelector('.plb-rem'), mm = tr.querySelector('.plb-mem');
             const per = parseInt(perEl.value, 10);
@@ -22920,9 +23549,9 @@ renderLGTagPrintWindow = function(tags, printWin) {
             rem.textContent = (per > 0 && r > 0 && !boxEl.dataset.manual) ? 'เศษ ' + fmt(r) + ' ชิ้น' : '';
         }
         function total(root) {
-            let b = 0;
-            root.querySelectorAll('tbody tr').forEach(tr => { const v = parseInt(tr.querySelector('.plb-box').value, 10); if (v > 0) b += v; });
-            const t = root.querySelector('#plb-total'); if (t) t.textContent = b > 0 ? 'รวมทั้งหมด ' + fmt(b) + ' กล่อง' : '';
+            const by = {};
+            root.querySelectorAll('tbody tr').forEach(tr => { const v = parseInt(tr.querySelector('.plb-box').value, 10); if (v > 0) by[tr.dataset.u] = (by[tr.dataset.u] || 0) + v; });
+            const t = root.querySelector('#plb-total'); if (t) t.textContent = sumText(by) ? 'รวมทั้งหมด ' + sumText(by) : '';
         }
         function collect(root) {
             const out = [];   // ตามลำดับรายการในรอบ (ช่องที่ไม่ใช่งานส่งสินค้าเป็น null)
@@ -22931,13 +23560,13 @@ renderLGTagPrintWindow = function(tags, printWin) {
                 const x = ship[Number(tr.dataset.k)];
                 const per = parseInt(tr.querySelector('.plb-per').value, 10);
                 const boxes = parseInt(tr.querySelector('.plb-box').value, 10);
-                out[x.i] = { qty: Number(x.p.quantity), per: per > 0 ? per : 0, boxes: boxes > 0 ? boxes : 0, key: String(x.p.productId).trim() };
+                out[x.i] = { qty: Number(x.p.quantity), per: per > 0 ? per : 0, boxes: boxes > 0 ? boxes : 0, key: String(x.p.productId).trim(), unit: tr.dataset.u || 'กล่อง' };
             });
             return out;
         }
-
+ 
         Swal.fire({
-            title: '📦 ระบุข้อมูลกล่องก่อนพิมพ์ Packing List',
+            title: '📦 ระบุข้อมูลกล่อง/แร็คก่อนพิมพ์ Packing List',
             html: html, width: 760, showCancelButton: false, showDenyButton: true, showCloseButton: true,
             confirmButtonText: '🖨️ พิมพ์ Packing List', denyButtonText: 'ข้ามไป (พิมพ์แบบเดิม)',
             denyButtonColor: '#6c757d', focusConfirm: false,
@@ -22969,7 +23598,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
             }
         });
     };
-
+ 
     try {
         Object.defineProperty(window, 'generatePackingListPDF', {
             configurable: true, enumerable: true,
@@ -22985,7 +23614,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
         }, 500);
     }
 })();
-// ===== จบ PACKING-BOX-B2 =====
+// ===== จบ PACKING-BOX-B3 =====
 // ===== LG-RETURN-TAG-WEB: คืนแท็ก / ยกเลิกการยิงออก (แบบ A: ค้นหา WO / Part / เลขแท็ก → เลือก → เหตุผล → คืน) =====
 // ต้องวางโค้ด Google Script (LG-RETURN-TAG) แล้ว Deploy เวอร์ชันใหม่ด้วย ปุ่มถึงจะใช้งานได้
 // ปุ่ม "คืนแท็ก" โผล่ข้างปุ่ม "เช็คแท็กค้างสแกน" เฉพาะแอดมิน หรือคนที่แอดมินติ๊กสิทธิ์ "คืนแท็ก" ในหน้าผู้ใช้
@@ -25538,6 +26167,373 @@ renderLGTagPrintWindow = function(tags, printWin) {
 })();
 // ===== จบ LG-RECV-I18N =====
 (function () {
+    if (window.__lgPlanI18n) return; window.__lgPlanI18n = true;
+ 
+    const PANE = 'pills-lg-matching';
+    const THAI = /[฀-๿]/;
+    const isEn = () => { try { return currentLanguage === 'en'; } catch (e) { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e2) { return false; } } };
+ 
+    // [ไทย, อังกฤษ] (เรียงวลียาวไปสั้นให้อัตโนมัติ)
+    const TT = [];
+    const esc = (s) => s.replace(/[.*+?^${}()|[\]\\\/]/g, '\\$&');
+    const X = (th, en) => TT.push([new RegExp('^(\\s*)' + esc(th) + '(\\s*)$', 'g'), '$1' + en + '$2']);   // ตรงทั้งข้อความ (คงช่องว่างหน้า-หลัง)
+    const P = (re, en) => TT.push([re, en]);                                                          // บางส่วนของข้อความ
+ 
+    // ---------- หน้าหลัก ----------
+    X('อัปโหลดแพลน LG', 'Upload LG Plan');
+    P(/ดาวน์โหลดเทมเพลตก่อน กรอกข้อมูล/g, 'Download the template first, then fill in');
+    P(/แล้วอัปโหลดกลับเข้าระบบ จากนั้นกด "ปริ้นแท็ก" ได้เลย/g, 'then upload it back into the system and press "Print tags".');
+    P(/วันที่แพลน\s*:/g, 'Plan date:');
+    P(/อัปโหลดจะต่อท้ายแพลนของวันที่เลือก \/ ปริ้นแท็กเฉพาะวันที่เลือก/g, 'Uploads are appended to the plan of the selected date / tags are printed for the selected date only');
+    X('ดาวน์โหลดเทมเพลต', 'Download template');
+    X('อัปโหลดแพลน', 'Upload plan');
+    X('ปริ้นแพลน', 'Print plan');
+    X('ปริ้นแท็ก', 'Print tags');
+    X('เช็คแท็กค้างสแกน', 'Check unscanned tags');
+    X('คืนแท็ก', 'Return tag');
+    P(/เพิ่มแพลน LG ด้วยมือ/g, 'Add LG plan manually');
+    P(/\(ต่อท้ายแพลนของวันที่เลือกด้านบน\)/g, '(appended to the plan of the date selected above)');
+    X('จำนวนออเดอร์ *', 'Order qty *');
+    P(/วันที่-เวลาเริ่มผลิต/g, 'Start date-time');
+    P(/จำนวนออเดอร์/g, 'Order qty');
+    P(/เวลาเริ่มผลิต/g, 'Start time');
+    X('เพิ่มเข้าแพลน', 'Add to plan');
+    X('สแกนแท็ก', 'Scan tag');
+    P(/สแกนด้วยกล้อง/g, 'Scan with camera');
+    P(/ปิดกล้อง/g, 'Close camera');
+    P(/เล็งกล้องไปที่บาร์โค้ด\/QR บนแท็ก ระบบจะสแกนให้อัตโนมัติ/g, 'Point the camera at the barcode/QR on the tag; the system scans automatically');
+    P(/สถานะการแมทช์ทั้งหมด/g, 'All match status');
+    X('รีเฟรช', 'Refresh');
+    X('ไลน์ผลิต', 'Production line');
+    X('วันที่-เวลาผลิต', 'Production date-time');
+    X('สแกนแล้ว / ออเดอร์', 'Scanned / Order');
+    X('ความคืบหน้า', 'Progress');
+    X('สถานะ', 'Status');
+    X('ปริ้นล่าสุด', 'Last printed');
+    X('ลำดับ', 'Seq.');
+    P(/เหลืออีก\s*(\d+)/g, 'Remaining $1');
+    P(/เหลืออีก/g, 'Remaining');
+    P(/✅ ครบแล้ว/g, '✅ Complete');
+    P(/ยังไม่มีแพลนของวันที่เลือก กรุณาอัปโหลดก่อน/g, 'No plan for the selected date. Please upload first');
+    P(/🔦 คลิกช่องนี้แล้วสแกนแท็กได้เลย \(เครื่องสแกน USB\)\.\.\./g, '🔦 Click this box, then scan a tag (USB scanner)...');
+    P(/เพิ่ม WO (\S+) แล้ว/g, 'Added WO $1');
+    P(/ไม่สามารถอ่านบาร์โค้ดนี้ได้ ลองสแกนใหม่อีกครั้ง/g, 'Cannot read this barcode. Please try scanning again');
+ 
+    // ---------- ป๊อบอัพปริ้นแท็ก ----------
+    P(/เลือกล็อตที่จะปริ้นแท็ก/g, 'Select lots to print tags');
+    P(/🏷️ รหัส ANE\/ANF ระบบดึงจากคอลัมน์ Model ของแพลนให้อัตโนมัติ/g, '🏷️ The ANE/ANF code is taken automatically from the Model column of the plan');
+    P(/เลือกรหัสนำหน้าเลขที่เอกสาร/g, 'Select the document number prefix');
+    P(/ขนาดแท็ก\s*:/g, 'Tag size:');
+    P(/A4L \(แบบเดิม\)/g, 'A4L (original)');
+    P(/A4P \(แบบยาว\)/g, 'A4P (long)');
+    X('เลือกทั้งหมด', 'Select all');
+    X('เฉพาะที่ยังไม่ปริ้น', 'Unprinted only');
+    X('ไม่เลือก', 'Select none');
+    X('ออเดอร์', 'Order');
+    X('สแกนแล้ว', 'Scanned');
+    X('ปริ้นแล้ว', 'Printed');
+    X('ยังไม่ปริ้น', 'Not printed');
+    X('ปิด', 'Close');
+    P(/กรุณาเลือกก่อนครับ/g, 'Please select first');
+    P(/กำลังสร้างแท็ก\.\.\./g, 'Creating tags...');
+    P(/⏳ กำลังเตรียมแท็ก กรุณารอสักครู่\.\.\./g, '⏳ Preparing tags, please wait...');
+    P(/สร้างแท็กไม่สำเร็จ/g, 'Failed to create tags');
+    P(/ปริ้นแล้ว แต่บันทึกรายการแท็กไม่สำเร็จ/g, 'Printed, but saving the tag list failed');
+    P(/ไม่มีรายการให้ปริ้น/g, 'Nothing to print');
+    P(/กรุณาตรวจสอบจำนวนออเดอร์ในแพลนครับ/g, 'Please check the order quantities in the plan');
+    P(/ยังไม่มีแพลน/g, 'No plan yet');
+    P(/กรุณาอัปโหลดแพลนก่อนปริ้นแท็กครับ/g, 'Please upload a plan before printing tags');
+    P(/วันที่เลือกยังไม่มีแพลน กรุณาอัปโหลดหรือเพิ่มแพลนก่อนครับ/g, 'The selected date has no plan. Please upload or add a plan first');
+    P(/วันที่เลือกยังไม่มีแพลนให้ปริ้นครับ/g, 'The selected date has no plan to print');
+    P(/เปิดหน้าต่างไม่สำเร็จ/g, 'Could not open the window');
+    P(/เบราว์เซอร์บล็อกป๊อปอัพ กรุณาอนุญาตป๊อปอัพสำหรับเว็บนี้แล้วกดใหม่อีกครั้งครับ/g, 'The browser blocked the pop-up. Please allow pop-ups for this site and try again');
+ 
+    // ---------- เช็คแท็กค้างสแกน ----------
+    X('ทั้งหมด', 'All');
+    X('ยังไม่ใช้', 'Unused');
+    X('ใช้แล้ว', 'Used');
+    P(/ปริ้นทั้งหมด\s*(\d+)\s*ใบ/g, 'Printed $1 tags in total');
+    P(/ใช้แล้ว\s+(\d+)/g, 'Used $1');
+    P(/ยังไม่ใช้\s+(\d+)/g, 'Unused $1');
+    P(/ยกเลิก\s+(\d+)/g, 'Voided $1');
+    X('ใบที่', 'No.');
+    X('เลขแท็ก', 'Tag no.');
+    X('จำนวน', 'Qty');
+    X('ปริ้นเมื่อ / โดย', 'Printed at / by');
+    P(/ไม่มีข้อมูลแท็กของวันที่นี้ \(แท็กที่ปริ้นก่อนเริ่มใช้ฟังก์ชันนี้จะไม่มีในรายการ\)/g, 'No tag data for this date (tags printed before this feature was introduced are not listed)');
+    P(/ไม่มีรายการในตัวกรองนี้/g, 'No items in this filter');
+    P(/ในชีต LG_TagLog ไม่มีข้อมูลแท็กเลย/g, 'The LG_TagLog sheet has no tag data at all');
+    P(/แปลว่าตอนปริ้นแท็ก ระบบบันทึกรายการไม่สำเร็จ \(จะมีแถบสีเหลือง "ปริ้นแล้ว แต่บันทึกรายการแท็กไม่สำเร็จ" ขึ้นมุมขวาบนตอนปริ้น\) หรือยังไม่เคยปริ้นแท็กหลังเปิดใช้ฟังก์ชันนี้/g,
+      'This means saving the tag list failed when the tags were printed (a yellow bar "Printed, but saving the tag list failed" appears at the top right while printing), or no tags have been printed since this feature was enabled');
+    P(/มีแท็กในระบบทั้งหมด\s*(\d+)\s*ใบ ตามวันที่แพลน \(กดเพื่อดู\)\s*:/g, 'There are $1 tags in the system in total, by plan date (click to view):');
+    P(/\(ไม่มีวันที่\)/g, '(no date)');
+    P(/ไม่พบแท็กที่ตรงกับคำค้นหา/g, 'No tags match the search');
+    P(/🔍 ค้นหา เลขแท็ก \/ Part \/ WO/g, '🔍 Search tag no. / Part / WO');
+    P(/^(\s*)สแกน(\s)/g, '$1Scanned$2');
+    P(/^(\s*)โดย(\s)/g, '$1by$2');
+    X('คืนสถานะ', 'Restore');
+    X('ยกเลิกใบนี้', 'Void this tag');
+    P(/บันทึกสแกนออกย้อนหลังแล้ว\s*:/g, 'Retroactive scan-out recorded:');
+    P(/บันทึกสแกนออกย้อนหลัง/g, 'Record scan-out retroactively');
+    P(/ยืนยัน บันทึกสแกนออก/g, 'Confirm record scan-out');
+    P(/บันทึกสแกนออก/g, 'Record scan-out');
+    P(/ยกเลิกแท็ก (\S+) \?\s*\(ใบนี้จะไม่ถูกนับเป็น "ค้างสแกน"\)/g, 'Void tag $1 ?\n(this tag will not be counted as "unscanned")');
+    P(/คืนสถานะแท็ก (\S+) \?/g, 'Restore tag $1 ?');
+    P(/กำลังโหลดข้อมูลล่าสุด\.\.\./g, 'Loading the latest data...');
+    P(/ไม่มีสิทธิ์เข้าใช้งานส่วนนี้/g, 'You do not have access to this section');
+    X('ไม่มีสิทธิ์', 'No permission');
+    P(/รีเฟรชไม่สำเร็จ\s*:/g, 'Refresh failed:');
+    // แผงบันทึกสแกนออกย้อนหลัง
+    X('แท็ก', 'Tag');
+    P(/^(\s*·\s*.*?\s*·\s*)รวม(\s*)$/g, '$1Total$2');
+    P(/^(\s*)รวม(\s*)$/g, '$1Total$2');
+    X('ชิ้น', 'pcs');
+    X('เหตุผล', 'Reason');
+    X('หมายเหตุ (ถ้ามี)', 'Note (optional)');
+    X('เวลาที่ส่งจริง', 'Actual dispatch time');
+    X('ใช้เฉพาะแท็กที่', 'Use only for tags that were');
+    X('ส่งไปแล้วจริง', 'actually sent');
+    P(/เท่านั้น ถ้าแท็กใบนี้ไม่ได้ส่ง ให้ปิดหน้านี้แล้วกด "ยกเลิกใบนี้" แทน/g, '. If this tag was not sent, close this panel and press "Void this tag" instead.');
+    P(/ส่งแล้วแต่ลืมสแกน/g, 'Sent but forgot to scan');
+    P(/เครื่องสแกน\/ระบบมีปัญหา/g, 'Scanner/system problem');
+    P(/แท็กชำรุด สแกนไม่ติด/g, 'Tag damaged, cannot scan');
+    P(/อื่นๆ \(ระบุในช่องหมายเหตุ\)/g, 'Other (specify in the note)');
+    P(/เลือก "อื่นๆ" กรุณาระบุหมายเหตุ/g, 'Select "Other": please enter a note');
+    P(/เวลาไม่ถูกต้อง/g, 'Invalid time');
+    P(/เวลาที่ส่งจริงต้องไม่เป็นอนาคต/g, 'The actual dispatch time must not be in the future');
+    P(/กำลังบันทึก\s*(\d+)\/(\d+)\s*\.\.\./g, 'Saving $1/$2 ...');
+    P(/\(ย้อนหลัง\)/g, '(retroactive)');
+    P(/บันทึกไปแล้ว (\d+) จาก (\d+) รายการ/g, 'Saved $1 of $2 items,');
+    P(/กดยืนยันอีกครั้งเพื่อทำต่อ \(ระบบกันบันทึกซ้ำให้\)/g, 'press Confirm again to continue (duplicates are prevented)');
+    P(/ไม่ทราบสาเหตุ/g, 'Unknown reason');
+    X('บันทึกย้อนหลัง', 'Retroactive entry');
+    P(/\(ไม่ได้ระบุเหตุผล\)/g, '(no reason given)');
+    P(/ไม่พบแท็กเลขที่\s*(\S*)/g, 'Tag not found $1');
+    P(/แท็กใบนี้ไม่มีรายการ WO ให้บันทึก/g, 'This tag has no WO items to record');
+ 
+    // ---------- คืนแท็ก ----------
+    P(/คืนแท็ก \/ ยกเลิกการยิงออก/g, 'Return tag / cancel scan-out');
+    P(/ใช้เมื่อของถูกเอากลับมา หรือยิงผิดใบ — ไม่ลบประวัติ แค่ทำเครื่องหมาย "คืนแล้ว"/g, 'Use when goods were taken back or the wrong tag was scanned out — history is not deleted, only marked "Returned"');
+    X('ค้นหาเพื่อคืน', 'Search to return');
+    X('ประวัติการคืน', 'Return history');
+    X('ค้นหา', 'Search');
+    P(/ยังไม่ได้ค้นหา — แสดง (\d+) รายการที่ยิงออกล่าสุด/g, 'Not searched yet — showing the latest $1 scanned-out items');
+    P(/เจอ ([\d,]+) แถว รวม ([\d,]+) ชิ้น/g, 'Found $1 rows, $2 pcs in total');
+    P(/\(ค้นจากแท็กที่ยิง — ติ๊กเลือกให้แล้ว\)/g, '(found from the scanned tag — already ticked)');
+    P(/· แสดง (\d+) แถวแรก ลองพิมพ์ให้เจาะจงขึ้น/g, '· showing the first $1 rows, try a more specific search');
+    P(/กรองสถานะ\s*:/g, 'Filter status:');
+    P(/อยู่ระหว่างทาง/g, 'In transit');
+    P(/LG รับแล้ว/g, 'Received by LG');
+    X('ยิงออก', 'Scanned out');
+    X('แพลน', 'Plan');
+    P(/เหตุผลที่คืน/g, 'Reason for return');
+    P(/LG ไม่ได้ผลิต/g, 'LG did not produce');
+    P(/ยิงผิดใบ/g, 'Wrong tag scanned');
+    P(/ลูกค้าเลื่อน\/ยกเลิก/g, 'Customer postponed/cancelled');
+    P(/ของเสีย\/ตีกลับ/g, 'Defective/rejected');
+    P(/อื่นๆ/g, 'Other');
+    P(/ติ๊กเลือกแถวที่จะคืน/g, 'Tick the rows to return');
+    P(/เลือกแล้ว ([\d,]+) แถว · ([\d,]+) ชิ้น/g, 'Selected $1 rows · $2 pcs');
+    P(/↩ ยืนยันคืน/g, '↩ Confirm return');
+    P(/↩ คืนแท็ก/g, '↩ Return tag');
+    P(/หมายเหตุ \(ไม่บังคับ\) เช่น LG เลื่อนผลิตไปสัปดาห์หน้า/g, 'Note (optional), e.g. LG postponed production to next week');
+    P(/หมายเหตุ \(จำเป็นต้องใส่\)/g, 'Note (required)');
+    P(/🔍 พิมพ์ WO \/ Part \/ เลขแท็ก หรือยิงแท็กตรงนี้ แล้วกด Enter/g, '🔍 Type WO / Part / tag no., or scan a tag here, then press Enter');
+    P(/⚠ ที่เลือกมี ([\d,]+) แถวที่ LG รับไปแล้ว → ระบบจะตัดยอดรับของแถวนั้นให้ด้วย/g, '⚠ $1 selected rows were already received by LG → the received qty of those rows will be deducted too');
+    P(/แถวที่เลือก LG ยังไม่ได้รับ → ตัดแค่ยอดยิงออก/g, 'The selected rows have not been received by LG → only the scanned-out qty is deducted');
+    P(/แน่ใจไหม\? คืน ([\d,]+) แถว \(([\d,]+) ชิ้น\) เหตุผล/g, 'Are you sure? Return $1 rows ($2 pcs), reason');
+    P(/ฉันตรวจแล้วว่าเลือกถูกต้องทั้ง ([\d,]+) แถว/g, 'I have checked that all $1 selected rows are correct');
+    P(/กำลังบันทึก…/g, 'Saving…');
+    X('คืนแล้ว', 'Returned');
+    X('คีย์มือ', 'Manual');
+    P(/กำลังโหลดประวัติ…/g, 'Loading history…');
+    P(/ยังไม่มีรายการที่คืน/g, 'No returned items yet');
+    P(/ไม่พบแถวที่ยิงออกตามที่ค้นหา/g, 'No scanned-out rows found for this search');
+    P(/รายการที่คืนแล้ว \(ใหม่สุดก่อน\) — กด "ยกเลิกการคืน" เพื่อย้ายกลับไปเป็นแท็กที่ยิงออกตามเดิม/g, 'Returned items (newest first) — press "Undo return" to move them back to scanned-out tags');
+    P(/ยกเลิกการคืน ([\d,]+) แถว/g, 'Undo return of $1 rows');
+    P(/ยกเลิกการคืนไม่สำเร็จ\s*:/g, 'Undo failed:');
+    P(/ยกเลิกการคืน/g, 'Undo return');
+    P(/ตัดยอดรับด้วย/g, 'Also deducts received qty');
+    P(/· แสดง (\d+) จาก (\d+)/g, '· showing $1 of $2');
+    P(/✔ คืนแล้ว ([\d,]+) แถว/g, '✔ Returned $1 rows');
+    P(/\(ตัดยอดที่ LG รับด้วย (\d+) แถว\)/g, '(also deducted $1 rows received by LG)');
+    P(/แพลนของ WO\+Part นี้กลับเป็น "ยังไม่ยิง" แล้ว/g, 'the plan of this WO+Part is back to "not scanned out"');
+    P(/· มี (\d+) แถวที่ถูกคืนไปก่อนหน้านี้แล้ว/g, '· $1 rows had already been returned');
+    P(/✔ ยกเลิกการคืนแล้ว (\d+) แถว/g, '✔ Undid the return of $1 rows');
+    P(/\(คืนยอดที่ LG รับ (\d+) แถวด้วย\)/g, '(also restored $1 rows received by LG)');
+    P(/กลับมาเป็นแท็กที่ยิงออกตามเดิม/g, 'back to scanned-out tags as before');
+    P(/คืนสำเร็จบางส่วน (\d+) แถว แต่มีข้อผิดพลาด\s*:/g, 'Partly returned $1 rows, but there was an error:');
+    P(/คืนแท็กไม่สำเร็จ\s*:/g, 'Return failed:');
+    P(/แถวเก่าไม่มีรหัสแถว คืนไม่ได้/g, 'Old row has no row ID, cannot be returned');
+    P(/เหตุผล "อื่นๆ" ต้องพิมพ์หมายเหตุด้วยครับ/g, 'The reason "Other" requires a note');
+    P(/เลือก ([\d,]+) แถว/g, 'Selected $1 rows');
+ 
+    // ---------- อัปโหลดแพลน / เพิ่มแพลนด้วยมือ ----------
+    P(/เพิ่ม (\d+) รายการ/g, 'Add $1 items');
+    P(/เข้าแพลนวันที่/g, 'into the plan for');
+    P(/\(ต่อท้ายลำดับเดิม\)/g, '(appended after the existing order)');
+    P(/ข้าม (\d+) รายการที่มีอยู่แล้ว/g, 'Skip $1 existing items');
+    X('อัปโหลด', 'Upload');
+    P(/กำลังอัปโหลด\.\.\./g, 'Uploading...');
+    X('สำเร็จ!', 'Success!');
+    P(/เพิ่มแพลน (\d+) รายการเรียบร้อยแล้ว/g, 'Added $1 plan items successfully');
+    P(/ไม่มีรายการใหม่/g, 'No new items');
+    P(/รายการทั้งหมดในไฟล์นี้มีอยู่ในแพลนวันที่นี้แล้ว \(WO \+ Part No ซ้ำ\)/g, 'All items in this file already exist in the plan for this date (duplicate WO + Part No)');
+    P(/ไม่พบข้อมูล/g, 'No data found');
+    P(/กรุณาตรวจสอบไฟล์ Excel ว่ามีข้อมูลตามเทมเพลตหรือไม่/g, 'Please check that the Excel file contains data in the template format');
+    X('เกิดข้อผิดพลาด', 'Error');
+    P(/ไม่สามารถอ่านไฟล์ได้\s*:/g, 'Cannot read the file:');
+    P(/เพิ่มแพลน วันที่/g, 'Add plan for');
+    X('เพิ่มแพลน', 'Add plan');
+    P(/กรุณากรอก WO, Part No และจำนวนออเดอร์ให้ครบ/g, 'Please fill in WO, Part No and Order qty');
+    P(/WO \+ Part No นี้มีในแพลนของวันที่เลือกแล้ว/g, 'This WO + Part No already exists in the plan for the selected date');
+    P(/กำลังบันทึก\.\.\./g, 'Saving...');
+    P(/เพิ่มแพลนแล้ว/g, 'Plan added');
+    P(/บันทึกลำดับไม่สำเร็จ/g, 'Failed to save the order');
+    P(/บันทึกไม่สำเร็จ!/g, 'Save failed!');
+    P(/บันทึกไม่สำเร็จ/g, 'Save failed');
+ 
+    // ---------- ผลสแกน ----------
+    P(/สแกนซ้ำ! ไม่บันทึก/g, 'Duplicate scan! Not saved');
+    P(/สแกนซ้ำ!/g, 'Duplicate scan!');
+    P(/แท็ก (\S+) ถูกสแกนไปแล้วเมื่อ (.+?) โดย (.+?) — ไม่ได้บันทึก/g, 'Tag $1 was already scanned on $2 by $3 — not saved');
+    P(/แท็กใบนี้/g, 'This tag');
+    P(/ถูกสแกนไปแล้วเมื่อ/g, 'was already scanned on');
+    X('โดย', 'by');
+    X('รับทราบ', 'OK');
+    P(/ไม่พบ WO/g, 'No WO');
+    P(/ในแพลน \(บันทึกไว้แล้ว\)/g, 'in the plan (already saved)');
+    P(/ครบแล้ว!\s*WO/g, 'Complete! WO');
+    P(/ยังไม่ได้บันทึกลงชีต/g, 'not saved to the sheet');
+    P(/กำลังบันทึกอยู่ \(ไม่ต้องสแกนซ้ำ\)/g, 'is being saved (no need to scan again)');
+    P(/แท็กนี้ยังไม่ถูกนับ — สแกนใหม่ได้เลย/g, 'This tag was not counted — you can scan it again');
+    P(/กรุณาสแกนแท็กนี้ใหม่อีกครั้ง/g, 'Please scan this tag again');
+    P(/ระบบกำลังยุ่ง \(มีงานอื่นใช้ชีตอยู่นาน\) ยังไม่ได้บันทึก/g, 'The system is busy (another task has used the sheet for a long time) — not saved');
+    P(/เน็ตหลุด หรือต่อเซิร์ฟเวอร์ไม่ได้/g, 'Internet disconnected or cannot reach the server');
+    P(/ส่งข้อมูลถี่เกินไป/g, 'Sending data too frequently');
+    P(/เซิร์ฟเวอร์ตอบช้าเกินไป/g, 'The server responded too slowly');
+    P(/เซิร์ฟเวอร์ตอบผิดปกติ/g, 'Unexpected server response');
+    P(/โหลดไลบรารีไม่สำเร็จ/g, 'Failed to load the library');
+    P(/กรุณาเช็คอินเทอร์เน็ตแล้วรีเฟรชหน้าเว็บใหม่/g, 'Please check your internet connection and refresh the page');
+ 
+    // ---------- สิทธิ์ ----------
+    P(/คุณไม่มีสิทธิ์ใช้งาน/g, 'You do not have permission to use');
+    P(/ให้แอดมินเปิดสิทธิ์ให้ในหน้าจัดการผู้ใช้/g, '— ask an admin to enable it in User Management');
+    P(/ปริ้นแพลน LG/g, 'Print LG plan');
+    P(/ปริ้นแท็ก LG/g, 'Print LG tags');
+ 
+    // ---------- ตัวเลขท้ายสุด (สั้นสุด) ----------
+    P(/([\d,]+) แถว/g, '$1 rows');
+    P(/ชิ้น/g, 'pcs');
+ 
+    // เรียงจากวลียาวไปสั้นอัตโนมัติ กันวลียาวถูกคำสั้นตัดก่อน
+    TT.sort((a, b) => b[0].source.length - a[0].source.length);
+ 
+    // คำที่ความหมายต่างกันตามตำแหน่ง: "ยกเลิก" = Cancel (ปุ่มในป๊อบอัพ) / Voided (สถานะแท็ก)
+    function tr(s, el) {
+        let t = String(s);
+        if (/^\s*ยกเลิก\s*$/.test(t)) {
+            const btn = el && el.closest && el.closest('.swal2-actions, #lgm-cancel, .lr-ft, .lr-btn');
+            return t.replace('ยกเลิก', btn ? 'Cancel' : 'Voided');
+        }
+        for (let i = 0; i < TT.length; i++) t = t.replace(TT[i][0], TT[i][1]);
+        return t;
+    }
+ 
+    // ---------- ขอบเขต: หน้าอัปโหลดแพลน LG + หน้าต่างย่อยของหน้านี้ + ป๊อบอัพที่เปิดขณะอยู่หน้านี้ ----------
+    const OV = '#lgret-ov, #lgtc-mpanel';
+    const pane = () => document.getElementById(PANE);
+    const paneActive = () => { const p = pane(); return !!p && (p.classList.contains('active') || p.classList.contains('show')); };
+    function inScope(node) {
+        const el = node && (node.nodeType === 1 ? node : node.parentElement);
+        if (!el || !el.closest) return false;
+        if (el.closest('#' + PANE) || el.closest(OV)) return true;
+        if (paneActive() && el.closest('.swal2-container')) return true;
+        return false;
+    }
+ 
+    // ---------- แปล / คืนค่าเดิม (จำข้อความไทยเดิมไว้ เพื่อสลับกลับไทยได้) ----------
+    const ORIG = new WeakMap();   // text node -> {o, t}
+    const AORIG = new WeakMap();  // element -> {attr: {o, t}}
+    const ATTRS = ['placeholder', 'title', 'aria-label'];
+ 
+    function doText(n) {
+        const v = n.nodeValue, rec = ORIG.get(n);
+        if (rec && v === rec.t) {
+            if (!isEn()) { n.nodeValue = rec.o; ORIG.delete(n); }
+            else { const t = tr(rec.o, n.parentElement); if (t !== rec.t) { rec.t = t; n.nodeValue = t; } }
+            return;
+        }
+        if (rec) ORIG.delete(n);          // แอปเขียนทับด้วยข้อความใหม่ → ถือเป็นข้อความเดิมใหม่
+        if (!isEn() || !v || !THAI.test(v)) return;
+        const t = tr(v, n.parentElement);
+        if (t !== v) { ORIG.set(n, { o: v, t }); n.nodeValue = t; }
+    }
+    function doAttrs(el) {
+        let m = AORIG.get(el);
+        ATTRS.forEach(a => {
+            const v = el.getAttribute(a), rec = m && m[a];
+            if (rec && v === rec.t) {
+                if (!isEn()) { el.setAttribute(a, rec.o); delete m[a]; }
+                else { const t = tr(rec.o, el); if (t !== rec.t) { rec.t = t; el.setAttribute(a, t); } }
+                return;
+            }
+            if (rec) delete m[a];
+            if (!isEn() || !v || !THAI.test(v)) return;
+            const t = tr(v, el);
+            if (t !== v) { if (!m) { m = {}; AORIG.set(el, m); } m[a] = { o: v, t }; el.setAttribute(a, t); }
+        });
+    }
+    function sweep(root) {
+        if (!root) return;
+        const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        const nodes = []; while (w.nextNode()) nodes.push(w.currentNode);
+        nodes.forEach(doText);
+        if (root.querySelectorAll) root.querySelectorAll('[placeholder],[title],[aria-label]').forEach(doAttrs);
+        if (root.nodeType === 1) doAttrs(root);
+    }
+    function sweepAll() {
+        sweep(pane());
+        document.querySelectorAll(OV).forEach(sweep);
+        if (paneActive()) document.querySelectorAll('.swal2-container').forEach(sweep);
+    }
+ 
+    let busy = false;
+    const mo = new MutationObserver((muts) => {
+        if (busy) return;
+        busy = true;
+        try {
+            for (const m of muts) {
+                if (m.type === 'childList') { m.addedNodes.forEach(n => { if (inScope(n)) { if (n.nodeType === 3) doText(n); else sweep(n); } }); }
+                else if (m.type === 'characterData') { if (inScope(m.target)) doText(m.target); }
+                else if (m.type === 'attributes') { if (inScope(m.target)) doAttrs(m.target); }
+            }
+        } catch (e) { console.warn('LG-PLAN-I18N', e); }
+        finally { busy = false; try { mo.takeRecords(); } catch (e) { } }
+    });
+    mo.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ATTRS });
+ 
+    // กล่องยืนยัน / แจ้งเตือนแบบของเบราว์เซอร์ (confirm / alert) ที่หน้านี้ใช้ — แปลเฉพาะตอนอยู่หน้านี้และเป็นภาษาอังกฤษ
+    ['alert', 'confirm'].forEach(fn => {
+        const _o = window[fn];
+        if (typeof _o !== 'function') return;
+        window[fn] = function (msg) {
+            try { if (isEn() && paneActive() && typeof msg === 'string' && THAI.test(msg)) arguments[0] = tr(msg); } catch (e) { }
+            return _o.apply(this, arguments);
+        };
+    });
+ 
+    // ---------- สลับภาษา ----------
+    let last = isEn();
+    function onLang() { const n = isEn(); if (n === last) return; last = n; busy = true; try { sweepAll(); } finally { busy = false; try { mo.takeRecords(); } catch (e) { } } }
+    if (typeof window.setLanguage === 'function') {
+        const _sl = window.setLanguage;
+        window.setLanguage = function () { try { return _sl.apply(this, arguments); } finally { setTimeout(onLang, 80); } };
+    }
+    setInterval(() => { try { onLang(); } catch (e) { } }, 800);
+    try { if (isEn()) sweepAll(); } catch (e) { }
+})();
+(function () {
     if (window.__lgTagLine) return; window.__lgTagLine = true;
 
     const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -27027,8 +28023,8 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
         { name: 'หัวหน้าไลน์ LG', keys: ['canCheckLGTags', 'canReceiveLG', 'canBackdateLGReceive', 'canReturnLGTag', 'canViewHistory', 'canManageDeliveryPlan'] },
         { name: 'พนักงาน LG', keys: ['canReceiveLG'] }
     ];
-    const EXTRA_KEYS = ['canReceiveLG', 'canBackdateLGReceive', 'canReturnLGTag', 'canLGPrintTags', 'canLGUploadPlan', 'canLGManualPlan', 'canLGPrintPlan', 'canLGEditPlan'];
-    // สิทธิ์ที่ "ยังไม่เคยตั้งค่า (ช่องว่าง)" ถือว่าเปิดอยู่ ตามที่แพตช์ LG-PLAN-PERM-WEB กำหนด (LEGACY_ALLOW)
+    const EXTRA_KEYS = ['canReceiveLG', 'canBackdateLGReceive', 'canReturnLGTag', 'canLGPrintTags', 'canLGUploadPlan', 'canLGManualPlan', 'canLGPrintPlan', 'canLGEditPlan', 'canManageArchive'];
+    CATS[CATS.length - 1].items.push(['canManageArchive', 'จัดการ Archive ประวัติเก่า', 'ย้ายล็อตที่ปิดจบแล้วไปเก็บใน Archive', 'archive']);
     const LEGACY_KEYS = ['canLGPrintTags', 'canLGUploadPlan', 'canLGManualPlan', 'canLGPrintPlan'];
     const onOf = (u, k) => {
         const v = u ? u[k] : undefined;
@@ -28725,6 +29721,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
             perBox: '💡 ราคาต่อกล่อง/แร็ค = {b} × {p} = <b>{t} บาท</b>',
             locked: '🔒 สินค้านี้มีสต๊อกคงเหลือ {s} ชิ้น — ลบไม่ได้จนกว่าสต๊อกจะเป็น 0',
             save: 'บันทึก', cancel: 'ยกเลิก', saving: 'กำลังบันทึก…',
+            svTitle: 'กำลังบันทึกข้อมูล…', svSub: '{id} · {n} · อย่าปิดหน้านี้', svDoneEdit: 'อัปเดตข้อมูลสินค้าแล้ว', svDoneAdd: 'เพิ่มสินค้าใหม่แล้ว', svOk: 'ตกลง', svNone: 'ไม่มีข้อมูลที่เปลี่ยน', svPt: 'ประเภทแพ็คกิ้ง', svBox: 'กล่อง', svRack: 'แร็ค',
             gAuto: 'Autopart (ชิ้นส่วนรถยนต์)', gElec: 'Electronic (เครื่องใช้ไฟฟ้า)', gPack: 'Packaging (แพ็คกิ้ง/กล่อง)', gOther: 'อื่นๆ (Other)',
             needFields: 'กรุณากรอก รหัสสินค้า ชื่อสินค้า จำนวนเต็มกล่อง (อย่างน้อย 1) และราคา', idExists: 'มีรหัสสินค้านี้ในระบบแล้ว',
             addOk: 'เพิ่มสินค้าใหม่เรียบร้อย', updOk: 'อัปเดตข้อมูลสินค้าเรียบร้อย', saveErr: 'บันทึกไม่สำเร็จ',
@@ -28752,7 +29749,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
             fId: 'Product ID', fName: 'Product Name', fCust: 'Customer', fGroup: 'Customer Group', fBox: 'Full Box/Rack Qty', fPrice: 'Unit Price (THB)', fErp: 'ERP Code', erpMissing: '⚠ Not filled in', erpEx: 'e.g. FG-200118',
             perBox: '💡 Price per box/rack = {b} × {p} = <b>{t} THB</b>',
             locked: '🔒 This product still has {s} pcs in stock — it cannot be deleted until stock is 0',
-            save: 'Save', cancel: 'Cancel', saving: 'Saving…',
+            svTitle: 'Saving…', svSub: '{id} · {n} · please do not close this page', svDoneEdit: 'Product updated', svDoneAdd: 'Product added', svOk: 'OK', svNone: 'Nothing changed', svPt: 'Packaging type', svBox: 'Box', svRack: 'Rack',
             gAuto: 'Autopart', gElec: 'Electronic', gPack: 'Packaging', gOther: 'Other',
             needFields: 'Please fill in Product ID, Name, Full Box Qty (at least 1) and Price', idExists: 'This Product ID already exists',
             addOk: 'Product added', updOk: 'Product updated', saveErr: 'Could not save',
@@ -28776,6 +29773,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
     const GROUPS = ['Autopart', 'Electronic', 'Packaging', 'Other'];
     const GSTY = { Autopart: ['#dbeafe', '#1d4ed8', '🚗'], Electronic: ['#fef3c7', '#92400e', '⚡'], Packaging: ['#dcfce7', '#166534', '📦'], Other: ['#e5e7eb', '#374151', '•'] };
     const grp = (p) => (GROUPS.indexOf(str(p.customerGroup)) >= 0 ? str(p.customerGroup) : 'Other');
+    const isRackP = (p) => /rack|แร็ค|แร็ก/i.test(String((p && p.packagingType) || ''));   // ประเภทแพ็คกิ้ง:
     const canManage = () => !!(typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'admin' || currentUser.canManageProducts));
     const toast = (ok, msg) => {
         try {
@@ -28844,6 +29842,33 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
 #pmA-dr .df{padding:14px 20px;border-top:1px solid #e2e8f0;display:flex;gap:8px}
 .pmA-im{text-align:left;font-size:.9rem}.pmA-im .row2{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f1f5f9}
 .pmA-im .bad{color:#b91c1c;font-size:.8rem;margin-top:8px;max-height:130px;overflow:auto}.pmA-im .hint{color:#64748b;font-size:.8rem;margin-top:8px}
+#pmA-sv{position:fixed;inset:0;z-index:2100;background:rgba(15,23,42,.5);display:flex;align-items:center;justify-content:center;padding:16px;animation:pmSvOv .2s ease-out}
+#pmA-sv.out{opacity:0;transition:opacity .25s}
+#pmA-sv .cd{width:380px;max-width:100%;box-sizing:border-box;background:#fff;border-radius:22px;padding:28px 28px 0;box-shadow:0 24px 60px rgba(15,23,42,.35);display:flex;flex-direction:column;align-items:center;overflow:hidden;animation:pmSvCd .3s cubic-bezier(.2,.9,.3,1.2)}
+#pmA-sv .ring{width:64px;height:64px;border-radius:50%;background:#eff6ff;display:flex;align-items:center;justify-content:center}
+#pmA-sv.done .ring{background:#dcfce7;animation:pmSvPop .45s ease-out}
+#pmA-sv .ring svg{display:block}#pmA-sv .sp{animation:pmSvSpin .9s linear infinite}
+#pmA-sv .ck{stroke-dasharray:30;animation:pmSvChk .5s ease-out forwards}
+#pmA-sv .tt{margin-top:14px;font-size:1.2rem;font-weight:700;text-align:center;color:#0f172a}
+#pmA-sv .ss{margin-top:2px;font-size:.88rem;color:#475569;text-align:center}
+#pmA-sv .rows{margin-top:14px;width:100%;display:flex;flex-direction:column;gap:8px}
+#pmA-sv .rows:empty{display:none}
+#pmA-sv .rw{display:flex;justify-content:space-between;align-items:center;gap:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:9px 14px;font-size:.88rem;color:#0f172a;animation:pmSvRow .35s ease-out backwards}
+#pmA-sv .rw>span:first-child{color:#475569;white-space:nowrap}#pmA-sv .rw>span:last-child{text-align:right;word-break:break-word}
+#pmA-sv .rw s{color:#64748b}#pmA-sv .rw b{color:#1d4ed8}
+#pmA-sv .okb{margin-top:16px;width:100%;height:46px;border:0;border-radius:12px;background:#1e40af;color:#fff;font:inherit;font-weight:600;cursor:pointer}
+#pmA-sv .bar{position:relative;margin:16px -28px 0;width:calc(100% + 56px);height:5px;background:#e2e8f0;overflow:hidden}
+#pmA-sv .bar i{position:absolute;top:0;bottom:0;left:0;width:100%;background:#16a34a}
+#pmA-sv.wait .bar i{width:35%;background:#2563eb;border-radius:5px;animation:pmSvInd 1.1s ease-in-out infinite}
+#pmA-sv.done .bar i{animation:pmSvBar 5s linear forwards}
+@keyframes pmSvOv{from{opacity:0}to{opacity:1}}
+@keyframes pmSvCd{from{opacity:0;transform:translateY(16px) scale(.96)}to{opacity:1;transform:none}}
+@keyframes pmSvSpin{to{transform:rotate(360deg)}}
+@keyframes pmSvPop{0%{transform:scale(.6)}60%{transform:scale(1.08)}100%{transform:scale(1)}}
+@keyframes pmSvChk{from{stroke-dashoffset:30}to{stroke-dashoffset:0}}
+@keyframes pmSvRow{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes pmSvInd{from{left:-35%}to{left:100%}}
+@keyframes pmSvBar{from{width:100%}to{width:0}}
 @media (max-width:640px){#pmA-root .pm-chip{min-width:100px;padding:8px 12px}#pmA-root .pm-bar>*{flex:1 1 100%}}
 `;
     document.head.appendChild(css);
@@ -28938,7 +29963,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
                 return `<tr data-id="${pid}" class="${editId !== null && str(editId) === str(p.id) ? 'pm-sel' : ''}">
 <td class="pm-mono"><b>${pid}</b></td><td>${esc(p.name)}</td>
 <td>${esc(str(p.customer) || '-')}<br><span class="pm-bdg" style="background:${st[0]};color:${st[1]};font-size:.68rem;padding:0 8px">${st[2]} ${esc(g)}</span></td>
-<td class="n">${fmt(p.fullBoxQuantity)}</td>
+<td class="n">${fmt(p.fullBoxQuantity)}<br><span class="pm-bdg" style="background:${isRackP(p) ? '#dbeafe' : '#fef3c7'};color:${isRackP(p) ? '#1d4ed8' : '#92400e'};font-size:.68rem;padding:0 8px">${isRackP(p) ? (lang() === 'en' ? 'Rack' : 'แร็ค') : (lang() === 'en' ? 'Box' : 'กล่อง')}</span></td>
 <td class="pm-mono">${str(p.erpCode) ? esc(p.erpCode) : '<span style="color:#cbd5e1">—</span>'}</td>
 <td class="n">${Number(p.unitPrice) > 0 ? fmt(p.unitPrice, 2) : '<span style="color:#b45309">0.00</span>'}</td>
 <td class="n"><div class="pm-stk">${fmt(r.stock)}<span class="b"><i style="width:${Math.round(r.stock / maxStock * 100)}%"></i></span></div></td>
@@ -28983,6 +30008,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
 <div class="fl"><label>${esc(t('fGroup'))}</label><select id="pmA-gr">${groupOptions(mode === 'new' ? 'Other' : grp(x))}</select></div></div>
 <div class="two"><div class="fl"><label>${esc(t('fBox'))}</label><input id="pmA-box" type="number" min="1" step="1" value="${x.fullBoxQuantity == null ? '' : esc(x.fullBoxQuantity)}" required></div>
 <div class="fl"><label>${esc(t('fPrice'))}</label><input id="pmA-price" type="number" min="0" step="0.01" value="${x.unitPrice == null ? '' : esc(x.unitPrice)}" required></div></div>
+<div class="fl"><label>${lang() === 'en' ? 'Packaging type' : 'ประเภทแพ็คกิ้ง'}</label><select id="pmA-pt"><option value="Box" ${isRackP(x) ? '' : 'selected'}>${lang() === 'en' ? 'Box' : 'กล่อง'}</option><option value="Rack" ${isRackP(x) ? 'selected' : ''}>${lang() === 'en' ? 'Rack' : 'แร็ค'}</option></select></div>
 <div class="fl" id="pmA-erpw"><label>${esc(t('fErp'))} <span id="pmA-erpm" style="color:#b45309"></span></label><input id="pmA-erp" placeholder="${esc(t('erpEx'))}" value="${esc(x.erpCode || '')}"></div>
 <div class="calc" id="pmA-calc"></div>
 ${stock > 0 ? `<div class="lock">${esc(t('locked', { s: fmt(stock) }))}</div>` : ''}
@@ -29004,7 +30030,54 @@ ${stock > 0 ? `<div class="lock">${esc(t('locked', { s: fmt(stock) }))}</div>` :
         if (saving) return;
         dr.style.display = 'none'; ov.style.display = 'none'; dr.innerHTML = ''; editId = null; drawerMode = null; render();
     }
-
+        let svEl = null, svTimer = null;
+    const SV_SPIN = '<svg class="sp" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"/></svg>';
+    const SV_CHK = '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#15803d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="ck" d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+    function svClose(now) {
+        clearTimeout(svTimer); const el = svEl; svEl = null; if (!el) return;
+        if (now) { el.remove(); return; }
+        el.classList.add('out'); setTimeout(() => el.remove(), 260);
+    }
+    function svOpen(id, name) {
+        svClose(true);
+        const el = document.createElement('div'); el.id = 'pmA-sv'; el.className = 'wait';
+        el.innerHTML = '<div class="cd" role="status" aria-live="polite"><div class="ring">' + SV_SPIN + '</div><div class="tt">' + esc(t('svTitle')) + '</div><div class="ss">' + esc(t('svSub', { id: id, n: name })) + '</div><div class="rows"></div><button type="button" class="okb" style="display:none">' + esc(t('svOk')) + '</button><div class="bar"><i></i></div></div>';
+        document.body.appendChild(el); svEl = el;
+    }
+    function svRows(oldP, d, isEdit) {
+        const pt = (p) => (isRackP(p) ? t('svRack') : t('svBox'));
+        const v = (x) => (str(x) === '' ? '—' : str(x));
+        const L = [];
+        const chk = (label, a, b, same) => { if (!isEdit || !same) L.push([label, a, b]); };
+        chk(t('svPt'), oldP ? pt(oldP) : '', pt(d), oldP && isRackP(oldP) === isRackP(d));
+        chk(t('cBox'), oldP ? fmt(oldP.fullBoxQuantity) : '', fmt(d.fullBoxQuantity), oldP && Number(oldP.fullBoxQuantity) === Number(d.fullBoxQuantity));
+        chk(t('cPrice'), oldP ? fmt(oldP.unitPrice, 2) : '', fmt(d.unitPrice, 2), oldP && Number(oldP.unitPrice) === Number(d.unitPrice));
+        chk(t('cName'), oldP ? v(oldP.name) : '', v(d.name), oldP && str(oldP.name) === str(d.name));
+        chk(t('cCust'), oldP ? v(oldP.customer) : '', v(d.customer), oldP && str(oldP.customer) === str(d.customer));
+        chk(t('fGroup'), oldP ? grp(oldP) : '', grp(d), oldP && grp(oldP) === grp(d));
+        chk(t('cErp'), oldP ? v(oldP.erpCode) : '', v(d.erpCode), oldP && str(oldP.erpCode) === str(d.erpCode));
+        if (!isEdit) L.length = Math.min(L.length, 3);   // สินค้าใหม่: โชว์แค่ ประเภท / เต็มกล่อง / ราคา
+        if (isEdit && !L.length) return '<div class="rw"><span>' + esc(t('svNone')) + '</span></div>';
+        const shown = L.slice(0, 4);
+        let h = shown.map((r, i) => '<div class="rw" style="animation-delay:' + (0.1 + i * 0.12).toFixed(2) + 's"><span>' + esc(r[0]) + '</span><span>' + (isEdit ? '<s>' + esc(r[1]) + '</s> &nbsp;→&nbsp; ' : '') + '<b>' + esc(r[2]) + '</b></span></div>').join('');
+        if (L.length > shown.length) h += '<div class="rw" style="justify-content:center;color:#64748b">' + esc(t('imMore', { n: L.length - shown.length })) + '</div>';
+        return h;
+    }
+    function svDone(isEdit, id, name, oldP, d) {
+        const el = svEl; if (!el) return false;
+        try {
+            el.className = 'done';
+            el.querySelector('.ring').innerHTML = SV_CHK;
+            el.querySelector('.tt').textContent = t(isEdit ? 'svDoneEdit' : 'svDoneAdd');
+            el.querySelector('.ss').textContent = id + ' · ' + name;
+            el.querySelector('.rows').innerHTML = svRows(oldP, d, isEdit);
+            const okb = el.querySelector('.okb'); okb.style.display = ''; okb.onclick = () => svClose();
+            el.addEventListener('click', (e) => { if (e.target === el) svClose(); });
+            svTimer = setTimeout(() => svClose(), 5000);
+            setTimeout(() => { try { okb.focus(); } catch (e) { } }, 60);
+            return true;
+        } catch (e) { console.warn('PRODUCT-MGMT-A svDone', e); svClose(true); return false; }
+    }
     async function saveDrawer() {
         if (saving) return;
         const g = (id) => dr.querySelector('#' + id).value;
@@ -29013,17 +30086,19 @@ ${stock > 0 ? `<div class="lock">${esc(t('locked', { s: fmt(stock) }))}</div>` :
         if (!id || !name || !(box >= 1) || isNaN(price) || price < 0) { toast(false, t('needFields')); return; }
         const isEdit = drawerMode === 'edit';
         if (!isEdit && (db.products || []).some((p) => str(p.id) === id)) { toast(false, t('idExists')); return; }
-        const data = { id: id, name: name, customer: g('pmA-cu').trim(), customerGroup: g('pmA-gr'), fullBoxQuantity: box, erpCode: g('pmA-erp').trim(), unitPrice: price };
+        const data = { id: id, name: name, customer: g('pmA-cu').trim(), customerGroup: g('pmA-gr'), fullBoxQuantity: box, erpCode: g('pmA-erp').trim(), unitPrice: price, packagingType: g('pmA-pt') };
         const btn = dr.querySelector('#pmA-save'); saving = true; btn.disabled = true; btn.textContent = t('saving');
+        const oldP = isEdit ? ((db.products || []).find((p) => str(p.id) === id) || null) : null;
+        svOpen(id, name);
         try {
             const res = await callAppsScript(isEdit ? 'updateProduct' : 'addProduct', data);
-            if (res && res.status === 'error') { toast(false, res.message === 'Product ID already exists' ? t('idExists') : (res.message || t('saveErr'))); return; }
+            if (res && res.status === 'error') { svClose(true); toast(false, res.message === 'Product ID already exists' ? t('idExists') : (res.message || t('saveErr'))); return; }
             if (isEdit) { const i = db.products.findIndex((p) => str(p.id) === editId); if (i >= 0) db.products[i] = data; else db.products.push(data); }
             else db.products.push(data);
             saving = false; closeDrawer(); populateAll(); render();
-            toast(true, isEdit ? t('updOk') : t('addOk'));
+            if (!svDone(isEdit, id, name, oldP, data)) toast(true, isEdit ? t('updOk') : t('addOk'));
         } catch (err) {
-            console.error('PRODUCT-MGMT-A save', err); toast(false, (err && err.message) || String(err));
+            console.error('PRODUCT-MGMT-A save', err); svClose(true); toast(false, (err && err.message) || String(err));
         } finally {
             saving = false; const b2 = dr.querySelector('#pmA-save'); if (b2) { b2.disabled = false; b2.innerHTML = '<i class="bi bi-save-fill"></i>' + esc(t('save')); }
         }
@@ -29033,11 +30108,11 @@ ${stock > 0 ? `<div class="lock">${esc(t('locked', { s: fmt(stock) }))}</div>` :
     function exportRows() {
         const rows = filtered(dataset());
         if (!rows.length) { toast(false, t('exNone')); return; }
-        const H = [t('cId'), t('cName'), t('cCust'), t('fGroup'), t('cBox'), t('cErp'), t('cPrice'), t('cStock')];
-        const aoa = [H].concat(rows.map((r) => [str(r.p.id), str(r.p.name), str(r.p.customer), grp(r.p), Number(r.p.fullBoxQuantity) || 0, str(r.p.erpCode), Number(r.p.unitPrice) || 0, r.stock]));
+        const H = [t('cId'), t('cName'), t('cCust'), t('fGroup'), t('cBox'), (lang() === 'en' ? 'Packaging Type' : 'ประเภทแพ็คกิ้ง'), t('cErp'), t('cPrice'), t('cStock')];
+        const aoa = [H].concat(rows.map((r) => [str(r.p.id), str(r.p.name), str(r.p.customer), grp(r.p), Number(r.p.fullBoxQuantity) || 0, isRackP(r.p) ? (lang() === 'en' ? 'Rack' : 'แร็ค') : (lang() === 'en' ? 'Box' : 'กล่อง'), str(r.p.erpCode), Number(r.p.unitPrice) || 0, r.stock]));
         const d = new Date(), ymd = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
         if (typeof XLSX !== 'undefined') {
-            const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = [{ wch: 18 }, { wch: 34 }, { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 12 }];
+            const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = [{ wch: 18 }, { wch: 34 }, { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 12 }];
             const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, t('exSheet')); XLSX.writeFile(wb, 'Products_' + ymd + '.xlsx');
         } else {
             alert(t('exLib'));
@@ -29056,9 +30131,10 @@ ${stock > 0 ? `<div class="lock">${esc(t('locked', { s: fmt(stock) }))}</div>` :
         customerGroup: ['กลุ่มลูกค้า', 'customergroup', 'group'],
         fullBoxQuantity: ['จำนวนเต็มกล่อง/แร็ค', 'จำนวนเต็มกล่อง', 'เต็มกล่อง/แร็ค', 'เต็มกล่อง', 'fullbox/rackqty', 'fullboxquantity', 'fullbox', 'fullboxrack', 'boxqty'],
         erpCode: ['รหัสerp', 'erpcode', 'erp'],
-        unitPrice: ['ราคา/หน่วย', 'ราคาต่อหน่วย', 'ราคา', 'price/unit', 'unitprice', 'price']
+        unitPrice: ['ราคา/หน่วย', 'ราคาต่อหน่วย', 'ราคา', 'price/unit', 'unitprice', 'price'],
+        packagingType: ['ประเภทแพ็คกิ้ง', 'ประเภทบรรจุภัณฑ์', 'packagingtype', 'packaging']
     };
-    const LABEL = { id: 'cId', name: 'cName', customer: 'cCust', customerGroup: 'fGroup', fullBoxQuantity: 'cBox', erpCode: 'cErp', unitPrice: 'cPrice' };
+    const LABEL = { id: 'cId', name: 'cName', customer: 'cCust', customerGroup: 'fGroup', fullBoxQuantity: 'cBox', erpCode: 'cErp', unitPrice: 'cPrice', packagingType: 'cBox' };
     const num = (v) => { const s = String(v == null ? '' : v).replace(/,/g, '').trim(); if (s === '') return null; const n = Number(s); return isFinite(n) ? n : NaN; };
 
     function plan(rowsRaw) {
@@ -29085,6 +30161,12 @@ ${stock > 0 ? `<div class="lock">${esc(t('locked', { s: fmt(stock) }))}</div>` :
                 const gg = GROUPS.find((x) => x.toLowerCase() === str(g('customerGroup')).toLowerCase());
                 if (gg) v.customerGroup = gg; else err = err || t('imBadGroup');
             }
+             if (out.cols.packagingType !== undefined && str(g('packagingType')) !== '') {
+                const pv = norm(g('packagingType'));
+                if (/^(rack|แร็ค|แร็ก)$/.test(pv)) v.packagingType = 'Rack';
+                else if (/^(box|กล่อง)$/.test(pv)) v.packagingType = 'Box';
+                else err = err || (lang() === 'en' ? 'invalid packaging type (use Box or Rack)' : 'ประเภทแพ็คกิ้งไม่ถูกต้อง (ใช้ กล่อง หรือ แร็ค)');
+            }
             const nb = out.cols.fullBoxQuantity !== undefined ? num(g('fullBoxQuantity')) : null;
             if (nb === null) { if (isNew && !err) err = t('imMiss', { f: t('cBox') }); }
             else if (isNaN(nb) || nb < 1 || Math.floor(nb) !== nb) err = err || t('imBadNum', { f: t('cBox') }); else v.fullBoxQuantity = nb;
@@ -29093,7 +30175,7 @@ ${stock > 0 ? `<div class="lock">${esc(t('locked', { s: fmt(stock) }))}</div>` :
             else if (isNaN(np) || np < 0) err = err || t('imBadNum', { f: t('cPrice') }); else v.unitPrice = np;
             if (err) { why(err); return; }
             if (isNew) {
-                out.items.push({ isNew: true, id: id, payload: Object.assign({ id: id, name: '', customer: '', customerGroup: 'Other', fullBoxQuantity: 0, erpCode: '', unitPrice: 0 }, v) });
+                out.items.push({ isNew: true, id: id, payload: Object.assign({ id: id, name: '', customer: '', customerGroup: 'Other', fullBoxQuantity: 0, erpCode: '', unitPrice: 0, packagingType: 'Box' }, v) });
                 out.nNew++;
             } else {
                 const diff = {};
@@ -29314,7 +30396,7 @@ ${stock > 0 ? `<div class="lock">${esc(t('locked', { s: fmt(stock) }))}</div>` :
             if (i !== undefined && !F.keep.has(i)) tr.remove();
         });
         let b = 0; root.querySelectorAll('tbody tr .plb-box').forEach((el) => { const v = parseInt(el.value, 10); if (v > 0) b += v; });
-        tot.textContent = b > 0 ? 'รวมทั้งหมด ' + fmt(b) + ' กล่อง' : '';
+        tot.textContent = window.__plbTotal ? window.__plbTotal(root) : (b > 0 ? 'รวมทั้งหมด ' + fmt(b) + ' กล่อง' : '');   // B3: แยกหน่วย กล่อง/แร็ค
         if (!root.querySelector('.plip-banner')) {
             const d = document.createElement('div'); d.className = 'plip-banner';
             d.setAttribute('style', 'text-align:left;background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;border-radius:8px;padding:6px 10px;margin-bottom:8px;font-weight:700;font-size:.82rem');
@@ -29360,12 +30442,12 @@ ${stock > 0 ? `<div class="lock">${esc(t('locked', { s: fmt(stock) }))}</div>` :
         // กล่องสรุป "รวมที่ต้องส่ง" ของแพตช์กล่อง: คำนวณใหม่จากแถวที่เหลือ
         const sum = Array.from(el.querySelectorAll('div')).find((d) => d.children.length === 3 && d.firstElementChild.textContent.trim() === 'รวมที่ต้องส่ง');
         if (sum && qtyIdx >= 0 && ths[qtyIdx + 1] && /แพ็ค/.test(ths[qtyIdx + 1].textContent)) {
-            let boxes = 0, pcs = 0, n = 0;
+            let boxes = 0, pcs = 0, n = 0; const byU = {};
             left.forEach((tr) => {
-                const m = /(\d[\d,]*)\s*กล่อง/.exec(tr.children[qtyIdx + 1] ? tr.children[qtyIdx + 1].textContent : '');
-                if (m) { boxes += parseInt(m[1].replace(/,/g, ''), 10) || 0; pcs += parseInt(String(tr.children[qtyIdx].textContent).replace(/,/g, ''), 10) || 0; n++; }
+                const m = /(\d[\d,]*)\s*(กล่อง|แร็ค)/.exec(tr.children[qtyIdx + 1] ? tr.children[qtyIdx + 1].textContent : '');
+                if (m) { const q = parseInt(m[1].replace(/,/g, ''), 10) || 0; boxes += q; byU[m[2]] = (byU[m[2]] || 0) + q; pcs += parseInt(String(tr.children[qtyIdx].textContent).replace(/,/g, ''), 10) || 0; n++; }
             });
-            sum.children[1].textContent = fmt(boxes) + ' กล่อง';
+            sum.children[1].textContent = Object.keys(byU).filter((u) => byU[u] > 0).map((u) => fmt(byU[u]) + ' ' + u).join(' + ') || (fmt(boxes) + ' กล่อง');
             sum.children[2].textContent = n + ' รายการ · ' + fmt(pcs) + ' ชิ้น';
         }
         // QR: สร้างใหม่จากเลข Invoice ที่เลือก
@@ -35561,6 +36643,174 @@ window.pkFilter = window.pkFilter || 'all';
                 // ========================================================
                 // CALCULATOR FUNCTIONS (Keyboard Support)
                 // ========================================================
+                (function () {
+    if (window.__userSaveA) return; window.__userSaveA = true;
+    if (typeof window.handleUserFormSubmit !== 'function') { console.warn('USER-SAVE-A: ไม่พบ handleUserFormSubmit — แพตช์นี้ไม่ทำงาน (วางผิดตำแหน่ง? ต้องอยู่ใต้ฟังก์ชันเดิม)'); return; }
+ 
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const isTrue = (v) => v === true || String(v).toUpperCase() === 'TRUE';
+    const LABEL = {
+        canImport: 'รับสินค้าเข้า', canExport: 'จ่ายสินค้าออก', canViewHistory: 'ดูประวัติ', canCountStock: 'นับสต็อก', canConvertPart: 'เปลี่ยนรหัสสินค้า',
+        canManageDeliveryPlan: 'จัดการแผนจัดส่ง', canManageRack: 'จัดการ Rack (แพ็คกิ้ง)', canManageLotHold: 'ปลดล็อกล็อตค้าง (Q)',
+        canCheckLGTags: 'เช็คแท็กค้างสแกน', canReceiveLG: 'รับแท็กที่ LG', canBackdateLGReceive: 'รับแท็กย้อนหลัง', canReturnLGTag: 'คืนแท็ก',
+        canLGPrintTags: 'ปริ้นแท็ก LG', canLGUploadPlan: 'อัปโหลดแพลน LG', canLGManualPlan: 'เพิ่มแพลน LG ด้วยมือ', canLGPrintPlan: 'ปริ้นแพลน LG', canLGEditPlan: 'แก้ไขยอด / ยกเลิกแพลน LG',
+        canManageProducts: 'จัดการสินค้า', canForecast: 'อัปโหลด Forecast', canManageUsers: 'จัดการผู้ใช้', canManageAnnouncements: 'จัดการประกาศ', canManageSupport: 'ดูรายการแจ้งปัญหา', canManageArchive: 'จัดการ Archive ประวัติเก่า'
+    };
+    const LEGACY_ON = ['canLGPrintTags', 'canLGUploadPlan', 'canLGManualPlan', 'canLGPrintPlan'];   // ยังไม่เคยตั้งค่า = เปิดอยู่ (ตามแพตช์ LG เดิม)
+    const BASE_KEYS = ['canImport', 'canExport', 'canViewHistory', 'canCountStock', 'canManageProducts', 'canManageUsers', 'canManageAnnouncements', 'canManageDeliveryPlan', 'canConvertPart', 'canManageRack', 'canForecast', 'canManageLotHold', 'canManageSupport', 'canCheckLGTags'];
+    let dlg = null, busy = false;
+ 
+    // ---------- สไตล์ ----------
+    const css = document.createElement('style');
+    css.textContent = `
+#us-dlg{position:fixed;inset:0;z-index:2100;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto}
+#us-dlg .ud{position:relative;width:500px;max-width:100%;box-sizing:border-box;background:#fff;border-radius:22px;padding:30px 30px 32px;box-shadow:0 24px 60px rgba(15,23,42,.4);display:flex;flex-direction:column;align-items:center;gap:14px;color:#0f172a;overflow:hidden;animation:udIn .25s cubic-bezier(.2,.9,.3,1)}
+@keyframes udIn{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes udSp{to{transform:rotate(360deg)}}@keyframes udInd{0%{left:-35%}100%{left:100%}}@keyframes udBar{0%{width:100%}100%{width:0}}
+@keyframes udPop{0%{transform:scale(.6)}60%{transform:scale(1.08)}100%{transform:scale(1)}}
+#us-dlg .ud-big{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2rem;animation:udPop .35s ease-out}
+#us-dlg .ud-big.blu{background:#dbeafe;color:#1e40af;animation:none}#us-dlg .ud-big.grn{background:#dcfce7;color:#15803d}#us-dlg .ud-big.red{background:#fee2e2;color:#b91c1c}
+#us-dlg .ud-sp{display:inline-block;animation:udSp .9s linear infinite}
+#us-dlg .ud-c{text-align:center}#us-dlg .ud-t{font-size:1.3rem;font-weight:700}#us-dlg .ud-s{font-size:.9rem;color:#475569;margin-top:4px}
+#us-dlg .ud-ind{position:relative;width:100%;height:10px;border-radius:6px;background:#e2e8f0;overflow:hidden}
+#us-dlg .ud-ind i{position:absolute;top:0;bottom:0;width:35%;background:#60a5fa;border-radius:6px;animation:udInd 1.1s ease-in-out infinite}
+#us-dlg .ud-note{font-size:.82rem;color:#475569}
+#us-dlg .ud-box{width:100%;box-sizing:border-box;background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:6px 16px}
+#us-dlg .ud-blk{padding:11px 0;border-bottom:1px solid #e2e8f0}#us-dlg .ud-blk:last-child{border-bottom:0}
+#us-dlg .ud-bl{font-size:.82rem;color:#475569;margin-bottom:8px}
+#us-dlg .ud-chips{display:flex;flex-wrap:wrap;gap:6px}
+#us-dlg .ud-chip{border-radius:99px;padding:4px 12px;font-size:.82rem;font-weight:600}
+#us-dlg .ud-chip.g{background:#dcfce7;color:#166534}#us-dlg .ud-chip.r{background:#fee2e2;color:#991b1b}#us-dlg .ud-chip.b{background:#dbeafe;color:#1e40af}#us-dlg .ud-chip.n{background:#e2e8f0;color:#334155}
+#us-dlg .ud-row{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid #e2e8f0;font-size:.9rem}#us-dlg .ud-row:last-child{border-bottom:0}
+#us-dlg .ud-row span{color:#475569}#us-dlg .ud-row b{text-align:right}
+#us-dlg .ud-user{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #e2e8f0}
+#us-dlg .ud-av{width:44px;height:44px;border-radius:50%;background:#dbeafe;color:#1e40af;display:flex;align-items:center;justify-content:center;font-weight:700;flex:none}
+#us-dlg .ud-un{font-size:1rem;font-weight:700}#us-dlg .ud-us{font-size:.82rem;color:#475569}
+#us-dlg .ud-err{width:100%;box-sizing:border-box;background:#fef2f2;border:1px solid #fecaca;border-radius:14px;padding:12px 16px;font-size:.9rem;color:#991b1b;line-height:1.5;word-break:break-word}
+#us-dlg .ud-inf{width:100%;box-sizing:border-box;background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:12px 16px;font-size:.9rem;color:#334155;line-height:1.5}
+#us-dlg .ud-b{width:100%;display:flex;gap:10px}
+#us-dlg .ud-go{flex:1;height:48px;border:0;border-radius:14px;background:#1e40af;color:#fff;font:inherit;font-size:1rem;font-weight:600;cursor:pointer}
+#us-dlg .ud-no{height:48px;padding:0 24px;border-radius:14px;border:1px solid #cbd5e1;background:#fff;color:#334155;font:inherit;font-size:1rem;font-weight:600;cursor:pointer}
+#us-dlg .ud-cd{position:absolute;left:0;right:0;bottom:0;height:5px;background:#e2e8f0}#us-dlg .ud-cd i{display:block;height:100%;background:#4ade80;animation:udBar 4s linear forwards}
+`;
+    document.head.appendChild(css);
+ 
+    // ---------- หน้าต่าง ----------
+    let timer = null;
+    function openDlg(html) {
+        if (!dlg) {
+            dlg = document.createElement('div'); dlg.id = 'us-dlg';
+            dlg.addEventListener('mousedown', (e) => { if (e.target === dlg && !busy) closeDlg(); });
+            dlg.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !busy) closeDlg(); });
+            document.body.appendChild(dlg);
+            document.body.classList.add('modal-open');   // ให้ระบบซิงค์ข้อมูลทุก 30 วิ หยุดรอระหว่างบันทึก
+        }
+        dlg.innerHTML = html;
+    }
+    function closeDlg() {
+        if (timer) { clearTimeout(timer); timer = null; }
+        if (dlg) { dlg.remove(); dlg = null; }
+        if (!document.querySelector('.modal.show')) document.body.classList.remove('modal-open');
+    }
+    const lab = (k) => LABEL[k] || k;
+    function chips(keys, cls, sign) {
+        const max = 6, show = keys.slice(0, max);
+        return show.map((k) => '<span class="ud-chip ' + cls + '">' + sign + esc(lab(k)) + '</span>').join('') + (keys.length > max ? '<span class="ud-chip n">+' + (keys.length - max) + ' อื่นๆ</span>' : '');
+    }
+    const who = (d) => esc(d.username) + (d.fullname ? ' · ' + esc(d.fullname) : '');
+ 
+    function showSaving(d) {
+        openDlg('<div class="ud" role="dialog" aria-modal="true"><div class="ud-big blu"><i class="bi bi-arrow-repeat ud-sp"></i></div>' +
+            '<div class="ud-c"><div class="ud-t">กำลังบันทึกข้อมูลผู้ใช้…</div><div class="ud-s">' + who(d) + '</div></div>' +
+            '<div class="ud-ind"><i></i></div><div class="ud-note">รอสักครู่ ระบบกำลังส่งข้อมูลและสิทธิ์</div></div>');
+    }
+    function showFail(d, err) {
+        openDlg('<div class="ud" role="dialog" aria-modal="true"><div class="ud-big red"><i class="bi bi-exclamation-lg"></i></div>' +
+            '<div class="ud-c"><div class="ud-t">บันทึกไม่สำเร็จ</div><div class="ud-s">' + who(d) + '</div></div>' +
+            '<div class="ud-err">ไม่สามารถบันทึกได้: ' + esc((err && err.message) || String(err)) + '</div>' +
+            '<div class="ud-inf">ข้อมูลและสิทธิ์ที่แก้ไว้ยังอยู่ครบในฟอร์ม ไม่ต้องกรอกใหม่ ตรวจอินเทอร์เน็ตแล้วกด “ลองอีกครั้ง”</div>' +
+            '<div class="ud-b"><button type="button" class="ud-go" id="ud-retry">ลองอีกครั้ง</button><button type="button" class="ud-no" id="ud-close">ปิด</button></div></div>');
+        dlg.querySelector('#ud-retry').onclick = () => { closeDlg(); window.handleUserFormSubmit(); };
+        dlg.querySelector('#ud-close').onclick = () => closeDlg();
+        try { dlg.querySelector('#ud-retry').focus(); } catch (e) { }
+    }
+    function showEditOk(d, s) {
+        const rows = [];
+        if (s.added.length) rows.push('<div class="ud-blk"><div class="ud-bl">สิทธิ์ที่เปิดเพิ่ม</div><div class="ud-chips">' + chips(s.added, 'g', '+ ') + '</div></div>');
+        if (s.removed.length) rows.push('<div class="ud-blk"><div class="ud-bl">สิทธิ์ที่ปิด</div><div class="ud-chips">' + chips(s.removed, 'r', '− ') + '</div></div>');
+        if (s.roleChanged) rows.push('<div class="ud-row"><span>บทบาท</span><b>' + esc(s.oldRole) + ' → ' + esc(s.newRole) + '</b></div>');
+        if (s.nameChanged) rows.push('<div class="ud-row"><span>ชื่อที่แสดง</span><b>' + esc(s.oldName || '-') + ' → ' + esc(d.fullname || '-') + '</b></div>');
+        if (s.pwChanged) rows.push('<div class="ud-row"><span>รหัสผ่าน</span><b>เปลี่ยนแล้ว</b></div>');
+        if (!rows.length) rows.push('<div class="ud-row"><span>การเปลี่ยนแปลง</span><b>ไม่มี (ข้อมูลเหมือนเดิม)</b></div>');
+        rows.push('<div class="ud-row"><span>สิทธิ์ที่เปิดอยู่ตอนนี้</span><b>' + s.on + ' / ' + s.total + ' สิทธิ์</b></div>');
+        openDlg('<div class="ud" role="dialog" aria-modal="true"><div class="ud-big grn"><i class="bi bi-check-lg"></i></div>' +
+            '<div class="ud-c"><div class="ud-t">บันทึกข้อมูลผู้ใช้แล้ว</div><div class="ud-s">' + who(d) + '</div></div>' +
+            '<div class="ud-box">' + rows.join('') + '</div>' +
+            '<div class="ud-b"><button type="button" class="ud-go" id="ud-ok">ปิด</button></div><div class="ud-cd"><i></i></div></div>');
+        dlg.querySelector('#ud-ok').onclick = () => closeDlg();
+        try { dlg.querySelector('#ud-ok').focus(); } catch (e) { }
+        timer = setTimeout(() => { timer = null; if (dlg && dlg.querySelector('.ud-cd')) closeDlg(); }, 4000);
+    }
+    function showAddOk(d, s) {
+        const on = s.onKeys;
+        openDlg('<div class="ud" role="dialog" aria-modal="true"><div class="ud-big grn"><i class="bi bi-check-lg"></i></div>' +
+            '<div class="ud-c"><div class="ud-t">เพิ่มผู้ใช้ใหม่แล้ว</div><div class="ud-s">พร้อมให้ล็อกอินได้ทันที</div></div>' +
+            '<div class="ud-box"><div class="ud-user"><div class="ud-av">' + esc(String(d.fullname || d.username || '?').trim().charAt(0).toUpperCase()) + '</div><div><div class="ud-un">' + esc(d.fullname || d.username) + '</div><div class="ud-us">' + esc(d.username) + ' · ' + esc(s.newRole) + '</div></div></div>' +
+            '<div class="ud-blk"><div class="ud-bl">' + (on.length ? 'เปิดสิทธิ์ให้ ' + on.length + ' รายการ' : 'ยังไม่ได้เปิดสิทธิ์ใดๆ') + '</div>' + (on.length ? '<div class="ud-chips">' + chips(on, 'b', '') + '</div>' : '') + '</div></div>' +
+            '<div class="ud-b"><button type="button" class="ud-go" id="ud-next">เพิ่มคนต่อไป</button><button type="button" class="ud-no" id="ud-close">ปิด</button></div></div>');
+        dlg.querySelector('#ud-next').onclick = () => { closeDlg(); try { const u = document.getElementById('user-username'); if (u) u.focus(); } catch (e) { } };
+        dlg.querySelector('#ud-close').onclick = () => closeDlg();
+        try { dlg.querySelector('#ud-next').focus(); } catch (e) { }
+    }
+ 
+    // ---------- บันทึก ----------
+    window.handleUserFormSubmit = async function (e) {
+        if (e && e.preventDefault) e.preventDefault();
+        if (busy) return;
+        const val = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
+        const d = {
+            username: val('user-username').trim(), password: val('user-password'), fullname: val('user-fullname').trim(),
+            avatarUrl: val('user-avatar').trim(), role: val('user-role-select')
+        };
+        BASE_KEYS.forEach((k) => { const cb = document.getElementById('permission-' + k); if (cb) d[k] = cb.checked; });
+ 
+        const isEdit = (typeof originalUsernameForEdit !== 'undefined' && originalUsernameForEdit);
+        const old = isEdit ? ((db.users || []).find((u) => u.username === originalUsernameForEdit) || null) : null;
+        // อ่านสถานะสิทธิ์ทั้งหมดจากฟอร์ม (รวมสิทธิ์ที่แพตช์อื่นส่งเพิ่ม) ก่อนฟอร์มถูกล้าง
+        const cbs = Array.from(document.querySelectorAll('input[id^="permission-"]'));
+        const now = {}; cbs.forEach((cb) => { now[cb.id.slice(11)] = cb.checked; });
+        const wasOn = (k) => { const v = old ? old[k] : undefined; if (LEGACY_ON.indexOf(k) >= 0 && window.__lgPlanPermLegacy && old && (v === undefined || v === null || v === '')) return true; return isTrue(v); };
+        const keys = Object.keys(now);
+        const sel = document.getElementById('user-role-select');
+        const roleText = (v) => { try { const o = Array.from(sel.options).find((x) => x.value === v); return o ? o.textContent.trim() : (v || '-'); } catch (x) { return v || '-'; } };
+        const s = {
+            total: keys.length, on: keys.filter((k) => now[k]).length, onKeys: keys.filter((k) => now[k]),
+            added: old ? keys.filter((k) => now[k] && !wasOn(k)) : [], removed: old ? keys.filter((k) => !now[k] && wasOn(k)) : [],
+            roleChanged: !!old && String(old.role || '') !== String(d.role || ''), oldRole: old ? roleText(old.role) : '', newRole: roleText(d.role),
+            nameChanged: !!old && String(old.fullname || '') !== String(d.fullname || ''), oldName: old ? old.fullname : '',
+            pwChanged: !!old && String(old.password == null ? '' : old.password) !== String(d.password == null ? '' : d.password)
+        };
+ 
+        busy = true; showSaving(d);
+        try {
+            const action = isEdit ? 'updateUser' : 'addUser';
+            const payload = Object.assign({}, d);
+            const response = await callAppsScript(action, payload);
+            if (response && response.status === 'error') throw new Error(response.message || 'unknown error');
+            if (isEdit) {
+                const idx = db.users.findIndex((u) => u.username === originalUsernameForEdit);
+                if (idx !== -1) db.users[idx] = payload; else db.users.push(payload);
+            } else db.users.push(payload);
+            clearUserForm();
+            populateUserManagementTable();
+            busy = false;
+            if (isEdit) showEditOk(d, s); else showAddOk(d, s);
+        } catch (err) {
+            console.error('User Save Error:', err);
+            busy = false; showFail(d, err);
+        }
+    };
+})();
                 let calcExpression = '';
                 
                 window.toggleCalculator = function() {
