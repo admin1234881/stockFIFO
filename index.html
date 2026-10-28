@@ -3115,37 +3115,145 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- Forecast Tab -->
-                <div class="tab-pane fade" id="pills-forecast" role="tabpanel">
-                    <div class="row justify-content-center">
-                        <div class="col-lg-8">
-                            <div class="card shadow-sm border-0" style="border-radius: 20px;">
-                                <div class="card-header fw-bold bg-white pt-4 pb-3 px-4 border-0 d-flex justify-content-between align-items-center" style="border-radius: 20px 20px 0 0;">
-                                    <h5 class="fw-bold text-success mb-0"><i class="bi bi-graph-up-arrow me-2"></i>อัปโหลด Forecast (ประเมินสต็อก 3 วัน)</h5>
+                 <div class="tab-pane fade" id="pills-forecast" role="tabpanel">
+                    <!-- ===== FC-REDESIGN: หน้า อัปโหลด Forecast ดีไซน์ใหม่ ===== -->
+                    <style id="fc-css">
+                        #pills-forecast{--fc-ink:#0F172A;--fc-mut:#475569;--fc-line:#E2E8F0;--fc-blue:#1E40AF}
+                        #pills-forecast .fc-wrap{display:flex;flex-direction:column;gap:20px;color:var(--fc-ink)}
+                        #pills-forecast .fc-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px}
+                        #pills-forecast .fc-ttl{display:flex;align-items:center;gap:14px}
+                        #pills-forecast .fc-logo{width:50px;height:50px;border-radius:16px;background:var(--fc-blue);display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.5rem}
+                        #pills-forecast .fc-ttl h1{margin:0;font-size:1.5rem;font-weight:700;line-height:1.2}
+                        #pills-forecast .fc-ttl p{margin:2px 0 0;font-size:.875rem;color:var(--fc-mut)}
+                        #pills-forecast .fc-range{display:flex;align-items:center;gap:8px;font-size:.8125rem;color:#334155;background:#fff;border:1px solid var(--fc-line);border-radius:999px;padding:8px 14px}
+                        #pills-forecast .fc-range i{color:var(--fc-blue)}
+                        #pills-forecast .fc-banners{display:flex;flex-wrap:wrap;gap:14px}
+                        #pills-forecast .fc-b{flex:1 1 340px;display:flex;align-items:center;gap:14px;border-radius:20px;padding:16px 20px;border:1px solid}
+                        #pills-forecast .fc-b .ic{width:44px;height:44px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.3rem}
+                        #pills-forecast .fc-b .t{font-size:1.0625rem;font-weight:700}
+                        #pills-forecast .fc-b .s{font-size:.875rem;margin-top:2px}
+                        #pills-forecast .fc-b.ok{background:#DCFCE7;border-color:#86EFAC;color:#14532D}
+                        #pills-forecast .fc-b.ok .ic{background:#15803D}
+                        #pills-forecast .fc-b.warn{background:#FEF3C7;border-color:#FCD34D;color:#78350F}
+                        #pills-forecast .fc-b.warn .ic{background:#B45309}
+                        #pills-forecast .fc-chip{display:inline-block;font-size:.8125rem;font-weight:600;background:#fff;border:1px solid #FCD34D;border-radius:999px;padding:2px 12px;margin:6px 6px 0 0}
+                        #pills-forecast .fc-cols{display:flex;flex-wrap:wrap;gap:22px;align-items:stretch}
+                        #pills-forecast .fc-left{flex:1 1 560px;min-width:0;display:flex;flex-direction:column;gap:22px}
+                        #pills-forecast .fc-card{background:#fff;border:1px solid var(--fc-line);border-radius:24px;padding:24px;display:flex;flex-direction:column;gap:18px}
+                        #pills-forecast .fc-step{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+                        #pills-forecast .fc-step .l{display:flex;align-items:center;gap:12px}
+                        #pills-forecast .fc-step b.n{width:30px;height:30px;border-radius:50%;background:var(--fc-blue);color:#fff;font-size:.875rem;font-weight:600;display:flex;align-items:center;justify-content:center;flex:none}
+                        #pills-forecast .fc-step .h{font-size:1.125rem;font-weight:700}
+                        #pills-forecast .fc-step .d{font-size:.8125rem;color:var(--fc-mut);margin-top:2px}
+                        #pills-forecast .fc-dl{height:46px;padding:0 20px;border:2px solid var(--fc-blue);border-radius:999px;background:#fff;color:var(--fc-blue);font-size:.9375rem;font-weight:600;display:inline-flex;align-items:center;gap:8px}
+                        #pills-forecast .fc-dl:hover{background:#EFF4FF}
+                        #pills-forecast .fc-pv{overflow-x:auto;border:1px solid var(--fc-line);border-radius:14px}
+                        #pills-forecast .fc-pvg{min-width:640px;display:grid;grid-template-columns:90px 110px repeat(7,minmax(0,1fr));font-size:.75rem}
+                        #pills-forecast .fc-pvg>div{padding:10px 8px;border-top:1px solid var(--fc-line);text-align:center;color:var(--fc-mut)}
+                        #pills-forecast .fc-pvg>div.h{background:#F1F5F9;border-top:0;font-weight:600;color:#334155;line-height:1.3}
+                        #pills-forecast .fc-pvg>div.h b{display:block;font-weight:600}
+                        #pills-forecast .fc-pvg>div.a{text-align:left;padding-left:12px}
+                        #pills-forecast .fc-pvg>div.v{font-weight:600;color:var(--fc-ink)}
+                        #pills-forecast .fc-pvg>div.z{font-weight:600;color:#94A3B8}
+                        #pills-forecast .fc-drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:34px 20px;border:2px dashed #60A5FA;border-radius:20px;background:#F5F9FF;color:var(--fc-ink);width:100%}
+                        #pills-forecast .fc-drop:hover,#pills-forecast .fc-drop.drag{background:#E8F1FF;border-color:var(--fc-blue)}
+                        #pills-forecast .fc-drop .ic{width:60px;height:60px;border-radius:50%;background:#DBEAFE;color:var(--fc-blue);display:flex;align-items:center;justify-content:center;font-size:1.8rem}
+                        #pills-forecast .fc-drop .t{font-size:1.0625rem;font-weight:700;word-break:break-all;text-align:center}
+                        #pills-forecast .fc-drop .s{font-size:.8125rem;color:var(--fc-mut)}
+                        #pills-forecast .fc-how{flex:1 1 380px;max-width:460px;min-width:0;background:#0F172A;color:#fff;border-radius:24px;padding:26px;display:flex;flex-direction:column;gap:18px;box-sizing:border-box}
+                        #pills-forecast .fc-how .t{font-size:1.125rem;font-weight:700}
+                        #pills-forecast .fc-how .p{font-size:.875rem;color:#CBD5E1;line-height:1.6}
+                        #pills-forecast .fc-how .st{display:flex;align-items:center;gap:12px;background:#1E293B;border-radius:14px;padding:12px 14px;font-size:.875rem;margin-bottom:10px}
+                        #pills-forecast .fc-how .st i{width:26px;height:26px;flex:none;border-radius:50%;background:#2563EB;font-style:normal;font-size:.8125rem;font-weight:600;display:flex;align-items:center;justify-content:center}
+                        #pills-forecast .fc-how .st b{color:#93C5FD}
+                        #pills-forecast .fc-how .st b.r{color:#FCD34D;font-size:1.125rem}
+                        #pills-forecast .fc-how .ft{font-size:.75rem;color:#94A3B8;line-height:1.6;border-top:1px solid #334155;padding-top:14px}
+                        #pills-forecast .fc-tools{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+                        #pills-forecast .fc-chips{display:flex;flex-wrap:wrap;gap:8px}
+                        #pills-forecast .fc-fb{height:36px;padding:0 16px;border-radius:999px;font-size:.8125rem;font-weight:600;border:1.5px solid #CBD5E1;background:#fff;color:#334155}
+                        #pills-forecast .fc-fb.on{background:var(--fc-ink);border-color:var(--fc-ink);color:#fff}
+                        #pills-forecast .fc-tb{overflow:auto;max-height:520px;border:1px solid var(--fc-line);border-radius:16px}
+                        #pills-forecast .fc-g{display:grid;grid-template-columns:minmax(150px,1.6fr) minmax(90px,1fr) minmax(110px,1.2fr) minmax(90px,1fr) minmax(150px,1.6fr) 90px;gap:12px;align-items:center;padding:13px 18px;min-width:680px;border-top:1px solid var(--fc-line);background:#fff}
+                        #pills-forecast .fc-g.h{position:sticky;top:0;z-index:2;background:#F1F5F9;border-top:0;font-size:.75rem;font-weight:600;color:#334155}
+                        #pills-forecast .fc-g.chg{background:#F5F9FF}
+                        #pills-forecast .fc-g .num{text-align:right;font-size:.9375rem}
+                        #pills-forecast .fc-g .pid{font-size:.875rem;font-weight:600;color:var(--fc-blue);word-break:break-all}
+                        #pills-forecast .fc-g .cu{font-size:.75rem;color:var(--fc-mut);margin-top:2px}
+                        #pills-forecast .fc-g .was{display:block;font-size:.6875rem;font-weight:500;color:var(--fc-mut)}
+                        #pills-forecast .fc-bar{height:10px;border-radius:999px;background:#E2E8F0;overflow:hidden}
+                        #pills-forecast .fc-bar i{display:block;height:100%;border-radius:999px}
+                        #pills-forecast .fc-bd{display:inline-block;min-width:52px;text-align:center;font-size:.8125rem;font-weight:700;border-radius:999px;padding:4px 12px}
+                        #pills-forecast .fc-bd.ok{background:#DCFCE7;color:#14532D}
+                        #pills-forecast .fc-bd.low{background:#FEE2E2;color:#7F1D1D}
+                        #pills-forecast .fc-none{padding:36px 18px;text-align:center;font-size:.875rem;color:var(--fc-mut);border-top:1px solid var(--fc-line)}
+                        #pills-forecast button{cursor:pointer}
+                    </style>
+                    <div class="fc-wrap">
+                        <div class="fc-head">
+                            <div class="fc-ttl">
+                                <div class="fc-logo"><i class="bi bi-graph-up-arrow"></i></div>
+                                <div>
+                                    <h1>อัปโหลด Forecast</h1>
+                                    <p>ประเมินสต็อกที่ต้องมีล่วงหน้า 3 วัน จากแผนความต้องการของสัปดาห์หน้า</p>
                                 </div>
-                                <div class="card-body px-5 pb-5 pt-3 text-center">
-                                    <div class="mb-4">
-                                        <i class="bi bi-file-earmark-excel text-success" style="font-size: 4rem;"></i>
-                                        <h5 class="fw-bold mt-2">ขั้นตอนที่ 1: ดาวน์โหลดเทมเพลต</h5>
-                                        <p class="text-muted small">ระบบจะสร้างวันที่ของ "สัปดาห์หน้า" ให้อัตโนมัติ</p>
-                                        <button class="btn btn-outline-success fw-bold rounded-pill px-4" onclick="window.downloadForecastTemplate()">
-                                            <i class="bi bi-download me-2"></i>ดาวน์โหลด Template
-                                        </button>
+                            </div>
+                            <div class="fc-range" id="fc-range"><i class="bi bi-calendar3"></i><span>สัปดาห์หน้า</span></div>
+                        </div>
+ 
+                        <div class="fc-banners" id="fc-banner"></div>
+ 
+                        <div class="fc-cols">
+                            <div class="fc-left">
+                                <div class="fc-card">
+                                    <div class="fc-step">
+                                        <div class="l"><b class="n">1</b><div><div class="h">ดาวน์โหลดเทมเพลต</div><div class="d">ระบบสร้างวันที่ของ "สัปดาห์หน้า" (จันทร์–อาทิตย์) ให้อัตโนมัติ</div></div></div>
+                                        <button type="button" class="fc-dl" onclick="window.downloadForecastTemplate()"><i class="bi bi-download"></i>ดาวน์โหลด Template</button>
                                     </div>
-                                    <hr class="w-50 mx-auto my-4">
-                                    <div>
-                                        <h5 class="fw-bold mt-2">ขั้นตอนที่ 2 : อัปโหลดไฟล์ที่ใส่ตัวเลขแล้ว</h5>
-                                        <p class="text-muted small">ระบบจะคำนวณยอดสต็อก 3 วัน ไปผูกกับตาราง "สต็อกคงเหลือ"</p>
-                                        <button class="btn btn-success fw-bold shadow-sm rounded-pill px-5 py-2 fs-5" onclick="window.uploadForecastFile()">
-                                            <i class="bi bi-upload me-2"></i>คลิกเพื่ออัปโหลดไฟล์ Excel
-                                        </button>
-                                    </div>
+                                    <div class="fc-pv"><div class="fc-pvg" id="fc-pv"></div></div>
                                 </div>
+                                <div class="fc-card">
+                                    <div class="fc-step">
+                                        <div class="l"><b class="n">2</b><div><div class="h">อัปโหลดไฟล์ที่ใส่ตัวเลขแล้ว</div><div class="d">ระบบคำนวณเป้า 3 วัน แล้วไปผูกกับตาราง "สต็อกคงเหลือ"</div></div></div>
+                                    </div>
+                                    <button type="button" class="fc-drop" id="fc-drop" onclick="window.uploadForecastFile()">
+                                        <span class="ic"><i class="bi bi-cloud-arrow-up"></i></span>
+                                        <span class="t" id="fc-drop-t">ลากไฟล์ Excel มาวางที่นี่ หรือกดเพื่อเลือกไฟล์</span>
+                                        <span class="s" id="fc-drop-s">รองรับ .xlsx · .xls · .csv</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="fc-how">
+                                <div class="t">คำนวณเป้า 3 วันอย่างไร</div>
+                                <div class="p">นับเฉพาะวันที่มียอดมากกว่า 0 เอามาหาค่าเฉลี่ยต่อวัน แล้วคูณ 3 ปัดขึ้นเป็นจำนวนเต็ม</div>
+                                <div>
+                                    <div class="st"><i>1</i><span>รวมยอดเฉพาะวันที่ &gt; 0 <b>550</b> ชิ้น ใน <b>4</b> วัน</span></div>
+                                    <div class="st"><i>2</i><span>เฉลี่ยต่อวัน 550 ÷ 4 = <b>137.5</b></span></div>
+                                    <div class="st"><i>3</i><span>คูณ 3 ปัดขึ้น = <b class="r">413</b> ชิ้น</span></div>
+                                </div>
+                                <div class="ft">ตัวอย่างจากแถว LG / PART-001 ในเทมเพลต · ค้นหารหัสได้จาก Part No., รหัส ERP หรือชื่อสินค้า</div>
+                            </div>
+                        </div>
+ 
+                        <div class="fc-card">
+                            <div class="fc-tools">
+                                <div><div class="fc-step"><div class="h">เป้า 3 วันที่ใช้อยู่ตอนนี้</div></div><div class="d" style="font-size:.8125rem;color:var(--fc-mut)">เทียบกับสต็อกคงเหลือในคลัง</div></div>
+                                <div class="fc-chips" id="fc-filters"></div>
+                            </div>
+                            <div class="fc-tb">
+                                <div class="fc-g h">
+                                    <div>Part No. / ลูกค้า</div>
+                                    <div style="text-align:right">เป้า 3 วัน</div>
+                                    <div style="text-align:right">สต็อกคงเหลือ</div>
+                                    <div style="text-align:right">ขาด / เกิน</div>
+                                    <div>ความพร้อม</div>
+                                    <div style="text-align:right">สถานะ</div>
+                                </div>
+                                <div id="fc-tbody"></div>
                             </div>
                         </div>
                     </div>
-                </div>    
+                </div>
+                
                 <!-- Import Tab -->
                 <div class="tab-pane fade" id="pills-import" role="tabpanel">
                     <div class="card">
@@ -3167,103 +3275,199 @@
                         </div>
                     </div>
                 </div>
-                <!-- ========================================== -->
-                <!-- Rack System Tab (หน้าจัดการแพ็คกิ้ง) -->
-                <!-- ========================================== -->
-                <div class="tab-pane fade" id="pills-rack" role="tabpanel">
-                    <div class="row">
-                        <div class="col-lg-4 mb-4">
-                            <div class="card shadow-sm border-0" style="border-radius: 20px; min-height: calc(100vh - 145px);">
-                                <div class="card-header fw-bold bg-white pt-4 pb-2 px-4 border-0" style="border-radius: 20px 20px 0 0;">
-                                    <h5 class="fw-bold text-primary mb-0"><i class="bi bi-arrow-left-right me-2"></i>โอนย้าย Packing</h5>
-                                </div>
-                                <div class="card-body px-4 pb-4 pt-2">
- <!-- เลือกเฉพาะปลายทาง -->
-                                    <div class="mb-3 p-3 bg-light rounded border border-success-subtle">
-                                        <label class="form-label fw-bold text-success mb-1">1. เลือกปลายทางที่ต้องการนำไปเก็บ (Destination)</label>
-                                        <select id="rack-to-loc" class="form-select border-success fw-bold" required>
+                               <div class="tab-pane fade" id="pills-rack" role="tabpanel">
+                    <!-- ===== PK-REDESIGN: หน้า Packing ดีไซน์ใหม่ (ทุก id เดิมยังอยู่ครบ) ===== -->
+                    <style id="pk-css">
+                        #pills-rack{--pk-ink:#0F172A;--pk-mut:#475569;--pk-line:#E2E8F0;--pk-blue:#1E40AF;--pk-empty:#CBD5E1;--pk-fill:#2563EB;--pk-cust:#F59E0B}
+                        #pills-rack .pk-wrap{display:flex;flex-direction:column;gap:22px;color:var(--pk-ink)}
+                        #pills-rack .pk-head{display:flex;flex-wrap:wrap;align-items:center;gap:14px}
+                        #pills-rack .pk-logo{width:50px;height:50px;border-radius:16px;background:var(--pk-blue);display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.5rem}
+                        #pills-rack .pk-head h1{margin:0;font-size:1.5rem;font-weight:700;line-height:1.2}
+                        #pills-rack .pk-head p{margin:2px 0 0;font-size:.875rem;color:var(--pk-mut)}
+                        #pills-rack .pk-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+                        #pills-rack .pk-kpi{background:#fff;border:1px solid var(--pk-line);border-radius:20px;padding:18px 20px}
+                        #pills-rack .pk-kpi.main{background:var(--pk-blue);border-color:var(--pk-blue);color:#fff}
+                        #pills-rack .pk-kpi .l{display:flex;align-items:center;gap:8px;font-size:.875rem;color:var(--pk-mut)}
+                        #pills-rack .pk-kpi.main .l,#pills-rack .pk-kpi.main .s{color:#DBEAFE}
+                        #pills-rack .pk-kpi .v{font-size:2rem;font-weight:700;line-height:1.15;margin-top:4px}
+                        #pills-rack .pk-kpi .s{font-size:.8125rem;color:var(--pk-mut)}
+                        #pills-rack .pk-dot{width:10px;height:10px;border-radius:3px;display:inline-block;flex:none}
+                        #pills-rack .pk-cols{display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start}
+                        #pills-rack .pk-left{flex:1 1 400px;max-width:470px;min-width:0}
+                        #pills-rack .pk-right{flex:999 1 560px;min-width:0}
+                        #pills-rack .pk-card{background:#fff;border:1px solid var(--pk-line);border-radius:24px;padding:22px;display:flex;flex-direction:column;gap:20px}
+                        #pills-rack .pk-card h2{margin:0;font-size:1.1875rem;font-weight:700;display:flex;align-items:center;gap:10px}
+                        #pills-rack .pk-card h2 i{color:var(--pk-blue)}
+                        #pills-rack .pk-step{display:flex;align-items:center;gap:10px;font-size:.9375rem;font-weight:600;margin-bottom:10px}
+                        #pills-rack .pk-step b{width:24px;height:24px;border-radius:50%;background:var(--pk-blue);color:#fff;font-size:.8125rem;display:flex;align-items:center;justify-content:center}
+                        #pills-rack .pk-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+                        #pills-rack .pk-tile{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:12px 14px;min-height:62px;border-radius:14px;border:1.5px solid #CBD5E1;background:#fff;cursor:pointer;color:var(--pk-ink)}
+                        #pills-rack .pk-tile:hover{border-color:var(--pk-blue)}
+                        #pills-rack .pk-tile.on{border:2px solid var(--pk-blue);background:#EFF4FF;padding:11.5px 13.5px}
+                        #pills-rack .pk-tile .t{font-size:.875rem;font-weight:600}
+                        #pills-rack .pk-tile .d{font-size:.75rem;color:var(--pk-mut)}
+                        #pills-rack .pk-scan{display:flex;gap:8px}
+                        #pills-rack .pk-scan .in{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:10px;height:52px;padding:0 14px;border:2px solid var(--pk-blue);border-radius:14px;background:#F8FAFF}
+                        #pills-rack .pk-scan .in i{color:var(--pk-blue);font-size:1.2rem}
+                        #pills-rack .pk-scan input{flex:1 1 auto;min-width:0;border:0;outline:0;background:transparent;font-size:.9375rem;font-weight:600;color:var(--pk-ink)}
+                        #pills-rack .pk-scan button{width:52px;height:52px;flex:none;border:0;border-radius:14px;background:var(--pk-ink);color:#fff;font-size:1.3rem}
+                        #pills-rack .pk-upload{margin-top:10px;display:flex;align-items:center;gap:12px;padding:12px 14px;border:1.5px dashed #94A3B8;border-radius:14px;background:#fff;position:relative}
+                        #pills-rack .pk-upload .ic{width:38px;height:38px;border-radius:10px;background:#DCFCE7;color:#15803D;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex:none}
+                        #pills-rack .pk-upload .tx{display:flex;flex-direction:column;gap:2px;min-width:0}
+                        #pills-rack .pk-upload .tx b{font-size:.875rem}
+                        #pills-rack .pk-upload .tx span{font-size:.75rem;color:var(--pk-mut)}
+                        #pills-rack .pk-upload input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+                        #pills-rack .pk-stagehead{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+                        #pills-rack .pk-stagehead .n{margin-left:6px;font-size:.75rem;font-weight:600;color:var(--pk-blue);background:#DBEAFE;border-radius:999px;padding:2px 10px}
+                        #pills-rack .pk-clear{border:0;background:transparent;font-size:.8125rem;color:#B91C1C;padding:6px 4px}
+                        #pills-rack #rack-staging-list{display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto}
+                        #pills-rack .pk-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--pk-line);border-radius:14px;background:#F8FAFC}
+                        #pills-rack .pk-item .m{flex:1 1 auto;min-width:0}
+                        #pills-rack .pk-item .c{font-size:.875rem;font-weight:600;word-break:break-all}
+                        #pills-rack .pk-item .n{font-size:.75rem;color:var(--pk-mut);margin-top:1px}
+                        #pills-rack .pk-route{display:inline-flex;align-items:center;gap:6px;margin-top:8px;font-size:.75rem;font-weight:500;background:#fff;border:1px solid #CBD5E1;border-radius:999px;padding:3px 10px}
+                        #pills-rack .pk-route b{font-weight:600;color:var(--pk-blue)}
+                        #pills-rack .pk-route.new{background:#DCFCE7;border-color:#86EFAC}
+                        #pills-rack .pk-del{width:36px;height:36px;flex:none;border:0;border-radius:10px;background:#FEE2E2;color:#B91C1C}
+                        #pills-rack .pk-empty{padding:26px 10px;text-align:center;color:var(--pk-mut);font-size:.875rem;border:1.5px dashed #CBD5E1;border-radius:14px}
+                        #pills-rack .pk-empty i{display:block;font-size:1.8rem;opacity:.5;margin-bottom:6px}
+                        #pills-rack #btn-save-rack-batch{height:54px;border:0;border-radius:16px;background:var(--pk-blue);color:#fff;font-size:1rem;font-weight:600;display:flex;align-items:center;justify-content:center;gap:10px}
+                        #pills-rack #btn-save-rack-batch:hover{background:#1E3A8A}
+                        #pills-rack .pk-tools{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+                        #pills-rack .pk-search{display:flex;align-items:center;gap:8px;height:44px;padding:0 14px;width:280px;max-width:100%;background:#F1F5F9;border-radius:12px}
+                        #pills-rack .pk-search input{flex:1 1 auto;min-width:0;border:0;outline:0;background:transparent;font-size:.875rem}
+                        #pills-rack .pk-chips{display:flex;flex-wrap:wrap;gap:8px}
+                        #pills-rack .pk-chip{height:36px;padding:0 16px;border-radius:999px;font-size:.8125rem;font-weight:600;border:1.5px solid #CBD5E1;background:#fff;color:#334155}
+                        #pills-rack .pk-chip.on{background:var(--pk-ink);border-color:var(--pk-ink);color:#fff}
+                        #pills-rack .pk-legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.75rem;color:var(--pk-mut)}
+                        #pills-rack .pk-legend span{display:inline-flex;align-items:center;gap:6px}
+                        #pills-rack .pk-tablebox{overflow:auto;max-height:calc(100vh - 430px);min-height:240px;border:1px solid var(--pk-line);border-radius:16px}
+                        #pills-rack .pk-grid{display:grid;grid-template-columns:minmax(180px,2.2fr) repeat(3,minmax(70px,1fr)) minmax(150px,1.6fr) 90px;gap:12px;align-items:center;padding:13px 18px;min-width:660px}
+                        #pills-rack .pk-grid.h{position:sticky;top:0;z-index:2;background:#F1F5F9;font-size:.75rem;font-weight:600;color:#334155}
+                        #pills-rack .pk-grid.r{border-top:1px solid var(--pk-line);background:#fff}
+                        #pills-rack .pk-grid.r:hover{background:#F8FAFF}
+                        #pills-rack .pk-grid .num{text-align:right;font-size:.9375rem;font-weight:500}
+                        #pills-rack .pk-grid .code{font-size:.875rem;font-weight:600;color:var(--pk-blue)}
+                        #pills-rack .pk-grid .nm{font-size:.75rem;color:var(--pk-mut);margin-top:2px}
+                        #pills-rack .pk-bar{display:flex;height:10px;border-radius:999px;overflow:hidden;background:#E2E8F0}
+                        #pills-rack .pk-tot{display:inline-block;min-width:56px;text-align:center;font-size:.9375rem;font-weight:700;color:#fff;background:var(--pk-ink);border-radius:999px;padding:4px 12px}
+                        #pills-rack .pk-none{padding:40px 18px;text-align:center;font-size:.875rem;color:var(--pk-mut);border-top:1px solid var(--pk-line)}
+                        #pills-rack button{cursor:pointer}
+                    </style>
+                    <div class="pk-wrap">
+                        <div class="pk-head">
+                            <div class="pk-logo"><i class="bi bi-box-seam"></i></div>
+                            <div>
+                                <h1>ระบบจัดการ Packing</h1>
+                                <p>โอนย้ายกล่อง / แร็ค และดูสถานะคงเหลือทั้งหมดในที่เดียว</p>
+                            </div>
+                        </div>
+ 
+                        <div class="pk-kpis">
+                            <div class="pk-kpi main"><div class="l">รวมทั้งหมด</div><div class="v" id="pk-k-total">0</div><div class="s"><span id="pk-k-models">0</span> รุ่น</div></div>
+                            <div class="pk-kpi"><div class="l"><span class="pk-dot" style="background:#CBD5E1"></span>WH กล่องเปล่า</div><div class="v" id="pk-k-empty">0</div><div class="s"><span id="pk-p-empty">0%</span> ของทั้งหมด</div></div>
+                            <div class="pk-kpi"><div class="l"><span class="pk-dot" style="background:#2563EB"></span>WH กล่องมีงาน</div><div class="v" id="pk-k-filled">0</div><div class="s"><span id="pk-p-filled">0%</span> ของทั้งหมด</div></div>
+                            <div class="pk-kpi"><div class="l"><span class="pk-dot" style="background:#F59E0B"></span>อยู่ที่ลูกค้า</div><div class="v" id="pk-k-cust">0</div><div class="s"><span id="pk-p-cust">0%</span> ของทั้งหมด</div></div>
+                        </div>
+ 
+                        <div class="pk-cols">
+                            <!-- ฝั่งโอนย้าย -->
+                            <div class="pk-left">
+                                <div class="pk-card">
+                                    <h2><i class="bi bi-arrow-left-right"></i>โอนย้าย Packing</h2>
+ 
+                                    <div>
+                                        <div class="pk-step"><b>1</b>เลือกปลายทาง (Destination)</div>
+                                        <select id="rack-to-loc" class="d-none" required>
                                             <option value="" disabled selected>-- เลือกปลายทางก่อนเริ่มสแกน --</option>
-                                            <option id="opt-register-new" value="REGISTER_NEW" class="text-primary fw-bold" style="display: none;">✨ เพิ่มแพ็คกิ้งใหม่เข้าระบบ (Register New)</option>
+                                            <option id="opt-register-new" value="REGISTER_NEW" style="display: none;">✨ เพิ่มแพ็คกิ้งใหม่เข้าระบบ (Register New)</option>
                                             <option value="WH_EMPTY">📥 WH กล่องเปล่า (คืนกล่อง / เก็บกล่อง)</option>
                                             <option value="WH_FILLED">📦 WH ใส่ชิ้นงาน (เอาไปแพ็คงาน)</option>
                                             <option value="CUSTOMER">🚚 WH ลูกค้า (Customer)</option>
                                             <option value="OUT">🗑️ ตัดออกจากระบบ (ชำรุด)</option>
                                         </select>
-                                    </div>
-                                    <!-- ฟอร์มสำหรับเครื่องสแกน -->
-                                            <form id="rack-scan-form" class="mb-3">
-                                        <label class="form-label fw-bold">2. ยิงสแกน QR Code ERP ที่นี่</label>
-                                        <div class="input-group">
-                                            <input type="text" id="rack-scanner-input" class="form-control border-dark text-center fw-bold fs-5 shadow-sm" placeholder="ใช้เครื่องสแกน หรือเปิดกล้องเพื่อสแกน" autocomplete="off">
-                                            <button type="button" id="btn-open-camera" class="btn btn-dark shadow-sm px-3" onclick="toggleCameraScanner()" title="เปิดกล้องมือถือสแกน">
-                                                <i class="bi bi-qr-code-scan fs-5"></i>
-                                            </button>
+                                        <div class="pk-tiles" id="pk-tiles">
+                                            <button type="button" class="pk-tile" id="pk-tile-REGISTER_NEW" data-v="REGISTER_NEW" style="display:none;grid-column:1/-1" onclick="pkPickDest('REGISTER_NEW')"><span class="t">✨ เพิ่มแพ็คกิ้งใหม่</span><span class="d">รับกล่องใหม่เข้าระบบ</span></button>
+                                            <button type="button" class="pk-tile" data-v="WH_EMPTY" onclick="pkPickDest('WH_EMPTY')"><span class="t">WH กล่องเปล่า</span><span class="d">คืนกล่อง / เก็บกล่อง</span></button>
+                                            <button type="button" class="pk-tile" data-v="WH_FILLED" onclick="pkPickDest('WH_FILLED')"><span class="t">WH ใส่ชิ้นงาน</span><span class="d">เอาไปแพ็คงาน</span></button>
+                                            <button type="button" class="pk-tile" data-v="CUSTOMER" onclick="pkPickDest('CUSTOMER')"><span class="t">WH ลูกค้า</span><span class="d">ส่งไปที่ลูกค้า</span></button>
+                                            <button type="button" class="pk-tile" data-v="OUT" onclick="pkPickDest('OUT')"><span class="t">ตัดออกจากระบบ</span><span class="d">ชำรุด</span></button>
                                         </div>
-                                        
-                                        <div id="camera-scanner-container" class="d-none mt-3 rounded overflow-hidden shadow-sm" style="border: 2px solid #0d6efd;">
-                                            <div class="bg-primary text-white text-center py-2 fw-bold small d-flex justify-content-between px-3 align-items-center">
-                                                <span><i class="bi bi-camera-video me-1"></i> กล้องกำลังทำงาน... (สแกนต่อเนื่องได้เลย)</span>
-                                                <button type="button" class="btn-close btn-close-white" style="font-size: 0.7rem;" onclick="toggleCameraScanner()"></button>
+                                    </div>
+ 
+                                    <div>
+                                        <div class="pk-step"><b>2</b>ยิงสแกน QR Code ERP</div>
+                                        <form id="rack-scan-form" class="m-0">
+                                            <div class="pk-scan">
+                                                <div class="in">
+                                                    <i class="bi bi-upc-scan"></i>
+                                                    <input type="text" id="rack-scanner-input" placeholder="ใช้เครื่องสแกน หรือพิมพ์รหัส ERP" autocomplete="off">
+                                                </div>
+                                                <button type="button" id="btn-open-camera" onclick="toggleCameraScanner()" title="เปิดกล้องมือถือสแกน" aria-label="เปิดกล้องมือถือสแกน"><i class="bi bi-qr-code-scan"></i></button>
                                             </div>
-                                            <div id="reader" width="100%"></div>
+                                            <div id="camera-scanner-container" class="d-none mt-3 rounded overflow-hidden shadow-sm" style="border: 2px solid #0d6efd;">
+                                                <div class="bg-primary text-white text-center py-2 fw-bold small d-flex justify-content-between px-3 align-items-center">
+                                                    <span><i class="bi bi-camera-video me-1"></i> กล้องกำลังทำงาน... (สแกนต่อเนื่องได้เลย)</span>
+                                                    <button type="button" class="btn-close btn-close-white" style="font-size: 0.7rem;" onclick="toggleCameraScanner()"></button>
+                                                </div>
+                                                <div id="reader" width="100%"></div>
+                                            </div>
+                                        </form>
+                                        <div class="pk-upload">
+                                            <div class="ic"><i class="bi bi-file-earmark-excel-fill"></i></div>
+                                            <div class="tx"><b>อัปโหลดไฟล์สแกนออฟไลน์</b><span>Excel / CSV · วางรหัส ERP เรียงลงมาในคอลัมน์ A</span></div>
+                                            <input type="file" id="rack-upload-file" accept=".xlsx, .xls, .csv" aria-label="อัปโหลดไฟล์สแกนออฟไลน์">
                                         </div>
-                                    </form>
-                                    <!-- ปุ่มอัปโหลดไฟล์ Excel/CSV สำหรับสแกนออฟไลน์ -->
-                                    <div class="mb-3 p-3 bg-white rounded border border-secondary-subtle shadow-sm">
-                                        <label class="form-label fw-bold text-secondary mb-1"><i class="bi bi-file-earmark-excel-fill text-success me-2"></i>อัปโหลดไฟล์สแกนออฟไลน์ (Excel / CSV)</label>
-                                        <div class="input-group">
-                                            <input class="form-control border-secondary text-secondary" type="file" id="rack-upload-file" accept=".xlsx, .xls, .csv">
+                                    </div>
+ 
+                                    <div>
+                                        <div class="pk-stagehead">
+                                            <span style="font-size:.9375rem;font-weight:600">รอบันทึก<span class="n" id="pk-stage-count">0 รายการ</span></span>
+                                            <button type="button" class="pk-clear" onclick="pkClearStage()">ล้างทั้งหมด</button>
                                         </div>
-                                        <div class="form-text text-muted small mt-1"><i class="bi bi-info-circle me-1"></i>สร้างไฟล์ Excel โดยนำรหัส ERP วางเรียงต่อกันลงมาใน <b>คอลัมน์ A</b> (ไม่ต้องมีหัวข้อ)</div>
+                                        <div id="rack-staging-list">
+                                            <div class="pk-empty" id="rack-empty-row"><i class="bi bi-upc-scan"></i>รอสแกน QR Code</div>
+                                        </div>
                                     </div>
-                                    <!-- ตารางพักข้อมูลที่สแกนแล้ว -->
-                                    <div class="table-responsive mb-3 shadow-sm border flex-grow-1" style="max-height: calc(100vh - 430px); overflow-y: auto; border-radius: 10px;">
-                                        <table class="table table-hover align-middle text-center mb-0">
-                                            <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
-                                                <tr>
-                                                    <th class="text-start ps-3">รหัส ERP</th>
-                                                    <th>จำนวนในระบบ</th>
-                                                    <th>เส้นทางโยกย้าย</th>
-                                                    <th>ลบ</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="rack-staging-list">
-                                                <tr id="rack-empty-row"><td colspan="3" class="text-muted p-4"><i class="bi bi-upc-scan fs-3 d-block mb-2 opacity-50"></i>รอสแกน QR Code</td></tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
-
-                                    <!-- ปุ่มบันทึกเหมาเข่ง -->
-                                    <button type="button" id="btn-save-rack-batch" class="btn btn-primary w-100 fw-bold shadow-sm py-2 fs-5"><i class="bi bi-save-fill me-2"></i>บันทึกข้อมูลทั้งหมด</button>
+ 
+                                    <button type="button" id="btn-save-rack-batch"><i class="bi bi-check2-circle"></i>บันทึกข้อมูลทั้งหมด</button>
                                 </div>
                             </div>
-                        </div>
-                        <div class="col-lg-8">
-                            <div class="card shadow-sm border-0 d-flex flex-column" style="border-radius: 20px; min-height: calc(100vh - 145px);">
-                                <div class="card-header fw-bold bg-white pt-4 pb-3 px-4 border-0 d-flex justify-content-between align-items-center flex-wrap gap-2" style="border-radius: 20px 20px 0 0;">
-                                    <h5 class="fw-bold text-primary mb-0"><i class="bi bi-boxes me-2"></i>สรุปสถานะ Packing ทั้งหมด</h5>
-                                    
-                                    <div class="input-group" style="width: 280px; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
-                                        <span class="input-group-text bg-light border-0"><i class="bi bi-search text-muted"></i></span>
-                                        <input type="text" id="rack-summary-search" class="form-control border-0 bg-light" placeholder="ค้นหา นำเบอร์, รุ่น..." onkeyup="renderRackSummaryTable()">
+ 
+                            <!-- ฝั่งสรุป -->
+                            <div class="pk-right">
+                                <div class="pk-card">
+                                    <div class="pk-tools">
+                                        <h2><i class="bi bi-boxes"></i>สรุปสถานะ Packing ทั้งหมด</h2>
+                                        <label class="pk-search m-0"><i class="bi bi-search text-muted"></i>
+                                            <input type="text" id="rack-summary-search" placeholder="ค้นหา รหัส ERP, ชื่อรุ่น..." onkeyup="renderRackSummaryTable()" aria-label="ค้นหา">
+                                        </label>
                                     </div>
-                                </div>
-<div class="card-body px-4 pb-4 pt-0">
-                                    <div class="table-responsive bg-white shadow-sm" style="max-height: calc(100vh - 250px); overflow-y: auto; border-radius: 10px; border: 1px solid #dee2e6;">
-                                        <table class="table table-hover align-middle mb-0" style="border-collapse: separate; border-spacing: 0;">
-                                            <thead class="table-dark text-center" style="position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 5px rgba(0,0,0,0.15);">
-                                                <tr>
-                                                    <th class="text-start" style="position: sticky; top: 0; z-index: 10;">รหัส ERP / ชื่อแพ็คกิ้ง</th>
-                                                    <th style="background-color: #495057; position: sticky; top: 0; z-index: 10;">WH กล่องเปล่า</th>
-                                                    <th style="background-color: #343a40; position: sticky; top: 0; z-index: 10;">WH กล่องมีงาน</th>
-                                                    <th style="background-color: #212529; position: sticky; top: 0; z-index: 10;">WH อยู่ที่ลูกค้า</th>
-                                                    <th class="bg-primary" style="position: sticky; top: 0; z-index: 10;">รวมทั้งหมด</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="rack-summary-table">
-                                                <tr><td colspan="5" class="text-center text-muted p-5">ยังไม่มีข้อมูลแพ็คกิ้งในระบบ</td></tr>
-                                            </tbody>
-                                        </table>
+                                    <div class="pk-tools">
+                                        <div class="pk-chips">
+                                            <button type="button" class="pk-chip on" data-f="all" onclick="pkSetFilter('all')">ทั้งหมด</button>
+                                            <button type="button" class="pk-chip" data-f="cust" onclick="pkSetFilter('cust')">มีของอยู่ที่ลูกค้า</button>
+                                            <button type="button" class="pk-chip" data-f="empty" onclick="pkSetFilter('empty')">มีกล่องเปล่า</button>
+                                            <button type="button" class="pk-chip" data-f="filled" onclick="pkSetFilter('filled')">มีกล่องมีงาน</button>
+                                        </div>
+                                        <div class="pk-legend">
+                                            <span><i class="pk-dot" style="background:#CBD5E1"></i>กล่องเปล่า</span>
+                                            <span><i class="pk-dot" style="background:#2563EB"></i>กล่องมีงาน</span>
+                                            <span><i class="pk-dot" style="background:#F59E0B"></i>ที่ลูกค้า</span>
+                                        </div>
+                                    </div>
+                                    <div class="pk-tablebox">
+                                        <div class="pk-grid h">
+                                            <div>รหัส ERP / ชื่อแพ็คกิ้ง</div>
+                                            <div style="text-align:right">กล่องเปล่า</div>
+                                            <div style="text-align:right">กล่องมีงาน</div>
+                                            <div style="text-align:right">ที่ลูกค้า</div>
+                                            <div>สัดส่วน</div>
+                                            <div style="text-align:right">รวม</div>
+                                        </div>
+                                        <div id="rack-summary-table">
+                                            <div class="pk-none">ยังไม่มีข้อมูลแพ็คกิ้งในระบบ</div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -10229,7 +10433,34 @@ window.releaseGroupVehicle = async function(date, displayTime, customer) {
             }
 
             // 🟢 ขั้นตอนที่ 2: อัปเดตสถานะรถ ทีละรายการ (ลองใหม่อัตโนมัติได้ปลอดภัย เพราะแค่เปลี่ยนสถานะซ้ำไม่มีผลเสีย)
-            for (const { plan, saveDate } of planUpdates) {
+            let __batchOk = false;
+            try {
+                const __upd = planUpdates.map(({ plan, saveDate }) => ({ id: plan.id, status: 'Delivering', licensePlate: licensePlate, actualReleaseTime: "'" + releaseTime, date: saveDate }));
+                const __pick = (arr, miss) => arr.filter(u => miss.includes(String(u.id).trim()));
+                let __res = await callAppsScript('updateDeliveryPlanBatch', __upd);
+                if (!__res || !Array.isArray(__res.missing)) throw new Error('backend ยังไม่รองรับอัปเดตรวดเดียว');
+                let __miss = __res.missing.map(String);
+                if (__miss.length) {
+                    await new Promise(r => setTimeout(r, 5000));
+                    const __res2 = await callAppsScript('updateDeliveryPlanBatch', __pick(__upd, __miss));
+                    __miss = (__res2 && Array.isArray(__res2.missing)) ? __res2.missing.map(String) : [];
+                }
+                if (__miss.length) {
+                    const __full = __pick(__upd, __miss).map(u => Object.assign({}, db.deliveryPlans.find(p => p.id === u.id) || {}, u));
+                    await callAppsScriptWithRetry('addBatchDeliveryPlan', __full);
+                }
+                for (const { plan, saveDate } of planUpdates) {
+                    const realPlan = db.deliveryPlans.find(p => p.id === plan.id);
+                    if (realPlan) {
+                        realPlan.status = 'Delivering';
+                        realPlan.licensePlate = licensePlate;
+                        realPlan.actualReleaseTime = "'" + releaseTime;
+                        realPlan.date = saveDate;
+                    }
+                }
+                __batchOk = true;
+            } catch (__e) { console.warn('อัปเดตรวดเดียวไม่สำเร็จ ใช้วิธีทีละรายการแทน:', __e); }
+            for (const { plan, saveDate } of (__batchOk ? [] : planUpdates)) {
                 await callAppsScriptWithRetry('updateDeliveryPlan', {
                     id: plan.id,
                     status: 'Delivering',
@@ -13954,6 +14185,725 @@ function renderStockCountReportModalBody(count) {
                         }
                     });
                 };
+                (function () {
+    if (window.__scRedesign) return; window.__scRedesign = true;
+ 
+    // ---------- CSS ----------
+    if (!document.getElementById('sc-css')) {
+        const st = document.createElement('style'); st.id = 'sc-css';
+        st.textContent = `
+        .sc-wrap,.sc-cwrap{--ink:#0F172A;--mut:#475569;--line:#E2E8F0;--blue:#1E40AF}
+        .sc-wrap{display:flex;flex-direction:column;gap:20px;color:var(--ink)}
+        .sc-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px}
+        .sc-ttl{display:flex;align-items:center;gap:14px}
+        .sc-logo{width:50px;height:50px;border-radius:16px;background:var(--blue);display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.5rem;flex:none}
+        .sc-ttl h1{margin:0;font-size:1.5rem;font-weight:700;line-height:1.2}
+        .sc-ttl p{margin:2px 0 0;font-size:.875rem;color:var(--mut)}
+        .sc-acts{display:flex;flex-wrap:wrap;gap:10px}
+        .sc-btn{height:44px;padding:0 18px;border-radius:12px;border:1px solid;font-size:.875rem;font-weight:600;display:inline-flex;align-items:center;gap:8px;background:#fff}
+        .sc-btn.g{border-color:#86EFAC;color:#15803D}.sc-btn.g:hover{background:#F0FDF4}
+        .sc-btn.a{border-color:#FCD34D;background:#FFFBEB;color:#92400E}.sc-btn.a:hover{background:#FEF3C7}
+        .sc-btn.p{border-color:var(--blue);background:var(--blue);color:#fff;font-size:.9375rem}.sc-btn.p:hover{background:#1E3A8A}
+        .sc-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}
+        .sc-k{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px 20px}
+        .sc-k .l{font-size:.8125rem;font-weight:500;color:var(--mut)}
+        .sc-k .v{font-size:1.6rem;font-weight:700;margin-top:4px;line-height:1.25}
+        .sc-k .v .u{font-size:.9375rem;font-weight:500;margin-left:6px}
+        .sc-k .s{font-size:.8125rem;margin-top:2px;color:var(--mut)}
+        .sc-k.w{background:#FFFBEB;border-color:#FDE68A}.sc-k.w .l,.sc-k.w .v,.sc-k.w .s{color:#92400E}
+        .sc-k.ok{background:#F0FDF4;border-color:#BBF7D0}.sc-k.ok .l,.sc-k.ok .v,.sc-k.ok .s{color:#166534}
+        .sc-k.bad{background:#FEF2F2;border-color:#FECACA}.sc-k.bad .l,.sc-k.bad .v,.sc-k.bad .s{color:#991B1B}
+        .sc-card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:20px 22px;display:flex;flex-direction:column;gap:14px}
+        .sc-tools{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+        .sc-h{font-size:1.0625rem;font-weight:700}
+        .sc-chips{display:flex;flex-wrap:wrap;gap:8px}
+        .sc-chip{height:40px;padding:0 16px;border-radius:999px;border:1px solid #CBD5E1;background:#fff;color:#334155;font-size:.875rem;font-weight:600}
+        .sc-chip .n{margin-left:8px;opacity:.7}
+        .sc-chip.on{background:var(--blue);border-color:var(--blue);color:#fff}
+        .sc-tb{overflow-x:auto}
+        .sc-g{display:grid;grid-template-columns:165px minmax(150px,1.3fr) minmax(100px,1fr) 150px minmax(190px,1.3fr) 30px;gap:14px;align-items:center;padding:13px 14px;min-width:900px;border-bottom:1px solid #F1F5F9}
+        .sc-g.h{font-size:.75rem;font-weight:600;color:var(--mut);padding-top:0;border-bottom:1px solid var(--line)}
+        .sc-g.r{cursor:pointer;font-size:.875rem;border-radius:10px}
+        .sc-g.r:hover{background:#F8FAFC}
+        .sc-g .id{font-weight:700;color:var(--blue);white-space:nowrap}
+        .sc-pill{display:inline-block;padding:5px 12px;border-radius:999px;font-size:.8125rem;font-weight:600;white-space:nowrap}
+        .sc-pill.pending{background:#FEF3C7;color:#92400E}.sc-pill.approved{background:#DCFCE7;color:#166534}.sc-pill.rejected{background:#FEE2E2;color:#991B1B}
+        .sc-pill.todo{background:#F1F5F9;color:#475569}.sc-pill.ok{background:#DCFCE7;color:#166534}.sc-pill.pos{background:#FEF3C7;color:#92400E}.sc-pill.neg{background:#FEE2E2;color:#991B1B}
+        .sc-acc .t{display:flex;justify-content:space-between;font-size:.8125rem;color:#334155;margin-bottom:5px;gap:8px}
+        .sc-bar{height:6px;border-radius:999px;background:var(--line);overflow:hidden}
+        .sc-bar i{display:block;height:100%;border-radius:999px}
+        .sc-bar i.g{background:#15803D}.sc-bar i.a{background:#F59E0B}.sc-bar i.r{background:#DC2626}
+        .sc-note{font-size:.75rem;color:var(--mut)}
+        .sc-none{padding:40px 10px;text-align:center;color:var(--mut)}
+ 
+        /* ---- ป๊อบอัพนับ / รายงาน ---- */
+        #stockCountModal .modal-header,#stockCountReportModal .modal-header{background:#fff!important;border-bottom:1px solid #E2E8F0}
+        #stockCountModal .modal-title,#stockCountReportModal .modal-title{font-weight:700;color:#0F172A}
+        #stockCountModal .modal-body,#stockCountReportModal .modal-body{background:#F1F5F9;padding:20px 28px}
+        #stockCountModal .modal-footer,#stockCountReportModal .modal-footer{background:#0F172A;border:0;padding:14px 24px;gap:10px;flex-wrap:wrap}
+        #stockCountModal .modal-footer .btn,#stockCountReportModal .modal-footer .btn{height:44px;border-radius:12px;font-weight:600;padding:0 20px;display:inline-flex;align-items:center}
+        #stockCountModal .modal-footer .btn-secondary,#stockCountReportModal .modal-footer .btn-secondary,#stockCountReportModal .modal-footer .btn-info{background:transparent;border:1px solid #475569;color:#fff}
+        #stockCountModal .modal-footer .btn-primary,#stockCountReportModal .modal-footer .btn-success{background:#22C55E;border-color:#22C55E;color:#052E16;font-weight:700}
+        #stockCountReportModal .modal-footer .btn-danger{background:transparent;border:1px solid #F87171;color:#FCA5A5}
+        #stockCountModal .modal-footer .sc-fsum,#stockCountReportModal .modal-footer .sc-fsum{margin-right:auto;color:#E2E8F0;font-size:.875rem}
+        .sc-cwrap{display:flex;flex-direction:column;gap:16px}
+        .sc-sticky{position:sticky;top:-20px;z-index:6;background:#F1F5F9;padding:20px 0 10px;display:flex;flex-direction:column;gap:12px;margin-top:-20px}
+        .sc-prog{background:#fff;border:1px solid var(--line,#E2E8F0);border-radius:16px;padding:14px 18px;display:flex;flex-wrap:wrap;gap:16px;align-items:center}
+        .sc-prog .m{flex:1 1 280px;min-width:0}
+        .sc-prog .t{display:flex;justify-content:space-between;font-size:.875rem;font-weight:600;margin-bottom:6px}
+        .sc-prog .bar{height:10px;border-radius:999px;background:#E2E8F0;overflow:hidden}
+        .sc-prog .bar i{display:block;height:100%;background:#1E40AF;border-radius:999px;transition:width .2s}
+        .sc-cnts{display:flex;gap:8px;flex-wrap:wrap}
+        .sc-cnts span{padding:6px 12px;border-radius:10px;font-size:.8125rem;font-weight:600}
+        .sc-cnts .a{background:#F0FDF4;color:#166534}.sc-cnts .b{background:#FEF2F2;color:#991B1B}.sc-cnts .c{background:#F1F5F9;color:#334155}
+        .sc-srch{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+        .sc-srch .box{flex:1 1 340px;position:relative;min-width:0}
+        .sc-srch .box>i{position:absolute;left:14px;top:12px;color:#64748B}
+        .sc-srch input{width:100%;box-sizing:border-box;height:44px;padding:0 14px 0 42px;border-radius:12px;border:1px solid #CBD5E1;background:#fff;font-size:.9375rem}
+        .sc-srch input:focus{outline:3px solid #BFDBFE;border-color:#1E40AF}
+        .sc-pc{background:#fff;border:1px solid #E2E8F0;border-radius:18px;overflow:hidden}
+        .manual-count-item.sc-hide{display:none!important}
+        .sc-pc .hd{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding:14px 20px;background:#F8FAFC;border-bottom:1px solid #E2E8F0}
+        .sc-pc .hd .cd{font-weight:700;font-size:1rem;color:#0F172A}
+        .sc-pc .hd .nm{font-size:.875rem;color:#475569}
+        .sc-pc .hd .st{display:flex;flex-wrap:wrap;gap:16px;align-items:center;font-size:.875rem;color:#475569}
+        .sc-pc .hd .st b{color:#0F172A;margin-left:5px}
+        .sc-pc .bd{padding:4px 20px 14px}
+        .sc-lot{display:grid;grid-template-columns:1.2fr 1.2fr .9fr 1.2fr .9fr 36px;gap:14px;align-items:center;padding:8px 0;border-bottom:1px solid #F1F5F9}
+        .sc-lot.h{font-size:.75rem;font-weight:600;color:#475569;padding:10px 0}
+        .sc-lot .r{text-align:right}
+        .sc-lot .sc-lb{display:none;font-size:.75rem;color:#64748B;margin-bottom:2px}
+        .sc-lot .sc-ro{width:100%;box-sizing:border-box;height:38px;border:0;background:transparent;font-size:.875rem;font-weight:600;color:#334155;padding:0;pointer-events:none;appearance:none;-webkit-appearance:none}
+        .sc-lot .sys{font-size:.9375rem;font-weight:600;color:#334155;text-align:right}
+        .sc-lot .sc-in{width:100%;box-sizing:border-box;height:44px;padding:0 12px;border-radius:10px;border:1px solid #CBD5E1;font-size:1rem;font-weight:700;text-align:right;background:#fff}
+        .sc-lot .sc-in:focus{outline:3px solid #BFDBFE;border-color:#1E40AF}
+        .sc-lot.new{background:#FFFBEB;border-radius:10px;padding:8px 10px;margin-top:6px;border:1px solid #FCD34D}
+        .sc-lot.new .sc-ro{pointer-events:auto;height:38px;border:1px solid #FCD34D;border-radius:8px;padding:0 8px;background:#fff;appearance:auto;-webkit-appearance:auto}
+        .sc-lot .dl{width:36px;height:36px;border-radius:10px;border:1px solid #FCA5A5;background:#fff;color:#DC2626}
+        .sc-addlot{margin-top:10px;height:44px;padding:0 16px;border-radius:10px;border:1px dashed #94A3B8;background:#fff;color:#1E40AF;font-size:.875rem;font-weight:600;display:inline-flex;align-items:center;gap:8px}
+        .sc-addlot:hover{background:#EFF6FF}
+        .sc-empty{padding:14px 0 4px;font-size:.8125rem;color:#64748B}
+        @media(max-width:767px){
+          .sc-lot{grid-template-columns:1fr 1fr;gap:10px}.sc-lot.h{display:none}
+          .sc-lot .sc-lb{display:block}.sc-lot .r,.sc-lot .sys{text-align:left}
+          #stockCountModal .modal-body,#stockCountReportModal .modal-body{padding:14px 12px}
+        }
+        /* รายงาน */
+        .sc-rinfo{background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:16px 20px;display:flex;flex-wrap:wrap;gap:12px 32px;align-items:center}
+        .sc-rinfo .l{font-size:.75rem;font-weight:600;color:#475569}
+        .sc-rinfo .v{font-size:.9375rem;font-weight:700;color:#0F172A}
+        .sc-rtb{max-height:calc(100vh - 460px);min-height:220px;overflow:auto}
+        .sc-rg{display:grid;grid-template-columns:minmax(170px,1.8fr) minmax(100px,1fr) minmax(130px,1.1fr) minmax(90px,.8fr) minmax(90px,.8fr) minmax(90px,.8fr) minmax(80px,.7fr);gap:14px;align-items:center;padding:12px 14px;min-width:820px;border-bottom:1px solid #F1F5F9}
+        .sc-rg.h{position:sticky;top:0;z-index:2;background:#F1F5F9;font-size:.75rem;font-weight:600;color:#334155;border-bottom:0}
+        .sc-rg.v{background:#FFFBEB}
+        .sc-rg .c{font-weight:700;font-size:.875rem}.sc-rg .n{font-size:.8125rem;color:#475569}
+        .sc-rg .num{text-align:right;font-size:.9375rem}
+        .sc-rg.h .num{font-size:.75rem}
+        `;
+        document.head.appendChild(st);
+    }
+ 
+    // ---------- helpers ----------
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const fmtDate = d => new Date(d).toLocaleString(currentLanguage === 'th' ? 'th-TH' : 'en-GB', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' });
+    const stOf = c => c.status === 'pending' ? 'pending' : (c.status === 'rejected' ? 'rejected' : 'approved');
+    const stLabel = (s, T) => s === 'pending' ? T.stock_count_status_pending : (s === 'approved' ? T.stock_count_status_approved : 'ไม่อนุมัติ');
+    const accCls = a => a >= 97 ? 'g' : (a >= 90 ? 'a' : 'r');
+    const stat = c => {
+        const it = Array.isArray(c.items) ? c.items : [];
+        let sys = 0, net = 0, abs = 0, d = 0, sh = 0, ov = 0;
+        it.forEach(i => {
+            const s = Number(i.systemQty) || 0, v = (Number(i.countedQty) || 0) - s;
+            sys += s; net += v; abs += Math.abs(v);
+            if (v < 0) { d++; sh++; } else if (v > 0) { d++; ov++; }
+        });
+        return { n: it.length, d, sh, ov, sys, net, abs, acc: sys > 0 ? Math.max(0, 100 - abs / sys * 100) : 100 };
+    };
+    const chip = (label, n, on, fn) => `<button type="button" class="sc-chip${on ? ' on' : ''}" onclick="${fn}">${label}<span class="n">${n}</span></button>`;
+ 
+    // ================= 1) หน้าหลัก =================
+    window.scHF = window.scHF || 'all';
+    window.scHistFilter = function (f) { window.scHF = f; populateStockCountMainView(); };
+ 
+    populateStockCountMainView = function () {
+        const view = document.getElementById('stock-count-main-view');
+        if (!view) return;
+        const T = translations[currentLanguage];
+        const isAdmin = currentUser.role === 'admin';
+        const canCount = isAdmin || currentUser.canCountStock;
+        const f = window.scHF || 'all';
+ 
+        const all = [...(db.stockCounts || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
+        const nP = all.filter(c => stOf(c) === 'pending').length;
+        const nA = all.filter(c => stOf(c) === 'approved').length;
+        const nR = all.filter(c => stOf(c) === 'rejected').length;
+        const latest = all[0];
+        const lastOk = all.find(c => stOf(c) === 'approved');
+        const lastOkAcc = lastOk ? stat(lastOk).acc : null;
+ 
+        const list = all.filter(c => f === 'all' || stOf(c) === f);
+        let rows = '';
+        if (list.length === 0) {
+            rows = `<div class="sc-none">${all.length === 0 ? T.stock_count_no_history : 'ไม่มีรายการในตัวกรองนี้'}</div>`;
+        } else {
+            rows = list.map(c => {
+                const s = stOf(c), x = stat(c);
+                return `
+                <div class="sc-g r view-stock-count-report-btn" data-count-id="${esc(c.id)}">
+                    <div class="id">${esc(c.id)}</div>
+                    <div>${esc(fmtDate(c.date))}</div>
+                    <div>${esc(c.user)}</div>
+                    <div><span class="sc-pill ${s}">${stLabel(s, T)}</span></div>
+                    <div class="sc-acc">
+                        <div class="t"><span>${x.n ? `ต่าง ${x.d} จาก ${x.n} รายการ` : '-'}</span><b>${x.n ? x.acc.toFixed(1) + '%' : ''}</b></div>
+                        <div class="sc-bar"><i class="${accCls(x.acc)}" style="width:${x.n ? x.acc : 0}%"></i></div>
+                    </div>
+                    <div style="color:#64748B;text-align:right"><i class="bi bi-chevron-right"></i></div>
+                </div>`;
+            }).join('');
+        }
+ 
+        view.innerHTML = `
+        <div class="sc-wrap">
+            <div class="sc-head">
+                <div class="sc-ttl">
+                    <div class="sc-logo"><i class="bi bi-clipboard2-check-fill"></i></div>
+                    <div><h1>${T.stock_count_title}</h1><p>ตรวจนับสินค้าจริงเทียบกับยอดในระบบ ก่อนอนุมัติปรับยอด</p></div>
+                </div>
+                <div class="sc-acts">
+                    ${isAdmin ? `<button type="button" class="sc-btn g" onclick="startExcelDownload()"><i class="bi bi-download"></i>โหลดเทมเพลต</button>` : ''}
+                    ${isAdmin ? `<button type="button" class="sc-btn a" onclick="startExcelUpload()"><i class="bi bi-file-earmark-excel-fill"></i>อัปโหลดปรับสต็อก</button>` : ''}
+                    ${canCount ? `<button type="button" id="start-stock-count-btn" class="sc-btn p"><i class="bi bi-plus-lg"></i>${T.stock_count_start_button}</button>` : ''}
+                </div>
+            </div>
+ 
+            <div class="sc-kpis">
+                <div class="sc-k">
+                    <div class="l">นับครั้งล่าสุด</div>
+                    <div class="v" style="font-size:1.25rem">${latest ? esc(fmtDate(latest.date)) : '-'}</div>
+                    <div class="s">${latest ? `<span>โดย</span> ${esc(latest.user)}` : 'ยังไม่มีการนับ'}</div>
+                </div>
+                <div class="sc-k w">
+                    <div class="l">รอตรวจสอบ</div>
+                    <div class="v">${nP}<span class="u">รอบ</span></div>
+                    <div class="s">รออนุมัติโดยแอดมิน</div>
+                </div>
+                <div class="sc-k ok">
+                    <div class="l">ความแม่นยำรอบอนุมัติล่าสุด</div>
+                    <div class="v">${lastOk ? lastOkAcc.toFixed(1) + '%' : '-'}</div>
+                    <div class="s">${lastOk ? `รอบ ${esc(lastOk.id)}` : 'ยังไม่มีรอบที่อนุมัติ'}</div>
+                </div>
+                <div class="sc-k">
+                    <div class="l">นับมาแล้วทั้งหมด</div>
+                    <div class="v">${all.length}<span class="u">รอบ</span></div>
+                    <div class="s">อนุมัติ ${nA} · ไม่อนุมัติ ${nR}</div>
+                </div>
+            </div>
+ 
+            <div class="sc-card">
+                <div class="sc-tools">
+                    <div class="sc-h">${T.stock_count_history_title}</div>
+                    <div class="sc-chips">
+                        ${chip('ทั้งหมด', all.length, f === 'all', "scHistFilter('all')")}
+                        ${chip('รอตรวจสอบ', nP, f === 'pending', "scHistFilter('pending')")}
+                        ${chip('อนุมัติแล้ว', nA, f === 'approved', "scHistFilter('approved')")}
+                        ${chip('ไม่อนุมัติ', nR, f === 'rejected', "scHistFilter('rejected')")}
+                    </div>
+                </div>
+                <div class="sc-tb">
+                    <div class="sc-g h"><div>รอบนับ</div><div>วันที่ / เวลา</div><div>ผู้นับ</div><div>สถานะ</div><div>ผลต่าง / ความแม่นยำ</div><div></div></div>
+                    ${rows}
+                </div>
+                <div class="sc-note">กดที่แถวเพื่อเปิดรายงานของรอบนั้น</div>
+            </div>
+        </div>`;
+    };
+ 
+    // ================= 2) หน้านับ =================
+    window.scCF = 'all';
+    window.scCountFilter = function (f) {
+        window.scCF = f;
+        document.querySelectorAll('#stockCountModalBody .sc-chip').forEach(b => b.classList.toggle('on', b.getAttribute('data-f') === f));
+        scRefresh();
+    };
+ 
+    renderStockCountModalBody = function () {
+        const T = translations[currentLanguage];
+        const body = document.getElementById('stockCountModalBody');
+        window.scCF = 'all';
+ 
+        const allProducts = [...db.products]
+            .filter(p => p.customerGroup !== 'Packaging')
+            .sort((a, b) => String(a.id || '').localeCompare(String(b.id || '')));
+ 
+        if (allProducts.length === 0) {
+            body.innerHTML = `<div class="text-center p-5 text-muted"><i class="bi bi-box-seam opacity-50 d-block mb-3" style="font-size:3rem"></i>ไม่พบข้อมูลสินค้าในระบบ</div>`;
+            return;
+        }
+ 
+        let cards = '';
+        allProducts.forEach(product => {
+            const safeId = String(product.id || '');
+            const safeName = String(product.name || '');
+            const stockInfo = calculatedStock.find(s => String(s.productId).trim() === safeId.trim());
+            const currentQty = stockInfo ? stockInfo.totalQuantity : 0;
+            const activeLots = stockInfo ? stockInfo.lots.filter(l => l.quantity > 0) : [];
+ 
+            let lotsHtml = '';
+            if (activeLots.length > 0) {
+                activeLots.sort((a, b) => new Date(a.productionDate) - new Date(b.productionDate));
+                lotsHtml = `<div class="sc-lot h"><div>วันที่ผลิต</div><div>แพ็คกิ้ง</div><div class="r">ในระบบ</div><div>นับได้จริง</div><div>ผลต่าง</div><div></div></div>` +
+                    activeLots.map(lot => {
+                        const isTemp = lot.packagingType === 'temporary';
+                        return `
+                        <div class="sc-lot count-lot-row" data-system-qty="${lot.quantity}">
+                            <div><span class="sc-lb">วันที่ผลิต</span><input type="date" class="sc-ro count-prod-date" value="${esc(lot.productionDate)}" readonly tabindex="-1"></div>
+                            <div><span class="sc-lb">แพ็คกิ้ง</span><select class="sc-ro count-packaging-type" disabled tabindex="-1"><option value="standard" ${!isTemp ? 'selected' : ''}>Standard</option><option value="temporary" ${isTemp ? 'selected' : ''}>Temporary</option></select></div>
+                            <div><span class="sc-lb">ในระบบ</span><div class="sys">${lot.quantity.toLocaleString()}</div></div>
+                            <div><span class="sc-lb">นับได้จริง</span><input type="number" class="sc-in count-qty-input" min="0" inputmode="numeric" placeholder="กรอกจำนวน"></div>
+                            <div><span class="sc-lb">ผลต่าง</span><span class="sc-pill todo sc-df">ยังไม่นับ</span></div>
+                            <div></div>
+                        </div>`;
+                    }).join('');
+            } else {
+                lotsHtml = `<p class="sc-empty mb-0">ไม่มีสต็อกในระบบ — ถ้าพบของหน้างาน กด "เพิ่มล็อตที่เจอหน้างาน"</p>`;
+            }
+ 
+            cards += `
+            <div class="manual-count-item" data-search="${esc(safeId.toLowerCase() + ' ' + safeName.toLowerCase())}">
+                <div class="sc-pc product-count-group" data-product-id="${esc(safeId)}" data-product-name="${esc(safeName)}">
+                    <div class="hd">
+                        <div style="min-width:0"><div class="cd">${esc(safeId)}</div><div class="nm">${esc(safeName)}</div></div>
+                        <div class="st">
+                            <span>ในระบบ <b>${currentQty.toLocaleString()}</b></span>
+                            <span>นับได้ <b class="sc-ct">0</b></span>
+                            <span class="sc-pill todo sc-pb">ยังไม่นับ</span>
+                        </div>
+                    </div>
+                    <div class="bd">
+                        <div id="lots-container-${esc(safeId)}">${lotsHtml}</div>
+                        <button type="button" class="sc-addlot" onclick="window.app.addCountLotRow('${esc(safeId).replace(/\\/g, '\\\\')}')"><i class="bi bi-plus-lg"></i>เพิ่มล็อตที่เจอหน้างาน</button>
+                    </div>
+                </div>
+            </div>`;
+        });
+ 
+        body.innerHTML = `
+        <div class="sc-cwrap">
+            <div class="sc-sticky">
+                <div class="sc-prog">
+                    <div class="m">
+                        <div class="t"><span>ความคืบหน้า</span><span id="sc-ptxt"></span></div>
+                        <div class="bar"><i id="sc-pbar" style="width:0%"></i></div>
+                    </div>
+                    <div class="sc-cnts"><span class="a" id="sc-nok"></span><span class="b" id="sc-ndf"></span><span class="c" id="sc-ntd"></span></div>
+                </div>
+                <div class="sc-srch">
+                    <div class="box">
+                        <i class="bi bi-search"></i>
+                        <input type="text" id="manual-count-search" placeholder="ค้นหารหัส หรือชื่อสินค้า เพื่อเริ่มนับ..." oninput="filterManualCountProducts()" autocomplete="off" aria-label="ค้นหาสินค้า">
+                        <div id="manual-count-suggestions" class="list-group position-absolute w-100 suggestions-container" style="z-index:99999;top:100%"></div>
+                    </div>
+                    <div class="sc-chips">
+                        <button type="button" class="sc-chip on" data-f="all" onclick="scCountFilter('all')">ทั้งหมด</button>
+                        <button type="button" class="sc-chip" data-f="todo" onclick="scCountFilter('todo')">ยังไม่นับ</button>
+                        <button type="button" class="sc-chip" data-f="diff" onclick="scCountFilter('diff')">มีผลต่าง</button>
+                    </div>
+                </div>
+            </div>
+            <div id="manual-count-list" style="display:flex;flex-direction:column;gap:14px">${cards}</div>
+        </div>`;
+ 
+        // สรุปด้านล่าง (ในแถบปุ่ม)
+        const foot = document.querySelector('#stockCountModal .modal-footer');
+        if (foot && !document.getElementById('sc-fsum')) {
+            const d = document.createElement('div'); d.id = 'sc-fsum'; d.className = 'sc-fsum';
+            foot.insertBefore(d, foot.firstChild);
+        }
+        scRefresh();
+    };
+ 
+    // คำนวณผลต่าง/ความคืบหน้าสด ๆ ตอนพิมพ์
+    window.scRefresh = scRefresh;
+    function scRefresh() {
+        const body = document.getElementById('stockCountModalBody');
+        if (!body) return;
+        let tot = 0, ok = 0, dif = 0, todo = 0;
+        const f = window.scCF || 'all';
+        body.querySelectorAll('.product-count-group').forEach(g => {
+            let sysT = 0, cntT = 0, hasTodo = false, hasDiff = false, n = 0;
+            g.querySelectorAll('.count-lot-row').forEach(r => {
+                n++;
+                const sys = parseInt(r.dataset.systemQty || 0, 10) || 0; sysT += sys;
+                const inp = r.querySelector('.count-qty-input'), df = r.querySelector('.sc-df');
+                if (!inp || inp.value === '') { todo++; hasTodo = true; if (df) { df.className = 'sc-pill todo sc-df'; df.textContent = 'ยังไม่นับ'; } return; }
+                const c = parseInt(inp.value, 10) || 0; cntT += c;
+                const d = c - sys;
+                if (d === 0) { ok++; if (df) { df.className = 'sc-pill ok sc-df'; df.textContent = 'ตรง'; } }
+                else { dif++; hasDiff = true; if (df) { df.className = 'sc-pill ' + (d > 0 ? 'pos' : 'neg') + ' sc-df'; df.textContent = (d > 0 ? '+' : '') + d.toLocaleString(); } }
+            });
+            tot += n;
+            const ct = g.querySelector('.sc-ct'); if (ct) ct.textContent = cntT.toLocaleString();
+            const pb = g.querySelector('.sc-pb');
+            if (pb) {
+                if (n === 0) { pb.className = 'sc-pill todo sc-pb'; pb.textContent = 'ไม่มีสต็อก'; }
+                else if (hasDiff) { pb.className = 'sc-pill neg sc-pb'; pb.textContent = 'มีผลต่าง'; }
+                else if (hasTodo) { pb.className = 'sc-pill todo sc-pb'; pb.textContent = 'ยังนับไม่ครบ'; }
+                else { pb.className = 'sc-pill ok sc-pb'; pb.textContent = 'ตรงทุกล็อต'; }
+            }
+            const wrap = g.closest('.manual-count-item');
+            if (wrap) {
+                const hide = (f === 'todo' && !(n > 0 && hasTodo)) || (f === 'diff' && !hasDiff);
+                wrap.classList.toggle('sc-hide', hide);
+            }
+        });
+        const done = ok + dif, pct = tot ? Math.round(done / tot * 100) : 0;
+        const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+        set('sc-ptxt', `${done} / ${tot} ล็อต · ${pct}%`);
+        const bar = document.getElementById('sc-pbar'); if (bar) bar.style.width = pct + '%';
+        set('sc-nok', `ตรง ${ok}`); set('sc-ndf', `ไม่ตรง ${dif}`); set('sc-ntd', `ยังไม่นับ ${todo}`);
+        set('sc-fsum', `นับแล้ว ${done} จาก ${tot} ล็อต · ไม่ตรง ${dif} ล็อต`);
+    }
+    if (!window.__scInputBound) {
+        window.__scInputBound = true;
+        document.addEventListener('input', e => {
+            const t = e.target;
+            if (t && t.classList && t.classList.contains('count-qty-input') && t.closest && t.closest('#stockCountModalBody')) scRefresh();
+        });
+    }
+ 
+    // เพิ่มล็อตที่เจอหน้างาน (หน้าตาใหม่ — โครงข้อมูลเหมือนเดิม)
+    function patchApp() {
+        if (!(window.app && typeof window.app.addCountLotRow === 'function')) return false;
+        window.app.addCountLotRow = function (productId) {
+            const T = translations[currentLanguage];
+            const container = document.getElementById(`lots-container-${productId}`);
+            if (!container) return;
+            const msg = container.querySelector('p'); if (msg) msg.remove();
+            const row = document.createElement('div');
+            row.className = 'sc-lot new count-lot-row';
+            row.dataset.systemQty = '0';
+            row.innerHTML = `
+                <div><span class="sc-lb">วันที่ผลิต</span><input type="date" class="sc-ro count-prod-date" required aria-label="วันที่ผลิต"></div>
+                <div><span class="sc-lb">แพ็คกิ้ง</span><select class="sc-ro count-packaging-type" required><option value="standard" selected>${T.packaging_std}</option><option value="temporary">${T.packaging_temp}</option></select></div>
+                <div><span class="sc-lb">ในระบบ</span><div class="sys">0 <span class="sc-pill pos" style="margin-left:6px">ล็อตใหม่</span></div></div>
+                <div><span class="sc-lb">นับได้จริง</span><input type="number" class="sc-in count-qty-input" min="0" inputmode="numeric" placeholder="ระบุยอด" required></div>
+                <div><span class="sc-lb">ผลต่าง</span><span class="sc-pill todo sc-df">ยังไม่นับ</span></div>
+                <div><button type="button" class="dl" aria-label="ลบล็อตนี้" onclick="this.closest('.count-lot-row').remove();scRefresh()"><i class="bi bi-trash"></i></button></div>`;
+            container.appendChild(row);
+            scRefresh();
+        };
+        return true;
+    }
+    if (!patchApp()) { let n = 0; const iv = setInterval(() => { if (patchApp() || ++n > 60) clearInterval(iv); }, 250); }
+ 
+    // ================= 3) รายงาน / อนุมัติ =================
+    window.scRepFilter = function (mode) {
+        document.querySelectorAll('#stockCountReportModalBody .sc-chip').forEach(b => b.classList.toggle('on', b.getAttribute('data-f') === mode));
+        document.querySelectorAll('#stockCountReportModalBody .report-item-row').forEach(r => {
+            const v = r.getAttribute('data-v');
+            const show = mode === 'all' || (mode === 'diff' && v !== 'zero') || (mode === 'neg' && v === 'neg') || (mode === 'pos' && v === 'pos') || (mode === 'zero' && v === 'zero');
+            r.style.display = show ? '' : 'none';
+        });
+    };
+ 
+    renderStockCountReportModalBody = function (count) {
+        const T = translations[currentLanguage];
+        const body = document.getElementById('stockCountReportModalBody');
+        const footer = document.getElementById('stockCountReportModalFooter');
+        const isAdmin = currentUser.role === 'admin';
+        const canApprove = isAdmin && count.status === 'pending';
+        const s = stOf(count), x = stat(count);
+        document.getElementById('stockCountReportModalLabel').innerHTML = `<i class="bi bi-file-earmark-spreadsheet-fill me-2"></i>รายงานผลการนับสต็อก - ${esc(count.id)}`;
+ 
+        let nZero = 0, nNeg = 0, nPos = 0;
+        const items = Array.isArray(count.items) ? count.items : [];
+        const rows = items.map(item => {
+            const sys = Number(item.systemQty) || 0, cnt = Number(item.countedQty) || 0, v = cnt - sys;
+            let k = 'zero', vh = `<span style="color:#64748B;font-weight:700">0</span>`;
+            if (v > 0) { k = 'pos'; nPos++; vh = `<span class="sc-pill pos">+${v.toLocaleString()}</span>`; }
+            else if (v < 0) { k = 'neg'; nNeg++; vh = `<span class="sc-pill neg">${v.toLocaleString()}</span>`; }
+            else nZero++;
+            const pct = v === 0 ? '-' : (sys > 0 ? ((v > 0 ? '+' : '') + (v / sys * 100).toFixed(1) + '%') : '-');
+            const packText = item.packagingType === 'temporary' ? 'แพ็คกิ้งชั่วคราว' : 'แพ็คกิ้งสแตนดาร์ด';
+            return `
+            <div class="sc-rg report-item-row ${k === 'zero' ? 'filter-zero' : (k === 'pos' ? 'filter-positive' : 'filter-negative')}${v !== 0 ? ' v' : ''}" data-v="${k}">
+                <div style="min-width:0"><div class="c">${esc(item.productId)}</div><div class="n">${esc(item.productName)}</div></div>
+                <div>${esc(item.productionDate)}</div>
+                <div><span class="sc-pill todo" style="font-weight:500">${packText}</span></div>
+                <div class="num">${sys.toLocaleString()}</div>
+                <div class="num" style="font-weight:700;color:#1E40AF">${cnt.toLocaleString()}</div>
+                <div class="num">${vh}</div>
+                <div class="num" style="color:#334155;font-size:.875rem">${pct}</div>
+            </div>`;
+        }).join('');
+ 
+        const netPct = x.sys > 0 ? (x.net / x.sys * 100) : 0;
+        const subNet = s === 'pending' ? 'จะถูกปรับเข้าสต็อกเมื่ออนุมัติ' : (s === 'approved' ? 'ปรับเข้าสต็อกแล้ว' : 'ไม่ได้ปรับสต็อก (ยกเลิก)');
+        const sgn = n => (n > 0 ? '+' : '') + n.toLocaleString();
+ 
+        body.innerHTML = `
+        <div class="sc-cwrap">
+            <div class="sc-rinfo">
+                <div><div class="l">รหัสการนับ</div><div class="v" style="color:#1E40AF">${esc(count.id)}</div></div>
+                <div><div class="l">วันที่นับ</div><div class="v">${esc(new Date(count.date).toLocaleString(currentLanguage === 'th' ? 'th-TH' : 'en-GB', { dateStyle: 'long', timeStyle: 'short' }))}</div></div>
+                <div><div class="l">ผู้นับ</div><div class="v">${esc(count.user)}</div></div>
+                <div><div class="l">สถานะ</div><div class="v"><span class="sc-pill ${s}">${stLabel(s, T)}</span></div></div>
+            </div>
+            <div class="sc-kpis">
+                <div class="sc-k">
+                    <div class="l">ความแม่นยำรวม</div>
+                    <div class="v" style="font-size:1.9rem">${x.acc.toFixed(1)}%</div>
+                    <div class="sc-bar" style="margin-top:8px"><i class="${accCls(x.acc)}" style="width:${x.acc}%"></i></div>
+                </div>
+                <div class="sc-k">
+                    <div class="l">ล็อตที่ตรวจ</div>
+                    <div class="v" style="font-size:1.9rem">${x.n}</div>
+                    <div class="s">ตรง ${nZero} ล็อต</div>
+                </div>
+                <div class="sc-k ${x.d ? 'bad' : 'ok'}">
+                    <div class="l">ล็อตที่มีผลต่าง</div>
+                    <div class="v" style="font-size:1.9rem">${x.d}</div>
+                    <div class="s">ขาด ${x.sh} · เกิน ${x.ov}</div>
+                </div>
+                <div class="sc-k">
+                    <div class="l">ผลต่างสุทธิ (ชิ้น)</div>
+                    <div class="v" style="font-size:1.9rem">${sgn(x.net)}</div>
+                    <div class="s">${x.d ? `ผลต่างสุทธิ ${netPct > 0 ? '+' : ''}${netPct.toFixed(2)}% ของยอดระบบ` : subNet}</div>
+                    ${x.d ? `<div class="s">${subNet}</div>` : ''}
+                </div>
+            </div>
+            <div class="sc-card">
+                <div class="sc-tools">
+                    <div class="sc-h">รายละเอียดรายล็อต</div>
+                    <div class="sc-chips">
+                        <button type="button" class="sc-chip on" data-f="all" onclick="scRepFilter('all')">ทั้งหมด<span class="n">${items.length}</span></button>
+                        <button type="button" class="sc-chip" data-f="diff" onclick="scRepFilter('diff')">มีผลต่าง<span class="n">${nNeg + nPos}</span></button>
+                        <button type="button" class="sc-chip" data-f="neg" onclick="scRepFilter('neg')">ขาด<span class="n">${nNeg}</span></button>
+                        <button type="button" class="sc-chip" data-f="pos" onclick="scRepFilter('pos')">เกิน<span class="n">${nPos}</span></button>
+                        <button type="button" class="sc-chip" data-f="zero" onclick="scRepFilter('zero')">ตรง<span class="n">${nZero}</span></button>
+                    </div>
+                </div>
+                <div class="sc-tb sc-rtb">
+                    <div class="sc-rg h"><div>สินค้า</div><div>วันที่ผลิต</div><div>แพ็คกิ้ง</div><div class="num">ในระบบ</div><div class="num">นับได้</div><div class="num">ผลต่าง</div><div class="num">% ต่าง</div></div>
+                    ${rows}
+                </div>
+            </div>
+        </div>`;
+ 
+        footer.innerHTML = `
+            <div class="sc-fsum">${canApprove ? 'ตรวจสอบแล้วเลือกผล · ถ้าอนุมัติ ยอดสต็อกจะถูกปรับตามผลนับ' : ''}</div>
+            <button type="button" class="btn btn-info shadow-sm" onclick="downloadVarianceCSV('${esc(count.id)}')"><i class="bi bi-filetype-csv me-2"></i>ดาวน์โหลด (CSV)</button>
+            <button type="button" class="btn btn-secondary shadow-sm" data-bs-dismiss="modal">ปิดหน้าต่าง</button>
+            ${canApprove ? `
+            <button type="button" class="btn btn-danger shadow-sm" onclick="rejectStockCount('${esc(count.id)}')"><i class="bi bi-x-circle-fill me-2"></i>ไม่อนุมัติ (ยกเลิก)</button>
+            <button type="button" class="btn btn-success approve-stock-count-btn shadow-sm" data-count-id="${esc(count.id)}"><i class="bi bi-check-circle-fill me-2"></i>ยืนยันการปรับยอด</button>
+            ` : ''}`;
+    };
+ 
+    // วาดหน้าใหม่ทันทีถ้าข้อมูลโหลดแล้ว
+    try { if (typeof db !== 'undefined' && db && db.stockCounts && typeof currentUser !== 'undefined' && currentUser) populateStockCountMainView(); } catch (e) { }
+})();
+// ===== จบ SC-REDESIGN =====
+ 
+// ===== SC-I18N: หน้า "นับสต็อก" แปลเป็นอังกฤษตามปุ่มเปลี่ยนภาษา (วางต่อท้ายบล็อก SC-REDESIGN) =====
+(function () {
+    if (window.__scI18n) return; window.__scI18n = true;
+ 
+    const PANE = 'pills-stock-count';
+    const THAI = /[฀-๿]/;
+    const isEn = () => { try { return currentLanguage === 'en'; } catch (e) { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e2) { return false; } } };
+ 
+    const SC_MON = { 'มกราคม': 'January', 'กุมภาพันธ์': 'February', 'มีนาคม': 'March', 'เมษายน': 'April', 'พฤษภาคม': 'May', 'มิถุนายน': 'June', 'กรกฎาคม': 'July', 'สิงหาคม': 'August', 'กันยายน': 'September', 'ตุลาคม': 'October', 'พฤศจิกายน': 'November', 'ธันวาคม': 'December' };
+    // [ไทย, อังกฤษ] (เรียงวลียาวไปสั้นให้อัตโนมัติ)
+    const TT = [
+        // ----- หน้าหลัก -----
+        [/ตรวจนับสินค้าจริงเทียบกับยอดในระบบ ก่อนอนุมัติปรับยอด/g, 'Count the actual goods and compare with system quantities before approving the adjustment'],
+        [/โหลดเทมเพลต/g, 'Download template'],
+        [/อัปโหลดปรับสต็อก/g, 'Upload stock adjustment'],
+        [/นับครั้งล่าสุด/g, 'Latest count'],
+        [/^\s*โดย\s*$/g, 'by'],
+        [/ยังไม่มีการนับ/g, 'No counts yet'],
+        [/^\s*รอตรวจสอบ\s*$/g, 'Pending review'],
+        [/^\s*รอบ\s*$/g, 'rounds'],
+        [/รออนุมัติโดยแอดมิน/g, 'Waiting for admin approval'],
+        [/ความแม่นยำรอบอนุมัติล่าสุด/g, 'Accuracy of the latest approved count'],
+        [/^\s*รอบ (\S+)\s*$/g, 'Count $1'],
+        [/ยังไม่มีรอบที่อนุมัติ/g, 'No approved count yet'],
+        [/นับมาแล้วทั้งหมด/g, 'Total counts done'],
+        [/อนุมัติ (\d+) · ไม่อนุมัติ (\d+)/g, 'Approved $1 · Rejected $2'],
+        [/^\s*ทั้งหมด\s*$/g, 'All'],
+        [/^\s*อนุมัติแล้ว\s*$/g, 'Approved'],
+        [/^\s*ไม่อนุมัติ\s*$/g, 'Rejected'],
+        [/^\s*รอบนับ\s*$/g, 'Count'],
+        [/^\s*วันที่ \/ เวลา\s*$/g, 'Date / time'],
+        [/^\s*ผู้นับ\s*$/g, 'Counted by'],
+        [/^\s*สถานะ\s*$/g, 'Status'],
+        [/ผลต่าง \/ ความแม่นยำ/g, 'Variance / accuracy'],
+        [/ต่าง (\d+) จาก (\d+) รายการ/g, 'Variance in $1 of $2 items'],
+        [/กดที่แถวเพื่อเปิดรายงานของรอบนั้น/g, "Click a row to open that count's report"],
+        [/ไม่มีรายการในตัวกรองนี้/g, 'No items in this filter'],
+        // ----- หน้านับ -----
+        [/ไม่พบข้อมูลสินค้าในระบบ/g, 'No products found in the system'],
+        [/^\s*ความคืบหน้า\s*$/g, 'Progress'],
+        [/(\d+) \/ (\d+) ล็อต · (\d+)%/g, '$1 / $2 lots · $3%'],
+        [/^\s*ตรง (\d+)\s*$/g, 'Match $1'],
+        [/^\s*ไม่ตรง (\d+)\s*$/g, 'Mismatch $1'],
+        [/^\s*ยังไม่นับ (\d+)\s*$/g, 'Not counted $1'],
+        [/ค้นหารหัส หรือชื่อสินค้า เพื่อเริ่มนับ\.\.\./g, 'Search by code or name to start counting...'],
+        [/^\s*ค้นหาสินค้า\s*$/g, 'Search products'],
+        [/^\s*ยังไม่นับ\s*$/g, 'Not counted'],
+        [/^\s*มีผลต่าง\s*$/g, 'Has variance'],
+        [/^\s*ในระบบ\s*$/g, 'In system'],
+        [/^\s*นับได้\s*$/g, 'Counted'],
+        [/^\s*ตรง\s*$/g, 'Match'],
+        [/^\s*ตรงทุกล็อต\s*$/g, 'All lots match'],
+        [/^\s*ยังนับไม่ครบ\s*$/g, 'Not fully counted'],
+        [/^\s*ไม่มีสต็อก\s*$/g, 'No stock'],
+        [/^\s*วันที่ผลิต\s*$/g, 'Production date'],
+        [/^\s*แพ็คกิ้ง\s*$/g, 'Packaging'],
+        [/^\s*นับได้จริง\s*$/g, 'Actual count'],
+        [/^\s*ผลต่าง\s*$/g, 'Variance'],
+        [/^\s*เพิ่มล็อตที่เจอหน้างาน\s*$/g, 'Add a lot found on site'],
+        [/^\s*ล็อตใหม่\s*$/g, 'New lot'],
+        [/^\s*ระบุยอด\s*$/g, 'Enter qty'],
+        [/^\s*กรอกจำนวน\s*$/g, 'Enter qty'],
+        [/^\s*ลบล็อตนี้\s*$/g, 'Remove this lot'],
+        [/ไม่มีสต็อกในระบบ — ถ้าพบของหน้างาน กด "เพิ่มล็อตที่เจอหน้างาน"/g, 'No stock in the system — if you find goods on site, press "Add a lot found on site"'],
+        [/นับแล้ว (\d+) จาก (\d+) ล็อต · ไม่ตรง (\d+) ล็อต/g, 'Counted $1 of $2 lots · $3 mismatched'],
+        [/กรุณาระบุวันที่ผลิตและประเภทบรรจุภัณฑ์ให้ครบถ้วน สำหรับล็อตที่กดเพิ่มใหม่ด้วยครับ/g, 'Please enter the production date and packaging type for every newly added lot'],
+        [/กรุณาระบุยอดที่นับได้อย่างน้อย 1 รายการครับ/g, 'Please enter at least one counted quantity'],
+        // ----- รายงาน -----
+        [/รายงานผลการนับสต็อก - /g, 'Stock count report - '],
+        [/(\d{1,2}) (มกราคม|กุมภาพันธ์|มีนาคม|เมษายน|พฤษภาคม|มิถุนายน|กรกฎาคม|สิงหาคม|กันยายน|ตุลาคม|พฤศจิกายน|ธันวาคม) (\d{4}) เวลา (\d{1,2}:\d{2})/g, (m, d, mo, y, t) => d + ' ' + SC_MON[mo] + ' ' + (parseInt(y, 10) - 543) + ', ' + t],
+        [/^\s*รหัสการนับ\s*$/g, 'Count ID'],
+        [/^\s*วันที่นับ\s*$/g, 'Count date'],
+        [/ความแม่นยำรวม/g, 'Overall accuracy'],
+        [/^\s*ล็อตที่ตรวจ\s*$/g, 'Lots checked'],
+        [/^\s*ตรง (\d+) ล็อต\s*$/g, 'Match $1 lots'],
+        [/^\s*ล็อตที่มีผลต่าง\s*$/g, 'Lots with variance'],
+        [/ขาด (\d+) · เกิน (\d+)/g, 'Short $1 · Over $2'],
+        [/ผลต่างสุทธิ \(ชิ้น\)/g, 'Net variance (pcs)'],
+        [/ผลต่างสุทธิ ([+-]?[\d.]+)% ของยอดระบบ/g, 'Net variance $1% of system qty'],
+        [/จะถูกปรับเข้าสต็อกเมื่ออนุมัติ/g, 'Applied to stock when approved'],
+        [/ปรับเข้าสต็อกแล้ว/g, 'Applied to stock'],
+        [/ไม่ได้ปรับสต็อก \(ยกเลิก\)/g, 'Stock not adjusted (cancelled)'],
+        [/รายละเอียดรายล็อต/g, 'Lot details'],
+        [/^\s*ขาด\s*$/g, 'Short'],
+        [/^\s*เกิน\s*$/g, 'Over'],
+        [/^\s*สินค้า\s*$/g, 'Product'],
+        [/^\s*% ต่าง\s*$/g, '% diff'],
+        [/^\s*แพ็คกิ้งชั่วคราว\s*$/g, 'Temporary packaging'],
+        [/^\s*แพ็คกิ้งสแตนดาร์ด\s*$/g, 'Standard packaging'],
+        [/ตรวจสอบแล้วเลือกผล · ถ้าอนุมัติ ยอดสต็อกจะถูกปรับตามผลนับ/g, 'Review, then choose · approving adjusts stock to the counted quantities'],
+        [/ดาวน์โหลด \(CSV\)/g, 'Download (CSV)'],
+        [/ปิดหน้าต่าง/g, 'Close'],
+        [/ไม่อนุมัติ \(ยกเลิก\)/g, 'Reject (cancel)'],
+        [/ยืนยันการปรับยอด/g, 'Confirm adjustment'],
+        // ----- ป๊อบอัพยืนยัน / แจ้งผล -----
+        [/ยืนยันการไม่อนุมัติ\?/g, 'Confirm rejection?'],
+        [/คุณกำลังจะยกเลิกและปัดตกรายการนับสต็อก/g, 'You are about to cancel and reject stock count'],
+        [/ข้อมูลฉบับร่างนี้จะไม่ถูกนำไปปรับสต็อกจริง/g, 'This draft will not be applied to actual stock'],
+        [/ยืนยันไม่อนุมัติ/g, 'Confirm rejection'],
+        [/^\s*ปิด\s*$/g, 'Close'],
+        [/กำลังยกเลิกรายการ\.\.\./g, 'Cancelling...'],
+        [/ยกเลิกสำเร็จ!/g, 'Cancelled!'],
+        [/รายการนี้ถูกปัดตกและไม่อนุมัติเรียบร้อยแล้ว/g, 'This count has been rejected'],
+        [/กำลังบันทึกข้อมูล\.\.\./g, 'Saving...'],
+        [/รอระบบ Google Sheet อัปเดตสักครู่นะครับ/g, 'Please wait while Google Sheets updates'],
+        [/ระบบขัดข้อง บันทึกไม่สำเร็จ:/g, 'System error, could not save:']
+    ];
+    // เรียงจากวลียาวไปสั้นอัตโนมัติ กันวลียาวถูกคำสั้นตัดก่อน
+    TT.sort((a, b) => b[0].source.length - a[0].source.length);
+    function tr(s) {
+        let t = String(s);
+        for (let i = 0; i < TT.length; i++) t = t.replace(TT[i][0], TT[i][1]);
+        return t;
+    }
+ 
+    // ---------- ขอบเขต: หน้า Packing + ป๊อบอัพจัดการสถานะ + ป๊อบอัพที่เปิดขณะอยู่หน้านี้ ----------
+    const pane = () => document.getElementById(PANE);
+    const paneActive = () => { const p = pane(); return !!p && (p.classList.contains('active') || p.classList.contains('show')); };
+    function inScope(node) {
+        const el = node && (node.nodeType === 1 ? node : node.parentElement);
+        if (!el || !el.closest) return false;
+        if (el.closest('#' + PANE) || el.closest('#stockCountModal') || el.closest('#stockCountReportModal')) return true;
+        if (paneActive() && el.closest('.swal2-container')) return true;
+        return false;
+    }
+ 
+    // ---------- แปล / คืนค่าเดิม (จำข้อความไทยเดิมไว้ เพื่อสลับกลับไทยได้) ----------
+    const ORIG = new WeakMap();   // text node -> {o, t}
+    const AORIG = new WeakMap();  // element -> {attr: {o, t}}
+    const ATTRS = ['placeholder', 'title', 'aria-label'];
+ 
+    function doText(n) {
+        const v = n.nodeValue, rec = ORIG.get(n);
+        if (rec && v === rec.t) {
+            if (!isEn()) { n.nodeValue = rec.o; ORIG.delete(n); }
+            else { const t = tr(rec.o); if (t !== rec.t) { rec.t = t; n.nodeValue = t; } }
+            return;
+        }
+        if (rec) ORIG.delete(n);          // แอปเขียนทับด้วยข้อความใหม่ → ถือเป็นข้อความเดิมใหม่
+        if (!isEn() || !v || !THAI.test(v)) return;
+        const t = tr(v);
+        if (t !== v) { ORIG.set(n, { o: v, t }); n.nodeValue = t; }
+    }
+    function doAttrs(el) {
+        let m = AORIG.get(el);
+        ATTRS.forEach(a => {
+            const v = el.getAttribute(a), rec = m && m[a];
+            if (rec && v === rec.t) {
+                if (!isEn()) { el.setAttribute(a, rec.o); delete m[a]; }
+                else { const t = tr(rec.o); if (t !== rec.t) { rec.t = t; el.setAttribute(a, t); } }
+                return;
+            }
+            if (rec) delete m[a];
+            if (!isEn() || !v || !THAI.test(v)) return;
+            const t = tr(v);
+            if (t !== v) { if (!m) { m = {}; AORIG.set(el, m); } m[a] = { o: v, t }; el.setAttribute(a, t); }
+        });
+    }
+    function sweep(root) {
+        if (!root) return;
+        const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        const nodes = []; while (w.nextNode()) nodes.push(w.currentNode);
+        nodes.forEach(doText);
+        if (root.querySelectorAll) root.querySelectorAll('[placeholder],[title],[aria-label]').forEach(doAttrs);
+        if (root.nodeType === 1) doAttrs(root);
+    }
+    function sweepAll() {
+        sweep(pane()); sweep(document.getElementById('stockCountModal')); sweep(document.getElementById('stockCountReportModal'));
+        if (paneActive()) document.querySelectorAll('.swal2-container').forEach(sweep);
+    }
+ 
+    let busy = false;
+    const mo = new MutationObserver((muts) => {
+        if (busy) return;
+        busy = true;
+        try {
+            for (const m of muts) {
+                if (m.type === 'childList') { m.addedNodes.forEach(n => { if (inScope(n)) { if (n.nodeType === 3) doText(n); else sweep(n); } }); }
+                else if (m.type === 'characterData') { if (inScope(m.target)) doText(m.target); }
+                else if (m.type === 'attributes') { if (inScope(m.target)) doAttrs(m.target); }
+            }
+        } catch (e) { console.warn('SC-I18N', e); }
+        finally { busy = false; try { mo.takeRecords(); } catch (e) { } }
+    });
+    mo.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ATTRS });
+ 
+    // ---------- สลับภาษา ----------
+    let last = isEn();
+    function onLang() { const n = isEn(); if (n === last) return; last = n; busy = true; try { sweepAll(); } finally { busy = false; try { mo.takeRecords(); } catch (e) { } } }
+    if (typeof window.setLanguage === 'function') {
+        const _sl = window.setLanguage;
+        window.setLanguage = function () { try { return _sl.apply(this, arguments); } finally { setTimeout(onLang, 80); } };
+    }
+    setInterval(() => { try { onLang(); } catch (e) { } }, 800);
+    try { if (isEn()) sweepAll(); } catch (e) { }
+})();
+// ===== จบ SC-I18N =====
+ 
                 // ฟังก์ชันสำหรับดาวน์โหลดตารางออกเป็นไฟล์ CSV
                 window.downloadVarianceCSV = function(countId) {
                     const count = db.stockCounts.find(sc => sc.id === countId);
@@ -23812,6 +24762,538 @@ renderLGTagPrintWindow = function(tags, printWin) {
 })();
 // ===== จบ CONVERT-PAGE =====
 // ===== LG-RECV-I18N: เมนูด้านซ้าย (หัวข้อกลุ่ม + เมนู รับแท็ก LG) และหน้า "รับแท็กเข้า LG" (รวมกล่องภาพรวมด้านขวา, ปุ่มเลือกไลน์, ผลสแกน และป๊อบอัพของหน้านี้) แปลเป็นอังกฤษตามปุ่มเปลี่ยนภาษาของระบบ (วางใต้บรรทัด จบ CONVERT-PAGE) =====
+// ===== PK-I18N: หน้า "ระบบจัดการ Packing" + ป๊อบอัพของหน้านี้ แปลเป็นอังกฤษตามปุ่มเปลี่ยนภาษา (วางใต้บรรทัด จบ CONVERT-PAGE) =====
+(function () {
+    if (window.__fcRedesign) return; window.__fcRedesign = true;
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const fmt = (n) => Number(n).toLocaleString('en-US');
+    const pane = () => $('pills-forecast');
+    const paneActive = () => { const p = pane(); return !!p && (p.classList.contains('active') || p.classList.contains('show')); };
+ 
+    let lastResult = null;   // ผลอัปโหลดล่าสุด { file, updated, notFound[], zero, changes{id:oldQty} }
+    let filter = 'all';
+ 
+    // ---------- วันที่ของสัปดาห์หน้า (ตรงกับเทมเพลต) ----------
+    function nextWeek() {
+        const d = new Date(), cur = d.getDay(), add = cur === 0 ? 1 : 8 - cur;
+        const mon = new Date(d); mon.setDate(d.getDate() + add);
+        const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], out = [];
+        for (let i = 0; i < 7; i++) {
+            const t = new Date(mon); t.setDate(mon.getDate() + i);
+            out.push({ n: names[t.getDay()], dd: String(t.getDate()).padStart(2, '0'), mm: String(t.getMonth() + 1).padStart(2, '0'), yy: t.getFullYear() });
+        }
+        return out;
+    }
+    function drawDays() {
+        const w = nextWeek(), a = w[0], z = w[6];
+        const r = $('fc-range');
+        if (r) r.innerHTML = '<i class="bi bi-calendar3"></i><span>สัปดาห์หน้า</span><b>' + a.dd + '/' + a.mm + '/' + a.yy + ' – ' + z.dd + '/' + z.mm + '/' + z.yy + '</b>';
+        const pv = $('fc-pv');
+        if (pv) {
+            let h = '<div class="h a">Customer</div><div class="h a">Part No.</div>';
+            w.forEach(x => { h += '<div class="h"><b>' + x.n + '</b>' + x.dd + '/' + x.mm + '</div>'; });
+            h += '<div class="a">LG</div><div class="a">PART-001</div>';
+            [100, 150, 0, 100, 200, 0, 0].forEach(v => { h += '<div class="' + (v > 0 ? 'v' : 'z') + '">' + v + '</div>'; });
+            pv.innerHTML = h;
+        }
+    }
+ 
+    // ---------- แถบผลลัพธ์หลังอัปโหลด ----------
+    function drawBanner() {
+        const host = $('fc-banner'); if (!host) return;
+        if (!lastResult) { host.innerHTML = ''; return; }
+        const r = lastResult;
+        let h = '<div class="fc-b ok"><div class="ic"><i class="bi bi-check-lg"></i></div><div><div class="t">คำนวณเป้า 3 วันเรียบร้อย</div><div class="s">อัปเดตแล้ว ' + r.updated + ' รายการ</div></div></div>';
+        if (r.notFound.length || r.zero) {
+            h += '<div class="fc-b warn"><div class="ic"><i class="bi bi-exclamation-lg"></i></div><div style="min-width:0">';
+            if (r.notFound.length) {
+                h += '<div class="t">ไม่พบรหัสในระบบ ' + r.notFound.length + ' รายการ (ถูกข้าม)</div><div>' + r.notFound.slice(0, 30).map(x => '<span class="fc-chip">' + esc(x) + '</span>').join('') + (r.notFound.length > 30 ? '<span class="fc-chip">…</span>' : '') + '</div>';
+            }
+            if (r.zero) h += '<div class="s">ยอดเป็น 0 ทุกวัน ถูกข้าม ' + r.zero + ' รายการ</div>';
+            h += '</div></div>';
+        }
+        host.innerHTML = h;
+    }
+ 
+    // ---------- ตารางเป้า 3 วัน เทียบสต็อก ----------
+    function stockMap() {
+        const m = {};
+        try { (calculatedStock || []).forEach(s => { m[String(s.productId).trim()] = Number(s.totalQuantity) || 0; }); } catch (e) { }
+        return m;
+    }
+    window.fcSetFilter = function (f) { filter = f; drawTable(); };
+    function drawTable() {
+        const body = $('fc-tbody'), fl = $('fc-filters'); if (!body) return;
+        const sm = stockMap();
+        const all = (db.products || []).filter(p => (parseFloat(p.req3Days) || 0) > 0).map(p => {
+            const id = String(p.id).trim(), target = Math.round(parseFloat(p.req3Days) || 0), stock = sm[id] || 0, diff = stock - target;
+            return { id, cust: p.customer || '-', target, stock, diff, ok: diff >= 0, old: lastResult && lastResult.changes && (id in lastResult.changes) ? lastResult.changes[id] : null };
+        }).sort((a, b) => (a.ok - b.ok) || (a.diff - b.diff));
+        const nLow = all.filter(r => !r.ok).length;
+        if (fl) {
+            const defs = [['all', 'ทั้งหมด ' + all.length], ['short', 'ไม่พอ ' + nLow], ['ok', 'พอ ' + (all.length - nLow)]];
+            fl.innerHTML = defs.map(d => '<button type="button" class="fc-fb' + (filter === d[0] ? ' on' : '') + '" onclick="fcSetFilter(\'' + d[0] + '\')">' + d[1] + '</button>').join('');
+        }
+        let rows = all;
+        if (filter === 'short') rows = all.filter(r => !r.ok);
+        if (filter === 'ok') rows = all.filter(r => r.ok);
+        if (!all.length) { body.innerHTML = '<div class="fc-none">ยังไม่มีเป้า 3 วันในระบบ — อัปโหลดไฟล์เพื่อเริ่มต้น</div>'; return; }
+        if (!rows.length) { body.innerHTML = '<div class="fc-none">ไม่มีรายการในตัวกรองนี้</div>'; return; }
+        body.innerHTML = rows.map(r => {
+            const pct = Math.min(100, Math.round(r.stock / r.target * 100));
+            const changed = r.old !== null && r.old !== r.target;
+            return '<div class="fc-g' + (changed ? ' chg' : '') + '">'
+                + '<div style="min-width:0"><div class="pid">' + esc(r.id) + '</div><div class="cu">' + esc(r.cust) + '</div></div>'
+                + '<div class="num" style="font-weight:700">' + fmt(r.target) + (changed ? '<span class="was">เดิม ' + fmt(r.old) + '</span>' : '') + '</div>'
+                + '<div class="num">' + fmt(r.stock) + '</div>'
+                + '<div class="num" style="font-weight:600;color:' + (r.ok ? '#166534' : '#B91C1C') + '">' + (r.diff > 0 ? '+' : '') + fmt(r.diff) + '</div>'
+                + '<div class="fc-bar"><i style="width:' + pct + '%;background:' + (r.ok ? '#15803D' : '#DC2626') + '"></i></div>'
+                + '<div style="text-align:right"><span class="fc-bd ' + (r.ok ? 'ok' : 'low') + '">' + (r.ok ? 'พอ' : 'ไม่พอ') + '</span></div>'
+                + '</div>';
+        }).join('');
+    }
+ 
+    window.renderForecastPage = function () { try { drawDays(); drawBanner(); drawTable(); } catch (e) { console.warn('FC-REDESIGN', e); } };
+ 
+    // ---------- อัปโหลด (ลอจิกคำนวณเหมือนเดิม + เก็บผลลัพธ์ไว้แสดงบนหน้า) ----------
+    function setDrop(title, sub) { const t = $('fc-drop-t'), s = $('fc-drop-s'); if (t) t.textContent = title; if (s) s.textContent = sub; }
+ 
+    function processFile(file) {
+        if (!file) return;
+        if (!/\.(xlsx|xls|csv)$/i.test(file.name || '')) { Swal.fire('เกิดข้อผิดพลาด', 'รูปแบบไฟล์ไม่ถูกต้อง หรือไม่สามารถอ่านไฟล์ได้', 'error'); return; }
+        Swal.fire({ title: 'กำลังคำนวณ Forecast...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        const reader = new FileReader();
+        reader.onload = async function (event) {
+            try {
+                const data = new Uint8Array(event.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
+ 
+                let updateCount = 0, zero = 0;
+                const notFound = [], changes = {};
+                let localForecast = JSON.parse(localStorage.getItem('forecastData') || '{}');
+ 
+                for (let i = 1; i < jsonData.length; i++) {
+                    const row = jsonData[i];
+                    if (!row || !row[1]) continue;
+                    const rawPart = String(row[1]).trim();
+                    const partNo = rawPart.toUpperCase();
+                    if (!partNo) continue;
+ 
+                    let totalDemand = 0, activeDays = 0;
+                    for (let d = 2; d <= 8; d++) {
+                        const qty = parseFloat(row[d]) || 0;
+                        if (qty > 0) { totalDemand += qty; activeDays++; }
+                    }
+                    const avgDemand = activeDays > 0 ? (totalDemand / activeDays) : 0;
+                    const req3Days = Math.ceil(avgDemand * 3);
+ 
+                    const idx = db.products.findIndex(p =>
+                        String(p.id).trim().toUpperCase() === partNo ||
+                        (p.erpCode && String(p.erpCode).trim().toUpperCase() === partNo) ||
+                        (p.name && String(p.name).trim().toUpperCase() === partNo)
+                    );
+                    if (idx === -1) { if (!notFound.includes(rawPart)) notFound.push(rawPart); continue; }
+                    if (req3Days <= 0) { zero++; continue; }
+ 
+                    const matchedId = db.products[idx].id;
+                    changes[String(matchedId).trim()] = parseFloat(db.products[idx].req3Days) || 0;
+                    db.products[idx].req3Days = req3Days;
+                    localForecast[matchedId] = req3Days;
+                    updateCount++;
+                }
+ 
+                localStorage.setItem('forecastData', JSON.stringify(localForecast));
+                try {
+                    const forecastData = Object.keys(localForecast).map(k => ({ id: 'fc-' + Date.now(), productId: k, req3Days: localForecast[k] }));
+                    if (forecastData.length > 0) callAppsScript('saveForecast', forecastData).catch(e => console.warn('Backend Sync:', e));
+                } catch (err) { }
+ 
+                lastResult = { file: file.name, updated: updateCount, notFound, zero, changes };
+                const hh = String(new Date().getHours()).padStart(2, '0'), mi = String(new Date().getMinutes()).padStart(2, '0');
+                setDrop(file.name + ' · อัปโหลดแล้ว ' + hh + ':' + mi, 'กดเพื่อเลือกไฟล์ใหม่');
+                try { populateStockSummary(); } catch (e) { }
+                window.renderForecastPage();
+                Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'อัปโหลดสำเร็จ', timer: 2200, showConfirmButton: false });
+                const p = pane(); if (p && p.scrollIntoView) p.scrollIntoView({ block: 'start', behavior: 'smooth' });
+            } catch (err) {
+                console.error('Forecast Error:', err);
+                Swal.fire('เกิดข้อผิดพลาด', 'รูปแบบไฟล์ไม่ถูกต้อง หรือไม่สามารถอ่านไฟล์ได้', 'error');
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+ 
+    window.uploadForecastFile = function () {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.xlsx, .xls, .csv';
+        fileInput.onchange = e => processFile(e.target.files[0]);
+        fileInput.click();
+    };
+ 
+    // ---------- ลากไฟล์มาวาง ----------
+    document.addEventListener('dragover', (e) => { const z = e.target.closest && e.target.closest('#fc-drop'); if (z) { e.preventDefault(); z.classList.add('drag'); } });
+    document.addEventListener('dragleave', (e) => { const z = e.target.closest && e.target.closest('#fc-drop'); if (z) z.classList.remove('drag'); });
+    document.addEventListener('drop', (e) => {
+        const z = e.target.closest && e.target.closest('#fc-drop');
+        if (!z) return;
+        e.preventDefault(); z.classList.remove('drag');
+        const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if (f) processFile(f);
+    });
+ 
+    // ---------- วาดหน้าเมื่อเปิดแท็บ + อัปเดตเป็นระยะตอนเปิดหน้านี้ค้างไว้ ----------
+    document.addEventListener('shown.bs.tab', (e) => {
+        const t = e.target; if (t && t.getAttribute && t.getAttribute('data-bs-target') === '#pills-forecast') window.renderForecastPage();
+    });
+    setInterval(() => { try { if (paneActive()) { drawTable(); } } catch (e) { } }, 30000);
+    window.renderForecastPage();
+})();
+// ===== จบ FC-REDESIGN =====
+// ===== FC-I18N: หน้า "อัปโหลด Forecast" แปลเป็นอังกฤษตามปุ่มเปลี่ยนภาษา (วางต่อท้ายบล็อก FC-REDESIGN) =====
+(function () {
+    if (window.__fcI18n) return; window.__fcI18n = true;
+ 
+    const PANE = 'pills-forecast';
+    const THAI = /[\u0E00-\u0E7F]/;
+    const isEn = () => { try { return currentLanguage === 'en'; } catch (e) { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e2) { return false; } } };
+ 
+    // [ไทย, อังกฤษ] (เรียงวลียาวไปสั้นให้อัตโนมัติ)
+    const TT = [
+        [/^\s*อัปโหลด Forecast\s*$/g, 'Upload Forecast'],
+        [/ประเมินสต็อกที่ต้องมีล่วงหน้า 3 วัน จากแผนความต้องการของสัปดาห์หน้า/g, "Estimate the stock needed for the next 3 days from next week's demand plan"],
+        [/ระบบสร้างวันที่ของ "สัปดาห์หน้า" \(จันทร์–อาทิตย์\) ให้อัตโนมัติ/g, 'The system fills in the dates of "next week" (Mon–Sun) automatically'],
+        [/สัปดาห์หน้า/g, 'Next week'],
+        [/ดาวน์โหลดเทมเพลต/g, 'Download template'],
+        [/ดาวน์โหลด Template/g, 'Download Template'],
+        [/อัปโหลดไฟล์ที่ใส่ตัวเลขแล้ว/g, 'Upload the filled-in file'],
+        [/ระบบคำนวณเป้า 3 วัน แล้วไปผูกกับตาราง "สต็อกคงเหลือ"/g, 'The system calculates the 3-day target and links it to the "Stock" table'],
+        [/ลากไฟล์ Excel มาวางที่นี่ หรือกดเพื่อเลือกไฟล์/g, 'Drag an Excel file here, or click to choose a file'],
+        [/รองรับ \.xlsx · \.xls · \.csv/g, 'Supports .xlsx · .xls · .csv'],
+        [/อัปโหลดแล้ว/g, 'uploaded'],
+        [/กดเพื่อเลือกไฟล์ใหม่/g, 'Click to choose another file'],
+        [/คำนวณเป้า 3 วันอย่างไร/g, 'How the 3-day target is calculated'],
+        [/นับเฉพาะวันที่มียอดมากกว่า 0 เอามาหาค่าเฉลี่ยต่อวัน แล้วคูณ 3 ปัดขึ้นเป็นจำนวนเต็ม/g, 'Only days with demand above 0 are counted. Take the daily average, multiply by 3, and round up.'],
+        [/รวมยอดเฉพาะวันที่ > 0/g, 'Total of days with demand > 0:'],
+        [/^\s*ชิ้น ใน\s*$/g, ' pcs over '],
+        [/^\s*วัน\s*$/g, ' days'],
+        [/เฉลี่ยต่อวัน/g, 'Daily average'],
+        [/คูณ 3 ปัดขึ้น =/g, '× 3, rounded up ='],
+        [/^\s*ชิ้น\s*$/g, ' pcs'],
+        [/ตัวอย่างจากแถว LG \/ PART-001 ในเทมเพลต · ค้นหารหัสได้จาก Part No\., รหัส ERP หรือชื่อสินค้า/g, 'Example from the LG / PART-001 row in the template · parts are matched by Part No., ERP code or product name'],
+        [/เป้า 3 วันที่ใช้อยู่ตอนนี้/g, 'Current 3-day targets'],
+        [/เทียบกับสต็อกคงเหลือในคลัง/g, 'Compared with the stock in the warehouse'],
+        [/ทั้งหมด (\d+)/g, 'All $1'],
+        [/ไม่พอ (\d+)/g, 'Short $1'],
+        [/^\s*พอ (\d+)\s*$/g, 'Enough $1'],
+        [/Part No\. \/ ลูกค้า/g, 'Part No. / Customer'],
+        [/^\s*เป้า 3 วัน\s*$/g, '3-day target'],
+        [/^\s*สต็อกคงเหลือ\s*$/g, 'Stock'],
+        [/ขาด \/ เกิน/g, 'Short / Over'],
+        [/^\s*ความพร้อม\s*$/g, 'Readiness'],
+        [/^\s*สถานะ\s*$/g, 'Status'],
+        [/^\s*พอ\s*$/g, 'Enough'],
+        [/^\s*ไม่พอ\s*$/g, 'Short'],
+        [/เดิม (\d[\d,]*)/g, 'was $1'],
+        [/ยังไม่มีเป้า 3 วันในระบบ — อัปโหลดไฟล์เพื่อเริ่มต้น/g, 'No 3-day targets yet — upload a file to get started'],
+        [/ไม่มีรายการในตัวกรองนี้/g, 'No items in this filter'],
+        [/คำนวณเป้า 3 วันเรียบร้อย/g, '3-day targets calculated'],
+        [/อัปเดตแล้ว (\d+) รายการ/g, 'Updated $1 items'],
+        [/ไม่พบรหัสในระบบ (\d+) รายการ \(ถูกข้าม\)/g, '$1 codes not found in the system (skipped)'],
+        [/ยอดเป็น 0 ทุกวัน ถูกข้าม (\d+) รายการ/g, '$1 rows with zero demand on every day were skipped'],
+        [/อัปโหลดสำเร็จ/g, 'Upload complete'],
+        [/กำลังคำนวณ Forecast\.\.\./g, 'Calculating Forecast...'],
+        [/^\s*เกิดข้อผิดพลาด\s*$/g, 'Error'],
+        [/รูปแบบไฟล์ไม่ถูกต้อง หรือไม่สามารถอ่านไฟล์ได้/g, 'Invalid file format or the file could not be read']
+    ];
+    // เรียงจากวลียาวไปสั้นอัตโนมัติ กันวลียาวถูกคำสั้นตัดก่อน
+    TT.sort((a, b) => b[0].source.length - a[0].source.length);
+    function tr(s) {
+        let t = String(s);
+        for (let i = 0; i < TT.length; i++) t = t.replace(TT[i][0], TT[i][1]);
+        return t;
+    }
+ 
+    // ---------- ขอบเขต: หน้า Packing + ป๊อบอัพจัดการสถานะ + ป๊อบอัพที่เปิดขณะอยู่หน้านี้ ----------
+    const pane = () => document.getElementById(PANE);
+    const paneActive = () => { const p = pane(); return !!p && (p.classList.contains('active') || p.classList.contains('show')); };
+    function inScope(node) {
+        const el = node && (node.nodeType === 1 ? node : node.parentElement);
+        if (!el || !el.closest) return false;
+        if (el.closest('#' + PANE)) return true;
+        if (paneActive() && el.closest('.swal2-container')) return true;
+        return false;
+    }
+ 
+    // ---------- แปล / คืนค่าเดิม (จำข้อความไทยเดิมไว้ เพื่อสลับกลับไทยได้) ----------
+    const ORIG = new WeakMap();   // text node -> {o, t}
+    const AORIG = new WeakMap();  // element -> {attr: {o, t}}
+    const ATTRS = ['placeholder', 'title', 'aria-label'];
+ 
+    function doText(n) {
+        const v = n.nodeValue, rec = ORIG.get(n);
+        if (rec && v === rec.t) {
+            if (!isEn()) { n.nodeValue = rec.o; ORIG.delete(n); }
+            else { const t = tr(rec.o); if (t !== rec.t) { rec.t = t; n.nodeValue = t; } }
+            return;
+        }
+        if (rec) ORIG.delete(n);          // แอปเขียนทับด้วยข้อความใหม่ → ถือเป็นข้อความเดิมใหม่
+        if (!isEn() || !v || !THAI.test(v)) return;
+        const t = tr(v);
+        if (t !== v) { ORIG.set(n, { o: v, t }); n.nodeValue = t; }
+    }
+    function doAttrs(el) {
+        let m = AORIG.get(el);
+        ATTRS.forEach(a => {
+            const v = el.getAttribute(a), rec = m && m[a];
+            if (rec && v === rec.t) {
+                if (!isEn()) { el.setAttribute(a, rec.o); delete m[a]; }
+                else { const t = tr(rec.o); if (t !== rec.t) { rec.t = t; el.setAttribute(a, t); } }
+                return;
+            }
+            if (rec) delete m[a];
+            if (!isEn() || !v || !THAI.test(v)) return;
+            const t = tr(v);
+            if (t !== v) { if (!m) { m = {}; AORIG.set(el, m); } m[a] = { o: v, t }; el.setAttribute(a, t); }
+        });
+    }
+    function sweep(root) {
+        if (!root) return;
+        const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        const nodes = []; while (w.nextNode()) nodes.push(w.currentNode);
+        nodes.forEach(doText);
+        if (root.querySelectorAll) root.querySelectorAll('[placeholder],[title],[aria-label]').forEach(doAttrs);
+        if (root.nodeType === 1) doAttrs(root);
+    }
+    function sweepAll() {
+        sweep(pane());
+        if (paneActive()) document.querySelectorAll('.swal2-container').forEach(sweep);
+    }
+ 
+    let busy = false;
+    const mo = new MutationObserver((muts) => {
+        if (busy) return;
+        busy = true;
+        try {
+            for (const m of muts) {
+                if (m.type === 'childList') { m.addedNodes.forEach(n => { if (inScope(n)) { if (n.nodeType === 3) doText(n); else sweep(n); } }); }
+                else if (m.type === 'characterData') { if (inScope(m.target)) doText(m.target); }
+                else if (m.type === 'attributes') { if (inScope(m.target)) doAttrs(m.target); }
+            }
+        } catch (e) { console.warn('FC-I18N', e); }
+        finally { busy = false; try { mo.takeRecords(); } catch (e) { } }
+    });
+    mo.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ATTRS });
+ 
+    // ---------- สลับภาษา ----------
+    let last = isEn();
+    function onLang() { const n = isEn(); if (n === last) return; last = n; busy = true; try { sweepAll(); } finally { busy = false; try { mo.takeRecords(); } catch (e) { } } }
+    if (typeof window.setLanguage === 'function') {
+        const _sl = window.setLanguage;
+        window.setLanguage = function () { try { return _sl.apply(this, arguments); } finally { setTimeout(onLang, 80); } };
+    }
+    setInterval(() => { try { onLang(); } catch (e) { } }, 800);
+    try { if (isEn()) sweepAll(); } catch (e) { }
+})();
+// ===== จบ FC-I18N =====
+(function () {
+    if (window.__pkI18n) return; window.__pkI18n = true;
+
+    const PANE = 'pills-rack';
+    const THAI = /[฀-๿]/;
+    const isEn = () => { try { return currentLanguage === 'en'; } catch (e) { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e2) { return false; } } };
+
+    // [ไทย, อังกฤษ] (เรียงวลียาวไปสั้นให้อัตโนมัติ)
+    const TT = [
+        // ----- หัวหน้า + ตัวเลขสรุป -----
+        [/ระบบจัดการ Packing/g, 'Packing Management'],
+        [/โอนย้ายกล่อง \/ แร็ค และดูสถานะคงเหลือทั้งหมดในที่เดียว/g, 'Transfer boxes / racks and see all stock status in one place'],
+        [/^\s*รวมทั้งหมด\s*$/g, 'Total'],
+        [/^\s*รุ่น\s*$/g, ' models'],
+        [/WH กล่องเปล่า/g, 'WH Empty boxes'],
+        [/WH กล่องมีงาน/g, 'WH Boxes with parts'],
+        [/^\s*อยู่ที่ลูกค้า\s*$/g, 'At customer'],
+        [/^\s*ของทั้งหมด\s*$/g, ' of total'],
+        // ----- ฝั่งโอนย้าย -----
+        [/โอนย้าย Packing/g, 'Transfer Packing'],
+        [/เลือกปลายทาง \(Destination\)/g, 'Select destination'],
+        [/WH ใส่ชิ้นงาน/g, 'WH With parts'],
+        [/เอาไปแพ็คงาน/g, 'Take to pack parts'],
+        [/คืนกล่อง \/ เก็บกล่อง/g, 'Return / store boxes'],
+        [/WH ลูกค้า/g, 'WH Customer'],
+        [/ส่งไปที่ลูกค้า/g, 'Send to customer'],
+        [/ตัดออกจากระบบเพื่อทำลาย \(Scrap\)/g, 'Remove from system (Scrap)'],
+        [/ตัดออกจากระบบ/g, 'Remove from system'],
+        [/^\s*ชำรุด\s*$/g, 'Damaged'],
+        [/เพิ่มแพ็คกิ้งใหม่เข้าระบบ/g, 'Register New'],
+        [/เพิ่มแพ็คกิ้งใหม่/g, 'Add new packing'],
+        [/รับกล่องใหม่เข้าระบบ/g, 'Register new boxes'],
+        [/ยิงสแกน QR Code ERP/g, 'Scan ERP QR Code'],
+        [/ใช้เครื่องสแกน หรือพิมพ์รหัส ERP/g, 'Use scanner or type ERP code'],
+        [/เปิดกล้องมือถือสแกน/g, 'Scan with phone camera'],
+        [/กล้องกำลังทำงาน\.\.\. \(สแกนต่อเนื่องได้เลย\)/g, 'Camera is on... (continuous scan)'],
+        [/อัปโหลดไฟล์สแกนออฟไลน์/g, 'Upload offline scan file'],
+        [/วางรหัส ERP เรียงลงมาในคอลัมน์ A/g, 'Paste ERP codes down column A'],
+        [/^\s*รอบันทึก\s*$/g, 'Pending save'],
+        [/(\d+) รายการ/g, '$1 items'],
+        [/ล้างทั้งหมด/g, 'Clear all'],
+        [/รอสแกน QR Code/g, 'Waiting for QR scan'],
+        [/บันทึกข้อมูลทั้งหมด/g, 'Save all'],
+        [/ในระบบ (\d+) ใบ/g, 'in system: $1'],
+        [/✨ กล่องใหม่/g, '✨ New box'],
+        [/WH มีงาน/g, 'WH With parts'],
+        [/ลบรายการนี้/g, 'Remove this item'],
+        // ----- ฝั่งสรุป -----
+        [/สรุปสถานะ Packing ทั้งหมด/g, 'All Packing Status Summary'],
+        [/ค้นหา รหัส ERP, ชื่อรุ่น\.\.\./g, 'Search ERP code, model...'],
+        [/^\s*ค้นหา\s*$/g, 'Search'],
+        [/^\s*ทั้งหมด\s*$/g, 'All'],
+        [/มีของอยู่ที่ลูกค้า/g, 'Has items at customer'],
+        [/มีกล่องเปล่า/g, 'Has empty boxes'],
+        [/มีกล่องมีงาน/g, 'Has boxes with parts'],
+        [/^\s*กล่องเปล่า\s*$/g, 'Empty'],
+        [/^\s*กล่องมีงาน\s*$/g, 'With parts'],
+        [/^\s*ที่ลูกค้า\s*$/g, 'At customer'],
+        [/รหัส ERP \/ ชื่อแพ็คกิ้ง/g, 'ERP code / Packing name'],
+        [/^\s*สัดส่วน\s*$/g, 'Ratio'],
+        [/^\s*รวม\s*$/g, 'Total'],
+        [/ไม่พบข้อมูล หรือยังไม่มีข้อมูลแพ็คกิ้งในระบบ/g, 'No data found'],
+        [/ยังไม่มีข้อมูลแพ็คกิ้งในระบบ/g, 'No packing data yet'],
+        [/กล่องเปล่า (\d+) · มีงาน (\d+) · ลูกค้า (\d+)/g, 'Empty $1 · With parts $2 · Customer $3'],
+        // ----- ป๊อบอัพแจ้งเตือน -----
+        [/แจ้งเตือน/g, 'Notice'],
+        [/กรุณาเลือก "ปลายทาง" \(ข้อ 1\) ก่อนยิงสแกนครับ/g, 'Please select a "destination" (step 1) before scanning'],
+        [/กรุณาเลือก "ปลายทาง" \(ข้อ 1\) ก่อนอัปโหลดไฟล์ครับ/g, 'Please select a "destination" (step 1) before uploading'],
+        [/กรุณาเลือก "ปลายทาง" ก่อนยิงสแกนครับ/g, 'Please select a "destination" before scanning'],
+        [/สแกนซ้ำ!/g, 'Duplicate scan!'],
+        [/รหัส (.+?) ถูกสแกนไปแล้วครับ/g, 'Code $1 has already been scanned'],
+        [/มีในระบบแล้ว!/g, 'Already in system!'],
+        [/แพ็คกิ้งรหัส (.+?) มีอยู่ในระบบแล้ว \(อยู่ที่ (.+)\)/g, 'Packing $1 already exists in the system (at $2)'],
+        [/ไม่พบในระบบ!/g, 'Not found!'],
+        [/รหัส (.+?) เป็นกล่องใหม่ กรุณาเปลี่ยนปลายทางเป็น "✨ เพิ่มแพ็คกิ้งใหม่เข้าระบบ" ก่อนครับ/g, 'Code $1 is a new box. Please change the destination to "✨ Register New" first'],
+        [/ย้ายไม่ได้!/g, 'Cannot move!'],
+        [/กล่องนี้อยู่ที่ปลายทางนี้อยู่แล้วครับ/g, 'This box is already at that destination'],
+        [/กำลังอ่านไฟล์\.\.\./g, 'Reading file...'],
+        [/กรุณารอสักครู่/g, 'Please wait'],
+        [/อ่านไฟล์สำเร็จ!/g, 'File read!'],
+        [/ดึงข้อมูลเข้ารายการได้/g, 'Added to list:'],
+        [/^\s*ใบ\s*$/g, 'boxes'],
+        [/\(ข้ามรหัสซ้ำ\/ผิดสถานะ (\d+) ใบ\)/g, '(skipped $1 duplicate / wrong-status boxes)'],
+        [/ไม่มีข้อมูลใหม่/g, 'No new data'],
+        [/รหัสในไฟล์ซ้ำ หรืออยู่ในสถานะปลายทางที่เลือกอยู่แล้วครับ/g, 'Codes in the file are duplicates or already at the selected destination'],
+        [/^\s*เกิดข้อผิดพลาด\s*$/g, 'Error'],
+        [/^\s*ข้อผิดพลาด\s*$/g, 'Error'],
+        [/รูปแบบไฟล์ไม่ถูกต้องครับ \(ต้องเป็น \.xlsx หรือ \.csv\)/g, 'Invalid file format (must be .xlsx or .csv)'],
+        [/ยังไม่มีรายการสแกนให้บันทึกครับ/g, 'No scanned items to save'],
+        [/ไม่สามารถเข้าถึงกล้องได้ กรุณาตรวจสอบการอนุญาตให้เบราว์เซอร์ใช้งานกล้องครับ/g, 'Cannot access the camera. Please check the browser camera permission'],
+        [/บันทึกสำเร็จ!/g, 'Saved!'],
+        [/อัปเดตข้อมูลแพ็คกิ้งทั้งหมด (\d+) ใบ/g, 'Updated $1 packing items'],
+        // ----- ป๊อบอัพจัดการสถานะแพ็คกิ้ง -----
+        [/จัดการสถานะแพ็คกิ้ง/g, 'Manage Packing Status'],
+        [/นำเบอร์ \(ID\) ที่เลือก/g, 'Selected ID'],
+        [/เลือกการดำเนินการ/g, 'Select action'],
+        [/-- กรุณาเลือกรายการ --/g, '-- Please select --'],
+        [/ซ่อมเสร็จแล้ว \/ นำกลับเข้าคลังปกติ/g, 'Repaired / return to normal stock'],
+        [/บันทึกลง RackHistory/g, 'Save to RackHistory'],
+        [/กำลังบันทึกข้อมูล\.\.\./g, 'Saving data...'],
+        [/อัปเดตสถานะแร็คเรียบร้อยแล้ว/g, 'Rack status updated'],
+        // ----- คำเดี่ยวที่เหลือ (ยาวสั้นสุด ทำทีหลัง) -----
+        [/ลูกค้า/g, 'Customer'],
+        [/มีงาน/g, 'with parts']
+    ];
+    // เรียงจากวลียาวไปสั้นอัตโนมัติ กันวลียาวถูกคำสั้นตัดก่อน
+    TT.sort((a, b) => b[0].source.length - a[0].source.length);
+    function tr(s) {
+        let t = String(s);
+        for (let i = 0; i < TT.length; i++) t = t.replace(TT[i][0], TT[i][1]);
+        return t;
+    }
+
+    // ---------- ขอบเขต: หน้า Packing + ป๊อบอัพจัดการสถานะ + ป๊อบอัพที่เปิดขณะอยู่หน้านี้ ----------
+    const pane = () => document.getElementById(PANE);
+    const paneActive = () => { const p = pane(); return !!p && (p.classList.contains('active') || p.classList.contains('show')); };
+    function inScope(node) {
+        const el = node && (node.nodeType === 1 ? node : node.parentElement);
+        if (!el || !el.closest) return false;
+        if (el.closest('#' + PANE) || el.closest('#rackActionModal')) return true;
+        if (paneActive() && el.closest('.swal2-container')) return true;
+        return false;
+    }
+
+    // ---------- แปล / คืนค่าเดิม (จำข้อความไทยเดิมไว้ เพื่อสลับกลับไทยได้) ----------
+    const ORIG = new WeakMap();   // text node -> {o, t}
+    const AORIG = new WeakMap();  // element -> {attr: {o, t}}
+    const ATTRS = ['placeholder', 'title', 'aria-label'];
+
+    function doText(n) {
+        const v = n.nodeValue, rec = ORIG.get(n);
+        if (rec && v === rec.t) {
+            if (!isEn()) { n.nodeValue = rec.o; ORIG.delete(n); }
+            else { const t = tr(rec.o); if (t !== rec.t) { rec.t = t; n.nodeValue = t; } }
+            return;
+        }
+        if (rec) ORIG.delete(n);          // แอปเขียนทับด้วยข้อความใหม่ → ถือเป็นข้อความเดิมใหม่
+        if (!isEn() || !v || !THAI.test(v)) return;
+        const t = tr(v);
+        if (t !== v) { ORIG.set(n, { o: v, t }); n.nodeValue = t; }
+    }
+    function doAttrs(el) {
+        let m = AORIG.get(el);
+        ATTRS.forEach(a => {
+            const v = el.getAttribute(a), rec = m && m[a];
+            if (rec && v === rec.t) {
+                if (!isEn()) { el.setAttribute(a, rec.o); delete m[a]; }
+                else { const t = tr(rec.o); if (t !== rec.t) { rec.t = t; el.setAttribute(a, t); } }
+                return;
+            }
+            if (rec) delete m[a];
+            if (!isEn() || !v || !THAI.test(v)) return;
+            const t = tr(v);
+            if (t !== v) { if (!m) { m = {}; AORIG.set(el, m); } m[a] = { o: v, t }; el.setAttribute(a, t); }
+        });
+    }
+    function sweep(root) {
+        if (!root) return;
+        const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        const nodes = []; while (w.nextNode()) nodes.push(w.currentNode);
+        nodes.forEach(doText);
+        if (root.querySelectorAll) root.querySelectorAll('[placeholder],[title],[aria-label]').forEach(doAttrs);
+        if (root.nodeType === 1) doAttrs(root);
+    }
+    function sweepAll() {
+        sweep(pane());
+        sweep(document.getElementById('rackActionModal'));
+        if (paneActive()) document.querySelectorAll('.swal2-container').forEach(sweep);
+    }
+
+    let busy = false;
+    const mo = new MutationObserver((muts) => {
+        if (busy) return;
+        busy = true;
+        try {
+            for (const m of muts) {
+                if (m.type === 'childList') { m.addedNodes.forEach(n => { if (inScope(n)) { if (n.nodeType === 3) doText(n); else sweep(n); } }); }
+                else if (m.type === 'characterData') { if (inScope(m.target)) doText(m.target); }
+                else if (m.type === 'attributes') { if (inScope(m.target)) doAttrs(m.target); }
+            }
+        } catch (e) { console.warn('PK-I18N', e); }
+        finally { busy = false; try { mo.takeRecords(); } catch (e) { } }
+    });
+    mo.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ATTRS });
+
+    // ---------- สลับภาษา ----------
+    let last = isEn();
+    function onLang() { const n = isEn(); if (n === last) return; last = n; busy = true; try { sweepAll(); } finally { busy = false; try { mo.takeRecords(); } catch (e) { } } }
+    if (typeof window.setLanguage === 'function') {
+        const _sl = window.setLanguage;
+        window.setLanguage = function () { try { return _sl.apply(this, arguments); } finally { setTimeout(onLang, 80); } };
+    }
+    setInterval(() => { try { onLang(); } catch (e) { } }, 800);
+    try { if (isEn()) sweepAll(); } catch (e) { }
+})();
+// ===== จบ PK-I18N =====
 (function () {
     if (window.__lgRecvI18n) return; window.__lgRecvI18n = true;
 
@@ -33567,30 +35049,38 @@ async function populateSalesDashboard(startDate, endDate) {
                 });
 
                 // 3. ฟังก์ชันวาดตารางของที่สแกนรอไว้ (โชว์คอลัมน์จำนวนที่มีในระบบ)
-                window.renderRackStagingTable = function() {
+  window.renderRackStagingTable = function() {
                     const tbody = document.getElementById('rack-staging-list');
                     if (!tbody) return;
+                    const cnt = document.getElementById('pk-stage-count');
+                    if (cnt) cnt.textContent = rackStagingList.length + ' รายการ';
+                    const sv = document.getElementById('btn-save-rack-batch');
+                    if (sv) sv.innerHTML = '<i class="bi bi-check2-circle"></i>บันทึกข้อมูลทั้งหมด' + (rackStagingList.length ? ' (' + rackStagingList.length + ')' : '');
                     if (rackStagingList.length === 0) {
-                        tbody.innerHTML = '<tr id="rack-empty-row"><td colspan="4" class="text-muted p-4"><i class="bi bi-upc-scan fs-3 d-block mb-2 opacity-50"></i>รอสแกน QR Code</td></tr>';
+                        tbody.innerHTML = '<div class="pk-empty" id="rack-empty-row"><i class="bi bi-upc-scan"></i>รอสแกน QR Code</div>';
                         return;
                     }
-
+                    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+                    const nm = v => v === 'NEW' ? '✨ กล่องใหม่' : (v === 'WH_EMPTY' ? 'WH กล่องเปล่า' : (v === 'WH_FILLED' ? 'WH มีงาน' : (v === 'CUSTOMER' ? 'WH ลูกค้า' : 'ชำรุด')));
                     let html = '';
                     [...rackStagingList].reverse().forEach(item => {
-                        let fromName = item.from === 'NEW' ? '✨ กล่องใหม่' : (item.from === 'WH_EMPTY' ? 'WH กล่องเปล่า' : (item.from === 'WH_FILLED' ? 'WH มีงาน' : 'WH ลูกค้า'));
-                        let toName = item.to === 'WH_EMPTY' ? 'WH กล่องเปล่า' : (item.to === 'WH_FILLED' ? 'WH มีงาน' : (item.to === 'CUSTOMER' ? 'WH ลูกค้า' : 'ชำรุด'));
-                        let badgeColor = item.from === 'NEW' ? 'success' : 'primary';
-
                         html += `
-                            <tr>
-                                <td class="text-start ps-3"><b>${item.erpCode}</b><br><small class="text-muted">${item.name}</small></td>
-                                <td><span class="fw-bold text-primary">${item.modelCount}</span> <span class="small text-muted">ใบ</span></td>
-                                <td><span class="badge bg-${badgeColor}-subtle text-${badgeColor}-emphasis border px-2 shadow-sm">${fromName} <i class="bi bi-arrow-right mx-1 fw-bold"></i> ${toName}</span></td>
-                                <td><button class="btn btn-sm btn-outline-danger shadow-sm py-0 px-2" onclick="removeRackStaging('${item.erpCode}')"><i class="bi bi-x-lg"></i></button></td>
-                            </tr>
-                        `;
+                            <div class="pk-item">
+                                <div class="m">
+                                    <div class="c">${esc(item.erpCode)}</div>
+                                    <div class="n">${esc(item.name)} · ในระบบ ${esc(item.modelCount)} ใบ</div>
+                                    <div class="pk-route${item.from === 'NEW' ? ' new' : ''}">${nm(item.from)} <i class="bi bi-arrow-right"></i> <b>${nm(item.to)}</b></div>
+                                </div>
+                                <button type="button" class="pk-del" aria-label="ลบรายการนี้" onclick="removeRackStaging('${esc(item.erpCode).replace(/\\/g, '\\\\')}')"><i class="bi bi-x-lg"></i></button>
+                            </div>`;
                     });
                     tbody.innerHTML = html;
+                };
+ 
+                window.pkClearStage = function() {
+                    rackStagingList = [];
+                    renderRackStagingTable();
+                    const i = document.getElementById('rack-scanner-input'); if (i) i.focus();
                 };
 
                 window.removeRackStaging = function(erpCode) {
@@ -33728,47 +35218,85 @@ async function populateSalesDashboard(startDate, endDate) {
                         console.error('Error saving rack history to sheet:', error);
                     }
                 });
+window.pkFilter = window.pkFilter || 'all';
+                window.pkSetFilter = function(f) {
+                    window.pkFilter = f;
+                    document.querySelectorAll('#pills-rack .pk-chip').forEach(b => b.classList.toggle('on', b.getAttribute('data-f') === f));
+                    renderRackSummaryTable();
+                };
+                window.pkPickDest = function(v) {
+                    const sel = document.getElementById('rack-to-loc');
+                    if (!sel) return;
+                    sel.value = v;
+                    sel.dispatchEvent(new Event('change', { bubbles: true }));
+                    pkSyncTiles();
+                    const i = document.getElementById('rack-scanner-input'); if (i) i.focus();
+                };
+                window.pkSyncTiles = function() {
+                    const sel = document.getElementById('rack-to-loc');
+                    const opt = document.getElementById('opt-register-new');
+                    const tn = document.getElementById('pk-tile-REGISTER_NEW');
+                    if (tn && opt) tn.style.display = (opt.style.display === 'none') ? 'none' : '';
+                    document.querySelectorAll('#pk-tiles .pk-tile').forEach(b => {
+                        const on = sel && sel.value === b.getAttribute('data-v');
+                        b.classList.toggle('on', on);
+                        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+                    });
+                };
                 window.renderRackSummaryTable = function() {
                     const tableBody = document.getElementById('rack-summary-table');
                     if (!tableBody) return;
-
-                    // ดึงข้อความจากช่องค้นหา (ถ้ามี)
+                    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ 
                     const searchInput = document.getElementById('rack-summary-search');
                     const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
-
+                    const f = window.pkFilter || 'all';
+ 
                     const allRacks = calculateRackStock();
-                    let html = '';
-
+                    let html = '', sE = 0, sF = 0, sC = 0, models = 0;
+ 
                     for (const [erpCode, data] of Object.entries(allRacks)) {
                         const total = data.WH_EMPTY + data.WH_FILLED + data.CUSTOMER;
-                        if (total <= 0) continue; 
-
-                        // 🔍 ลอจิกการค้นหา (กรองถ้ารหัส ERP หรือชื่อรุ่น ไม่ตรงกับคำค้นหา)
+                        if (total <= 0) continue;
+                        // ตัวเลขสรุปด้านบน = ทั้งระบบ (ไม่ขึ้นกับคำค้นหา)
+                        sE += data.WH_EMPTY; sF += data.WH_FILLED; sC += data.CUSTOMER; models++;
+ 
                         if (searchTerm) {
-                            const isMatch = erpCode.toLowerCase().includes(searchTerm) || 
+                            const isMatch = erpCode.toLowerCase().includes(searchTerm) ||
                                             (data.name && data.name.toLowerCase().includes(searchTerm));
-                            if (!isMatch) continue; // ถ้าไม่ตรง ให้ข้ามไป ไม่ต้องวาดลงตาราง
+                            if (!isMatch) continue;
                         }
-
+                        if (f === 'cust' && !(data.CUSTOMER > 0)) continue;
+                        if (f === 'empty' && !(data.WH_EMPTY > 0)) continue;
+                        if (f === 'filled' && !(data.WH_FILLED > 0)) continue;
+ 
                         html += `
-                            <tr class="text-center">
-                                <td class="text-start">
-                                    <div class="fw-bold text-primary">${erpCode}</div>
-                                    <div class="text-muted small">${data.name}</div>
-                                </td>
-                                <td><span class="badge bg-light text-dark border fs-6 shadow-sm px-3">${data.WH_EMPTY.toLocaleString()}</span></td>
-                                <td><span class="badge bg-warning text-dark border fs-6 shadow-sm px-3">${data.WH_FILLED.toLocaleString()}</span></td>
-                                <td><span class="badge bg-danger-subtle text-danger-emphasis border fs-6 shadow-sm px-3">${data.CUSTOMER.toLocaleString()}</span></td>
-                                <td><span class="badge bg-primary fs-5 shadow-sm px-3">${total.toLocaleString()}</span></td>
-                            </tr>
-                        `;
+                            <div class="pk-grid r">
+                                <div style="min-width:0">
+                                    <div class="code">${esc(erpCode)}</div>
+                                    <div class="nm">${esc(data.name)}</div>
+                                </div>
+                                <div class="num">${data.WH_EMPTY.toLocaleString()}</div>
+                                <div class="num">${data.WH_FILLED.toLocaleString()}</div>
+                                <div class="num">${data.CUSTOMER.toLocaleString()}</div>
+                                <div class="pk-bar" title="กล่องเปล่า ${data.WH_EMPTY} · มีงาน ${data.WH_FILLED} · ลูกค้า ${data.CUSTOMER}">
+                                    <div style="background:#CBD5E1;width:${data.WH_EMPTY / total * 100}%"></div>
+                                    <div style="background:#2563EB;width:${data.WH_FILLED / total * 100}%"></div>
+                                    <div style="background:#F59E0B;width:${data.CUSTOMER / total * 100}%"></div>
+                                </div>
+                                <div style="text-align:right"><span class="pk-tot">${total.toLocaleString()}</span></div>
+                            </div>`;
                     }
-
-                    if (html === '') {
-                        tableBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted p-5">ไม่พบข้อมูล หรือยังไม่มีข้อมูลแพ็คกิ้งในระบบ</td></tr>`;
-                    } else {
-                        tableBody.innerHTML = html;
-                    }
+ 
+                    tableBody.innerHTML = html || `<div class="pk-none">ไม่พบข้อมูล หรือยังไม่มีข้อมูลแพ็คกิ้งในระบบ</div>`;
+ 
+                    const all = sE + sF + sC;
+                    const pc = n => (all ? Math.round(n / all * 100) : 0) + '%';
+                    const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+                    set('pk-k-total', all.toLocaleString()); set('pk-k-models', models.toLocaleString());
+                    set('pk-k-empty', sE.toLocaleString()); set('pk-k-filled', sF.toLocaleString()); set('pk-k-cust', sC.toLocaleString());
+                    set('pk-p-empty', pc(sE)); set('pk-p-filled', pc(sF)); set('pk-p-cust', pc(sC));
+                    pkSyncTiles();
                 };
 
                 setTimeout(() => renderRackSummaryTable(), 1000);
