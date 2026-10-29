@@ -26177,7 +26177,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
         del: (k) => { try { localStorage.removeItem(k); } catch (e) { } }
     };
     try {
-        const m = new URLSearchParams(location.search).get('mode');
+        const m = new URLSearchParams(location.search).get('mode') || new URLSearchParams((location.hash.split('?')[1] || '')).get('mode');
         if (m === 'pda') LS.set(KEY, '1');
         else if (m === 'normal') { LS.del(KEY); LS.del(UKEY); }
     } catch (e) { }
