@@ -26166,7 +26166,366 @@ renderLGTagPrintWindow = function(tags, printWin) {
     setInterval(() => { try { onLang(); } catch (e) { } }, 800);
     try { if (isEn()) sweepAll(); } catch (e) { }
 })();
+(function () {
+    if (window.__pdaMode) return; window.__pdaMode = true;
+ 
+    const KEY = 'atechPda', UKEY = 'atechPdaUser', PANE = 'pills-lg-receive';
+    const LS = {
+        get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } },
+        set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } },
+        del: (k) => { try { localStorage.removeItem(k); } catch (e) { } }
+    };
+    try {
+        const m = new URLSearchParams(location.search).get('mode');
+        if (m === 'pda') LS.set(KEY, '1');
+        else if (m === 'normal') { LS.del(KEY); LS.del(UKEY); }
+    } catch (e) { }
+    if (LS.get(KEY) !== '1') return;
+ 
+    const isEn = () => { try { return currentLanguage === 'en'; } catch (e) { return false; } };
+    const L = (th, en) => isEn() ? en : th;
+ 
+    // ---------- จำล็อกอินไว้ในเครื่อง (ใช้ได้เฉพาะเครื่องที่เปิดโหมด PDA) ----------
+    // ตอนเปิดหน้า ระบบเดิมจะลบล็อกอินทิ้งก่อน 1 ครั้ง (showLoginPage) แล้วค่อยอ่านค่า → ดักการลบครั้งแรกไว้ให้ล็อกอินที่จำไว้ไม่หาย
+    try {
+        if (LS.get(UKEY)) {
+            sessionStorage.setItem('currentUser', LS.get(UKEY));
+            const _rm = Storage.prototype.removeItem; let skip = true;
+            Storage.prototype.removeItem = function (k) {
+                if (skip && this === sessionStorage && k === 'currentUser') { skip = false; Storage.prototype.removeItem = _rm; return; }
+                return _rm.apply(this, arguments);
+            };
+            setTimeout(() => { if (Storage.prototype.removeItem !== _rm) Storage.prototype.removeItem = _rm; }, 6000);
+        }
+    } catch (e) { }
+    let had = false;
+    setInterval(() => {
+        try {
+            const u = sessionStorage.getItem('currentUser');
+            if (u) { had = true; if (LS.get(UKEY) !== u) LS.set(UKEY, u); }
+            else if (had) { had = false; LS.del(UKEY); }      // ล็อกเอาต์ → ลืมล็อกอิน
+        } catch (e) { }
+    }, 1000);
+ 
+    // ---------- หน้าตา ----------
+    const css = document.createElement('style');
+    css.textContent = `
+    body.pda-on #pills-tab, body.pda-on #floating-mascot-container, body.pda-on #al-panel,
+    body.pda-on .floating-btn, body.pda-on #chat-btn, body.pda-on #chat-toggle-btn { display:none !important; }
+    body.pda-on #main-dashboard header, body.pda-on .navbar, body.pda-on #announcements-display-area, body.pda-on #atx-dock { display:none !important; }
+    body.pda-on #main-dashboard { padding-left:0 !important; padding-right:0 !important; }
+    body.pda-on { padding-top:54px !important; background:#f3f6fb !important; }
+    body.pda-on .container, body.pda-on .container-fluid { padding-left:10px !important; padding-right:10px !important; max-width:100% !important; }
+    body.pda-on #${PANE} { margin:0 !important; padding:0 !important; }
+    body.pda-on #${PANE} > .d-flex { display:none !important; }
+    body.pda-on #lgr-cam-btn, body.pda-on #lgr-cam { display:none !important; }
+    body.pda-on #${PANE} .col-lg-7, body.pda-on #${PANE} .col-lg-5 { width:100% !important; flex:0 0 100% !important; max-width:100% !important; }
+    body.pda-on #${PANE} .lgr-scan { font-size:1.5rem !important; padding:18px 14px !important; }
+    body.pda-on #${PANE} .lgr-big { font-size:2.1rem !important; }
+    #pda-bar{position:fixed;left:0;right:0;top:0;height:50px;z-index:2000;background:#c8102e;color:#fff;display:flex;align-items:center;gap:8px;padding:0 10px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+    #pda-bar .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:1.05rem}
+    #pda-bar small{font-weight:600;opacity:.9;margin-left:6px}
+    #pda-bar button{border:0;border-radius:10px;padding:7px 12px;font-weight:700;background:rgba(255,255,255,.2);color:#fff;font-size:.95rem}
+    #pda-bar button:active{background:rgba(255,255,255,.4)}
+    #pda-flash{position:fixed;left:0;right:0;top:50px;bottom:0;z-index:1990;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px;color:#fff;pointer-events:none}
+    #pda-flash.show{display:flex;animation:pdaPop .18s ease-out}
+    #pda-flash.ok{background:#16a34a}#pda-flash.warn{background:#d97706}#pda-flash.err{background:#dc2626}
+    #pda-flash .b{font-size:2.6rem;font-weight:800;line-height:1.2}
+    #pda-flash .s{margin-top:14px;font-size:1.35rem;font-weight:600;line-height:1.5}
+    #pda-flash .s div{margin:2px 0}
+    @keyframes pdaPop{from{transform:scale(.96);opacity:.4}to{transform:scale(1);opacity:1}}
+    `;
+    document.head.appendChild(css);
+    document.body.classList.add('pda-on');
+ 
+    const bar = document.createElement('div');
+    bar.id = 'pda-bar';
+    bar.innerHTML = '<div class="t"></div><button type="button" id="pda-kb"></button><button type="button" id="pda-out"></button>';
+    document.body.appendChild(bar);
+    const flash = document.createElement('div');
+    flash.id = 'pda-flash';
+    document.body.appendChild(flash);
+ 
+    const $ = (id) => document.getElementById(id);
+    let kbOn = false;
+ 
+    function paintBar() {
+        const kp = document.querySelector('#lgr-kp b');
+        const who = (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.fullname || currentUser.username) : '';
+        const t = bar.querySelector('.t');
+        let html = '📥 ' + L('รับแท็ก LG', 'LG Receive');
+        if (kp) html += '<small>' + L('วันนี้ ', 'Today ') + kp.textContent + L(' แท็ก', ' tags') + '</small>';
+        if (who) html += '<small>· ' + String(who).replace(/[<>&]/g, '') + '</small>';
+        if (t.innerHTML !== html) t.innerHTML = html;
+        $('pda-kb').textContent = kbOn ? '⌨ ' + L('ซ่อน', 'Hide') : '⌨';
+        $('pda-out').textContent = L('ออก', 'Exit');
+    }
+    $('pda-kb').addEventListener('click', () => { kbOn = !kbOn; applyInput(); const i = $('lgr-input'); if (i) i.focus(); paintBar(); });
+    $('pda-out').addEventListener('click', () => {
+        if (!confirm(L('ออกจากระบบ PDA ใช่ไหม?', 'Log out of PDA?'))) return;
+        LS.del(UKEY); try { sessionStorage.removeItem('currentUser'); } catch (e) { }
+        location.reload();
+    });
+ 
+    // ---------- ช่องสแกน: ไม่เด้งคีย์บอร์ด + เคอร์เซอร์อยู่ในช่องตลอด ----------
+    function applyInput() {
+        const i = $('lgr-input'); if (!i) return;
+        i.setAttribute('inputmode', kbOn ? 'text' : 'none');
+        i.setAttribute('autocomplete', 'off'); i.setAttribute('autocapitalize', 'off'); i.setAttribute('autocorrect', 'off');
+        i.setAttribute('spellcheck', 'false'); i.setAttribute('enterkeyhint', 'done');
+        i.placeholder = L('🔦 ยิงแท็กได้เลย', '🔦 Scan a tag');
+    }
+    const paneActive = () => { const p = $(PANE); return !!p && p.classList.contains('active'); };
+    const swalOpen = () => !!document.querySelector('.swal2-container');
+    setInterval(() => {
+        try {
+            if (!document.body.classList.contains('pda-on')) document.body.classList.add('pda-on');   // กันแอปล้างคลาสของ body
+            if (!paneActive()) return;
+            applyInput();
+            const i = $('lgr-input');
+            if (i && !swalOpen() && document.activeElement !== i && !(document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName))) i.focus({ preventScroll: true });
+            if (i && !swalOpen() && document.activeElement !== i && !kbOn) i.focus({ preventScroll: true });
+            paintBar();
+        } catch (e) { }
+    }, 350);
+    document.addEventListener('click', () => { setTimeout(() => { const i = $('lgr-input'); if (i && paneActive() && !swalOpen()) i.focus({ preventScroll: true }); }, 30); }, true);
+ 
+    // ---------- เข้าหน้า "รับแท็ก LG" ให้เอง ----------
+    let noPermAt = 0;
+    setInterval(() => {
+        try {
+            const dash = $('main-dashboard');
+            const loggedIn = dash && !dash.classList.contains('d-none') && getComputedStyle(dash).display !== 'none' && typeof currentUser !== 'undefined' && currentUser;
+            if (!loggedIn || paneActive() || swalOpen()) { if (!loggedIn) noPermAt = 0; return; }
+            const b = $('nav-lg-receive-item');
+            if (b && b.style.display !== 'none') { noPermAt = 0; b.click(); try { window.scrollTo(0, 0); } catch (e) { } return; }
+            if (!noPermAt) noPermAt = Date.now();
+            if (Date.now() - noPermAt > 5000) bar.querySelector('.t').innerHTML = '⛔ ' + L('บัญชีนี้ไม่มีสิทธิ์รับแท็ก LG — ให้แอดมินเปิดสิทธิ์', 'This account cannot receive LG tags — ask an admin');
+        } catch (e) { }
+    }, 600);
+ 
+    // ---------- แจ้งผลเต็มจอ (เขียว = รับแล้ว / เหลือง = ซ้ำ / แดง = ผิดปกติ) ----------
+    let ft = null;
+    function showFlash(kind, cardEl) {
+        clearTimeout(ft);
+        const big = cardEl.querySelector('.lgr-big');
+        const rows = cardEl.querySelectorAll('.lgr-row > div');
+        let s = '';
+        rows.forEach(d => { const k = d.querySelector('small'), v = d.querySelector('b'); if (k && v) s += '<div>' + k.textContent + ': ' + v.textContent + '</div>'; });
+        if (!s) { const n = cardEl.querySelector('.lgr-note'); if (n) s = '<div>' + n.textContent + '</div>'; }
+        flash.className = 'show ' + kind;
+        flash.innerHTML = '<div class="b">' + (big ? big.innerHTML : '') + '</div><div class="s">' + s + '</div>';
+        ft = setTimeout(hideFlash, kind === 'ok' ? 1300 : 3200);
+    }
+    function hideFlash() { clearTimeout(ft); flash.className = ''; }
+    flash.style.pointerEvents = 'none';
+    (function watch(n) {
+        const r = $('lgr-result');
+        if (!r) { if (n < 100) setTimeout(() => watch(n + 1), 400); return; }
+        new MutationObserver(() => {
+            const c = r.querySelector('.lgr-card');
+            if (!c) return;
+            if (c.classList.contains('wait')) { hideFlash(); return; }
+            ['ok', 'warn', 'err'].forEach(k => { if (c.classList.contains(k)) showFlash(k, c); });
+        }).observe(r, { childList: true });
+    })(0);
+ 
+    // ---------- กันจอดับ ----------
+    let wl = null;
+    async function keepAwake() {
+        try { if (paneActive() && navigator.wakeLock && !wl) { wl = await navigator.wakeLock.request('screen'); wl.addEventListener('release', () => { wl = null; }); } } catch (e) { }
+    }
+    setInterval(keepAwake, 4000);
+    document.addEventListener('visibilitychange', () => { wl = null; if (!document.hidden) keepAwake(); });
+ 
+    paintBar();
+})();
+// ===== จบ PDA-MODE =====
 // ===== จบ LG-RECV-I18N =====
+(function () {
+    if (window.__pdaMode) return; window.__pdaMode = true;
+ 
+    const KEY = 'atechPda', UKEY = 'atechPdaUser', PANE = 'pills-lg-receive';
+    const LS = {
+        get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } },
+        set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } },
+        del: (k) => { try { localStorage.removeItem(k); } catch (e) { } }
+    };
+    try {
+        const m = new URLSearchParams(location.search).get('mode');
+        if (m === 'pda') LS.set(KEY, '1');
+        else if (m === 'normal') { LS.del(KEY); LS.del(UKEY); }
+    } catch (e) { }
+    if (LS.get(KEY) !== '1') return;
+ 
+    const isEn = () => { try { return currentLanguage === 'en'; } catch (e) { return false; } };
+    const L = (th, en) => isEn() ? en : th;
+ 
+    // ---------- จำล็อกอินไว้ในเครื่อง (ใช้ได้เฉพาะเครื่องที่เปิดโหมด PDA) ----------
+    // ตอนเปิดหน้า ระบบเดิมจะลบล็อกอินทิ้งก่อน 1 ครั้ง (showLoginPage) แล้วค่อยอ่านค่า → ดักการลบครั้งแรกไว้ให้ล็อกอินที่จำไว้ไม่หาย
+    try {
+        if (LS.get(UKEY)) {
+            sessionStorage.setItem('currentUser', LS.get(UKEY));
+            const _rm = Storage.prototype.removeItem; let skip = true;
+            Storage.prototype.removeItem = function (k) {
+                if (skip && this === sessionStorage && k === 'currentUser') { skip = false; Storage.prototype.removeItem = _rm; return; }
+                return _rm.apply(this, arguments);
+            };
+            setTimeout(() => { if (Storage.prototype.removeItem !== _rm) Storage.prototype.removeItem = _rm; }, 6000);
+        }
+    } catch (e) { }
+    let had = false;
+    setInterval(() => {
+        try {
+            const u = sessionStorage.getItem('currentUser');
+            if (u) { had = true; if (LS.get(UKEY) !== u) LS.set(UKEY, u); }
+            else if (had) { had = false; LS.del(UKEY); }      // ล็อกเอาต์ → ลืมล็อกอิน
+        } catch (e) { }
+    }, 1000);
+ 
+    // ---------- หน้าตา ----------
+    const css = document.createElement('style');
+    css.textContent = `
+    body.pda-on #pills-tab, body.pda-on #floating-mascot-container, body.pda-on #al-panel,
+    body.pda-on .floating-btn, body.pda-on #chat-btn, body.pda-on #chat-toggle-btn { display:none !important; }
+    body.pda-on #main-dashboard header, body.pda-on .navbar, body.pda-on #announcements-display-area, body.pda-on #atx-dock { display:none !important; }
+    body.pda-on #main-dashboard { padding-left:0 !important; padding-right:0 !important; }
+    body.pda-in { padding-top:54px !important; background:#f3f6fb !important; }
+    body.pda-on:not(.pda-in) #pda-bar, body.pda-on:not(.pda-in) #pda-flash { display:none !important; }
+    body.pda-on .container, body.pda-on .container-fluid { padding-left:10px !important; padding-right:10px !important; max-width:100% !important; }
+    body.pda-on #${PANE} { margin:0 !important; padding:0 !important; }
+    body.pda-on #${PANE} > .d-flex { display:none !important; }
+    body.pda-on #lgr-cam-btn, body.pda-on #lgr-cam { display:none !important; }
+    body.pda-on #${PANE} .col-lg-7, body.pda-on #${PANE} .col-lg-5 { width:100% !important; flex:0 0 100% !important; max-width:100% !important; }
+    body.pda-on #${PANE} .lgr-scan { font-size:1.5rem !important; padding:18px 14px !important; }
+    body.pda-on #${PANE} .lgr-big { font-size:2.1rem !important; }
+    #pda-bar{position:fixed;left:0;right:0;top:0;height:50px;z-index:2000;background:#c8102e;color:#fff;display:flex;align-items:center;gap:8px;padding:0 10px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+    #pda-bar .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:1.05rem}
+    #pda-bar small{font-weight:600;opacity:.9;margin-left:6px}
+    #pda-bar button{border:0;border-radius:10px;padding:7px 12px;font-weight:700;background:rgba(255,255,255,.2);color:#fff;font-size:.95rem}
+    #pda-bar button:active{background:rgba(255,255,255,.4)}
+    #pda-flash{position:fixed;left:0;right:0;top:50px;bottom:0;z-index:1990;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px;color:#fff;pointer-events:none}
+    #pda-flash.show{display:flex;animation:pdaPop .18s ease-out}
+    #pda-flash.ok{background:#16a34a}#pda-flash.warn{background:#d97706}#pda-flash.err{background:#dc2626}
+    #pda-flash .b{font-size:2.6rem;font-weight:800;line-height:1.2}
+    #pda-flash .s{margin-top:14px;font-size:1.35rem;font-weight:600;line-height:1.5}
+    #pda-flash .s div{margin:2px 0}
+    @keyframes pdaPop{from{transform:scale(.96);opacity:.4}to{transform:scale(1);opacity:1}}
+    `;
+    document.head.appendChild(css);
+    document.body.classList.add('pda-on');
+ 
+    const bar = document.createElement('div');
+    bar.id = 'pda-bar';
+    bar.innerHTML = '<div class="t"></div><button type="button" id="pda-kb"></button><button type="button" id="pda-out"></button>';
+    document.body.appendChild(bar);
+    const flash = document.createElement('div');
+    flash.id = 'pda-flash';
+    document.body.appendChild(flash);
+ 
+    const $ = (id) => document.getElementById(id);
+    let kbOn = false;
+ 
+    function paintBar() {
+        const kp = document.querySelector('#lgr-kp b');
+        const who = (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.fullname || currentUser.username) : '';
+        const t = bar.querySelector('.t');
+        let html = '📥 ' + L('รับแท็ก LG', 'LG Receive');
+        if (kp) html += '<small>' + L('วันนี้ ', 'Today ') + kp.textContent + L(' แท็ก', ' tags') + '</small>';
+        if (who) html += '<small>· ' + String(who).replace(/[<>&]/g, '') + '</small>';
+        if (t.innerHTML !== html) t.innerHTML = html;
+        $('pda-kb').textContent = kbOn ? '⌨ ' + L('ซ่อน', 'Hide') : '⌨';
+        $('pda-out').textContent = L('ออก', 'Exit');
+    }
+    $('pda-kb').addEventListener('click', () => { kbOn = !kbOn; applyInput(); const i = $('lgr-input'); if (i) i.focus(); paintBar(); });
+    $('pda-out').addEventListener('click', () => {
+        if (!confirm(L('ออกจากระบบ PDA ใช่ไหม?', 'Log out of PDA?'))) return;
+        LS.del(UKEY); try { sessionStorage.removeItem('currentUser'); } catch (e) { }
+        location.reload();
+    });
+ 
+    // แถบแดง/สไตล์ PDA แสดงเฉพาะหลังล็อกอินแล้ว (หน้าล็อกอินใช้หน้าตาเดิม)
+    setInterval(() => {
+        try {
+            const dash = $('main-dashboard');
+            const inn = !!(dash && !dash.classList.contains('d-none') && getComputedStyle(dash).display !== 'none' && typeof currentUser !== 'undefined' && currentUser);
+            document.body.classList.toggle('pda-in', inn);
+        } catch (e) { }
+    }, 300);
+ 
+    // ---------- ช่องสแกน: ไม่เด้งคีย์บอร์ด + เคอร์เซอร์อยู่ในช่องตลอด ----------
+    function applyInput() {
+        const i = $('lgr-input'); if (!i) return;
+        i.setAttribute('inputmode', kbOn ? 'text' : 'none');
+        i.setAttribute('autocomplete', 'off'); i.setAttribute('autocapitalize', 'off'); i.setAttribute('autocorrect', 'off');
+        i.setAttribute('spellcheck', 'false'); i.setAttribute('enterkeyhint', 'done');
+        i.placeholder = L('🔦 ยิงแท็กได้เลย', '🔦 Scan a tag');
+    }
+    const paneActive = () => { const p = $(PANE); return !!p && p.classList.contains('active'); };
+    const swalOpen = () => !!document.querySelector('.swal2-container');
+    setInterval(() => {
+        try {
+            if (!document.body.classList.contains('pda-on')) document.body.classList.add('pda-on');   // กันแอปล้างคลาสของ body
+            if (!paneActive()) return;
+            applyInput();
+            const i = $('lgr-input');
+            if (i && !swalOpen() && document.activeElement !== i && !(document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName))) i.focus({ preventScroll: true });
+            if (i && !swalOpen() && document.activeElement !== i && !kbOn) i.focus({ preventScroll: true });
+            paintBar();
+        } catch (e) { }
+    }, 350);
+    document.addEventListener('click', () => { setTimeout(() => { const i = $('lgr-input'); if (i && paneActive() && !swalOpen()) i.focus({ preventScroll: true }); }, 30); }, true);
+ 
+    // ---------- เข้าหน้า "รับแท็ก LG" ให้เอง ----------
+    let noPermAt = 0;
+    setInterval(() => {
+        try {
+            const dash = $('main-dashboard');
+            const loggedIn = dash && !dash.classList.contains('d-none') && getComputedStyle(dash).display !== 'none' && typeof currentUser !== 'undefined' && currentUser;
+            if (!loggedIn || paneActive() || swalOpen()) { if (!loggedIn) noPermAt = 0; return; }
+            const b = $('nav-lg-receive-item');
+            if (b && b.style.display !== 'none') { noPermAt = 0; b.click(); try { window.scrollTo(0, 0); } catch (e) { } return; }
+            if (!noPermAt) noPermAt = Date.now();
+            if (Date.now() - noPermAt > 5000) bar.querySelector('.t').innerHTML = '⛔ ' + L('บัญชีนี้ไม่มีสิทธิ์รับแท็ก LG — ให้แอดมินเปิดสิทธิ์', 'This account cannot receive LG tags — ask an admin');
+        } catch (e) { }
+    }, 600);
+ 
+    // ---------- แจ้งผลเต็มจอ (เขียว = รับแล้ว / เหลือง = ซ้ำ / แดง = ผิดปกติ) ----------
+    let ft = null;
+    function showFlash(kind, cardEl) {
+        clearTimeout(ft);
+        const big = cardEl.querySelector('.lgr-big');
+        const rows = cardEl.querySelectorAll('.lgr-row > div');
+        let s = '';
+        rows.forEach(d => { const k = d.querySelector('small'), v = d.querySelector('b'); if (k && v) s += '<div>' + k.textContent + ': ' + v.textContent + '</div>'; });
+        if (!s) { const n = cardEl.querySelector('.lgr-note'); if (n) s = '<div>' + n.textContent + '</div>'; }
+        flash.className = 'show ' + kind;
+        flash.innerHTML = '<div class="b">' + (big ? big.innerHTML : '') + '</div><div class="s">' + s + '</div>';
+        ft = setTimeout(hideFlash, kind === 'ok' ? 1300 : 3200);
+    }
+    function hideFlash() { clearTimeout(ft); flash.className = ''; }
+    flash.style.pointerEvents = 'none';
+    (function watch(n) {
+        const r = $('lgr-result');
+        if (!r) { if (n < 100) setTimeout(() => watch(n + 1), 400); return; }
+        new MutationObserver(() => {
+            const c = r.querySelector('.lgr-card');
+            if (!c) return;
+            if (c.classList.contains('wait')) { hideFlash(); return; }
+            ['ok', 'warn', 'err'].forEach(k => { if (c.classList.contains(k)) showFlash(k, c); });
+        }).observe(r, { childList: true });
+    })(0);
+ 
+    // ---------- กันจอดับ ----------
+    let wl = null;
+    async function keepAwake() {
+        try { if (paneActive() && navigator.wakeLock && !wl) { wl = await navigator.wakeLock.request('screen'); wl.addEventListener('release', () => { wl = null; }); } } catch (e) { }
+    }
+    setInterval(keepAwake, 4000);
+    document.addEventListener('visibilitychange', () => { wl = null; if (!document.hidden) keepAwake(); });
+ 
+    paintBar();
+})();
 (function () {
     if (window.__dpI18n) return; window.__dpI18n = true;
  
