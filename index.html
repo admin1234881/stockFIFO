@@ -1313,6 +1313,7 @@
     box-shadow: 0 0 18px rgba(13,110,253,0.55);
 }
 #pills-tab .icon-nav-icon i { color: inherit !important; }
+#pills-tab .icon-nav-icon svg.i3d { width: 28px; height: 31px; margin: 0 -3px; flex: none; overflow: visible; }
 #pills-tab .icon-nav-label {
     max-width: none; margin-left: 0; opacity: 0; color: inherit;
     font-size: .85rem; font-weight: 500; transition: opacity .2s ease;
@@ -2184,11 +2185,11 @@
                 <div class="nav-group">
                     <div class="nav-group-title"><span>ภาพรวม</span></div>
                     <button class="icon-nav-btn active" id="pills-stock-tab" data-bs-toggle="pill" data-bs-target="#pills-stock" type="button" role="tab">
-                        <span class="icon-nav-icon"><i class="bi bi-house-heart-fill"></i></span>
+                        <span class="icon-nav-icon"><svg class="i3d" width="28" height="31" viewBox="0 0 40 44" aria-hidden="true"><ellipse cx="20" cy="40" rx="12" ry="3" fill="rgba(0,0,0,.4)"/><g stroke-linejoin="round" stroke-width="3"><path d="M20 4 L35 12 L20 20 L5 12 Z" fill="#FCD34D" stroke="#FCD34D"/><path d="M5 12 L20 20 L20 36 L5 28 Z" fill="#F59E0B" stroke="#F59E0B"/><path d="M35 12 L20 20 L20 36 L35 28 Z" fill="#B45309" stroke="#B45309"/></g><g fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 20.5l6 3.4 6-3.4"/><path d="M20 23.9V30"/></g></svg></span>
                         <span class="icon-nav-label" data-lang-key="nav_stock">สต็อกคงเหลือ</span>
                     </button>
                     <button class="icon-nav-btn" id="pills-dashboard-tab" data-bs-toggle="pill" data-bs-target="#pills-dashboard" type="button" role="tab">
-                        <span class="icon-nav-icon"><i class="bi bi-speedometer2"></i></span>
+                        <span class="icon-nav-icon"><svg class="i3d" width="28" height="31" viewBox="0 0 40 44" aria-hidden="true"><ellipse cx="20" cy="40" rx="12" ry="3" fill="rgba(0,0,0,.4)"/><g stroke-linejoin="round" stroke-width="3"><path d="M20 4 L35 12 L20 20 L5 12 Z" fill="#A5B4FC" stroke="#A5B4FC"/><path d="M5 12 L20 20 L20 36 L5 28 Z" fill="#6366F1" stroke="#6366F1"/><path d="M35 12 L20 20 L20 36 L35 28 Z" fill="#3730A3" stroke="#3730A3"/></g><g fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 29V24"/><path d="M20 33V20"/><path d="M27 29V16"/></g></svg></span>
                         <span class="icon-nav-label" data-lang-key="nav_dashboard">แดชบอร์ด</span>
                     </button>
                 </div>
@@ -26167,6 +26168,313 @@ renderLGTagPrintWindow = function(tags, printWin) {
 })();
 // ===== จบ LG-RECV-I18N =====
 (function () {
+    if (window.__dpI18n) return; window.__dpI18n = true;
+ 
+    const PANE = 'pills-delivery-plan';
+    const THAI = /[฀-๿]/;
+    const isEn = () => { try { return currentLanguage === 'en'; } catch (e) { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e2) { return false; } } };
+ 
+    const TT = [];
+    const esc = (s) => s.replace(/[.*+?^${}()|[\]\\\/]/g, '\\$&');
+    const X = (th, en) => TT.push([new RegExp('^(\\s*)' + esc(th) + '(\\s*)$', 'g'), '$1' + en + '$2']);   // ตรงทั้งข้อความ
+    const P = (re, en) => TT.push([re, en]);                                                          // บางส่วนของข้อความ
+ 
+    // ---------- ทั่วไป ----------
+    P(/(\d{1,2}:\d{2})\s*น\./g, '$1');
+    X('ข้อผิดพลาด', 'Error');
+    X('เกิดข้อผิดพลาด', 'Error');
+    X('ปิด', 'Close');
+    X('ปิดหน้าต่าง', 'Close');
+    X('ข้อมูลไม่ครบ', 'Incomplete information');
+    X('ข้อมูลไม่ถูกต้อง', 'Invalid input');
+    X('ไม่มีข้อมูล', 'No data');
+    X('ไม่พบข้อมูล!', 'No data found!');
+    X('ปฏิเสธการเข้าถึง', 'Access denied');
+    P(/ไม่สามารถบันทึกข้อมูลได้\s*:/g, 'Could not save the data:');
+    P(/ไม่สามารถบันทึกได้\s*:/g, 'Could not save:');
+    P(/กรุณาเข้าสู่ระบบก่อนครับ/g, 'Please log in first');
+    P(/ไม่พบคิวจัดส่งนี้ในระบบ กรุณารีเฟรชหน้าเว็บครับ/g, 'This delivery trip was not found. Please refresh the page');
+    P(/ไม่พบข้อมูลรายการนี้ กรุณารีเฟรชหน้าเว็บครับ/g, 'This item was not found. Please refresh the page');
+    P(/ไม่พบข้อมูลคิวงานนี้ในระบบ/g, 'This job was not found in the system');
+    P(/ไม่พบไลบรารี XLSX กรุณารีเฟรชหน้าเว็บอีกครั้ง/g, 'XLSX library not found. Please refresh the page');
+    P(/ไม่พบระบบสร้างไฟล์ กรุณารีเฟรชหน้าเว็บอีกครั้ง/g, 'File builder not found. Please refresh the page');
+    P(/เครื่องมือสร้าง PDF ยังโหลดไม่เสร็จ กรุณารอสักครู่แล้วกดใหม่ครับ/g, 'The PDF tool is still loading. Please wait a moment and try again');
+    P(/กำลังโหลดเครื่องมือสร้าง PDF กรุณารอสักครู่แล้วกดใหม่ครับ/g, 'Loading the PDF tool. Please wait a moment and try again');
+    P(/กรุณาเลือกวันที่ต้องการพิมพ์แผนงานในช่อง "ดูแผนงานวันที่" ก่อนครับ/g, 'Please pick the date to print first');
+    P(/ไม่มีคิว "ส่งสินค้า" สำหรับวันที่คุณเลือกครับ/g, 'There is no "Delivery" trip for the selected date');
+    P(/เจอปัญหาชั่วคราว กำลังลองใหม่อีกครั้ง\.\.\./g, 'Temporary problem, retrying...');
+    X('กำลังบันทึก...', 'Saving...');
+    X('กำลังลบ...', 'Deleting...');
+ 
+    // ---------- ป๊อบอัพ "ปรับล็อตที่จะหยิบ" ----------
+    X('ปรับล็อตที่จะหยิบ', 'Adjust lots to pick');
+    X('ลูกค้า:', 'Customer:');
+    P(/\|\s*รอบ\s*:/g, '| Trip:');
+    P(/\|\s*วันที่\s*:/g, '| Date:');
+    X('รหัสสินค้า', 'Product code');
+    X('รหัสสินค้า:', 'Product code:');
+    X('Lot วันที่', 'Lot date');
+    X('จำนวน', 'Qty');
+    X('แจ้งปัญหา', 'Report issue');
+    X('แจ้งจำนวนจริง', 'Report actual qty');
+    P(/⚠️ (\S+) — สต็อกไม่พอ ขาด ([\d,]+) ชิ้น \(ไม่มีล็อตให้แนะนำเพิ่ม\)/g, '⚠️ $1 — not enough stock, short $2 pcs (no more lots to suggest)');
+    P(/ไม่มีพาร์ทที่ต้องหยิบล็อตในคิวนี้/g, 'No parts need lot picking in this trip');
+    P(/กด "หาไม่เจอ" ถ้าไปหยิบจริงแล้วไม่พบของในล็อตนั้น ระบบจะล็อกล็อตนี้ไว้รอแอดมินตรวจสอบทันที แล้วแนะนำล็อตถัดไปให้อัตโนมัติ/g, 'Press "Report actual qty" if the goods are not really in that lot. The system will hold the missing quantity for admin review and suggest the next lot automatically');
+    // ขั้นตอนแจ้งจำนวนจริง (prompt / confirm / แจ้งเตือน)
+    P(/พาร์ท "([^"]+)" ล็อตวันที่ (\S+)\s*\n?\s*จำนวนที่ระบบคิดว่ามีในล็อตนี้ทั้งหมด\s*:\s*([\d,]+) ชิ้น/g, 'Part "$1" lot date $2\nQty the system thinks is in this lot: $3 pcs');
+    P(/กรอกจำนวนที่นับเจอจริงหน้างาน \(ทั้งล็อต ไม่ใช่แค่ยอดที่ต้องส่ง — ใส่ 0 ถ้าไม่เจอเลย\)\s*:/g, 'Enter the quantity actually counted on site (whole lot, not just the qty to ship — enter 0 if none found):');
+    P(/กรุณากรอกจำนวนเป็นตัวเลขไม่ติดลบ/g, 'Please enter a non-negative number');
+    X('เจอครบตามระบบ', 'Matches the system');
+    P(/ไม่ต้องล็อกอะไร ใช้ล็อตนี้ได้ตามปกติเลยครับ/g, 'Nothing to hold — use this lot as usual');
+    P(/เจอจริง ([\d,]+) ชิ้น จากที่ระบบคิดว่ามีทั้งล็อต ([\d,]+) ชิ้น/g, 'Actually found $1 pcs out of $2 pcs the system thinks are in the lot');
+    P(/ส่วนที่ขาด ([\d,]+) ชิ้น จะถูกล็อกทั้งหมดไว้รอแอดมินตรวจสอบ/g, 'The missing $1 pcs will be held for admin review');
+    P(/ยืนยันบันทึก\?/g, 'Confirm and save?');
+    P(/บันทึกแล้ว เหลือให้หยิบล็อตนี้ได้ ([\d,]+) ชิ้น/g, 'Saved. $1 pcs left to pick from this lot');
+    P(/พนักงานเจอจริง/g, 'Staff actually found');
+ 
+    // ---------- ป๊อบอัพ "รูปก่อน-หลังส่ง" ----------
+    X('รูปก่อน-หลังส่ง', 'Photos before / after delivery');
+    X('ก่อนไปส่ง', 'Before delivery');
+    X('หลังส่งเสร็จ', 'After delivery');
+    X('ยังไม่มีการอัปโหลด', 'Not uploaded yet');
+    X('กำลังโหลด...', 'Loading...');
+    X('โหลดไม่สำเร็จ', 'Failed to load');
+    P(/คัดลอกภาพไว้ แล้ววางในไลน์ด้วย Ctrl\+V/g, 'Copy the image, then paste it into LINE with Ctrl+V');
+ 
+    // ---------- ป๊อบอัพ แก้เวลา ----------
+    P(/กำลังบันทึกเวลาใหม่\.\.\./g, 'Saving the new time...');
+    P(/✅ แก้ไขเวลาเป็น (\S+) น\. เรียบร้อย!/g, '✅ Time changed to $1');
+    P(/✅ แก้ไขเวลาเป็น (\S+) เรียบร้อย!/g, '✅ Time changed to $1');
+    P(/กรุณาเลือกเวลาด้วยค่ะ/g, 'Please select a time');
+ 
+    // ---------- ป๊อบอัพ แก้จำนวน / ลบ ----------
+    X('แก้ไขจำนวนจัดส่ง', 'Edit delivery quantity');
+    X('จำนวนเดิม:', 'Original qty:');
+    X('บันทึกยอดใหม่', 'Save new quantity');
+    P(/กรุณาระบุจำนวนที่มากกว่า 0/g, 'Please enter a quantity greater than 0');
+    P(/อัปเดตจำนวนเรียบร้อย!/g, 'Quantity updated!');
+    X('ยืนยันการลบ?', 'Confirm deletion?');
+    P(/คุณต้องการลบแผนจัดส่งรายการนี้ใช่หรือไม่\?/g, 'Do you want to delete this delivery plan item?');
+    X('ใช่, ลบเลย!', 'Yes, delete!');
+    X('ลบเรียบร้อย!', 'Deleted!');
+ 
+    // ---------- อัปโหลด Excel ----------
+    X('กำลังอ่านไฟล์ Excel...', 'Reading Excel file...');
+    P(/ไม่สามารถอ่านไฟล์ Excel ได้ ตรวจสอบว่าไฟล์ไม่ได้ถูกเข้ารหัสผ่าน/g, 'Cannot read the Excel file. Check that it is not password-protected');
+    X('อัปโหลดแผนจัดส่งสำเร็จ!', 'Delivery plan uploaded!');
+    P(/ดึงคิวงานของวันที่\s*:/g, 'Jobs for date:');
+    P(/บันทึกสำเร็จ\s*:/g, 'Saved:');
+    P(/รหัสสินค้าไม่มีในระบบ\s*:/g, 'Product codes not in the system:');
+    P(/\(ถูกข้าม\)/g, '(skipped)');
+    X('ไม่พบสินค้าใดๆ ในระบบเลย!', 'No products found in the system!');
+    P(/รหัสสินค้าที่อยู่ใน Excel ไม่มีในฐานข้อมูลทั้งหมดเลยครับ\s*:/g, 'None of the product codes in the Excel file exist in the database:');
+    P(/ไม่มีข้อมูลรายการจัดส่งในไฟล์ หรือรูปแบบแถวผิดพลาดครับ/g, 'The file has no delivery rows, or the row format is wrong');
+    P(/เกิดบั๊กในการอ่านข้อมูล\s*:/g, 'Error while reading the data:');
+    X('ไม่พบข้อมูลที่ใช้งานได้!', 'No usable data found!');
+    P(/อาจเกิดจาก\s*:/g, 'Possible causes:');
+    P(/1\. วันที่\/เวลาพิมพ์ผิดเพี้ยนเกินไป/g, '1. Dates/times are badly mistyped');
+    P(/2\. รหัสสินค้า/g, '2. Product codes');
+    P(/ไม่มีในระบบเลย/g, 'are not in the system at all');
+    X('โหลดลงตารางสำเร็จ!', 'Loaded into the table!');
+    P(/เพิ่มแผนการจัดส่งเรียบร้อย ([\d,]+) รายการ/g, 'Added $1 delivery plan item(s)');
+    P(/\(ข้ามรหัสสินค้าที่ไม่มีในระบบ ([\d,]+) รายการ\)/g, '(skipped $1 item(s) whose product code is not in the system)');
+    P(/บันทึกไม่สำเร็จ ([\d,]+) รายการ!/g, '$1 item(s) failed to save!');
+    P(/รายการบนตารางแสดงผลไว้แล้ว แต่/g, 'The items are shown in the table, but');
+    P(/ยังไม่ถูกบันทึกลง Google Sheet จริง/g, 'have NOT been saved to the Google Sheet');
+    P(/ถ้ารีเฟรชหน้าเว็บตอนนี้ ข้อมูลเหล่านี้จะหายไป\s*:/g, 'if you refresh now they will be lost:');
+    P(/ลองกดอัปโหลดไฟล์เดิมซ้ำอีกครั้ง หรือแจ้งแอดมินเช็คระบบ/g, 'Try uploading the same file again, or ask an admin to check the system');
+    X('เกิดข้อผิดพลาดในการประมวลผล', 'Processing error');
+    P(/ข้อมูลในไฟล์อาจมีปัญหา โปรดตรวจสอบไฟล์อีกครั้ง/g, 'The data in the file may have a problem. Please check the file again');
+ 
+    // ---------- รถกลับถึง (ฟอร์มเดิม) ----------
+    X('รถกลับถึง A-TECH', 'Truck back at A-TECH');
+    X('ทะเบียนรถ:', 'License plate:');
+    X('กลับจากลูกค้า:', 'Returning from customer:');
+    X('ไม่ระบุ', 'Not specified');
+ 
+    // ---------- ตัวเลขท้ายสุด ----------
+    P(/([\d,]+) ชิ้น/g, '$1 pcs');
+    P(/([\d,]+) รายการ/g, '$1 item(s)');
+    P(/^(\s*)รายการ(?=\s|$)/g, '$1item(s)');   // ตัวเลขอยู่ในแท็ก <b> แยกจากคำว่า "รายการ"
+    X('ชิ้น', 'pcs');
+ 
+    TT.sort((a, b) => b[0].source.length - a[0].source.length);
+ 
+    // "ยกเลิก" ที่เป็นปุ่มในป๊อบอัพ = Cancel
+    function tr(s, el) {
+        let t = String(s);
+        if (/^\s*ยกเลิก\s*$/.test(t)) {
+            const btn = el && el.closest && el.closest('.swal2-actions');
+            return btn ? t.replace('ยกเลิก', 'Cancel') : t;
+        }
+        for (let i = 0; i < TT.length; i++) t = t.replace(TT[i][0], TT[i][1]);
+        return t;
+    }
+ 
+    // ---------- ขอบเขต: หน้าอัปโหลดแพลน LG + หน้าต่างย่อยของหน้านี้ + ป๊อบอัพที่เปิดขณะอยู่หน้านี้ ----------
+    const OV = '#__dp_none__';
+    const pane = () => document.getElementById(PANE);
+    const paneActive = () => { const p = pane(); return !!p && (p.classList.contains('active') || p.classList.contains('show')); };
+    function inScope(node) {
+        const el = node && (node.nodeType === 1 ? node : node.parentElement);
+        if (!el || !el.closest) return false;
+        if (el.closest('#' + PANE) || el.closest(OV)) return true;
+        if (paneActive() && el.closest('.swal2-container')) return true;
+        return false;
+    }
+ 
+    // ---------- แปล / คืนค่าเดิม (จำข้อความไทยเดิมไว้ เพื่อสลับกลับไทยได้) ----------
+    const ORIG = new WeakMap();   // text node -> {o, t}
+    const AORIG = new WeakMap();  // element -> {attr: {o, t}}
+    const ATTRS = ['placeholder', 'title', 'aria-label'];
+ 
+    function doText(n) {
+        const v = n.nodeValue, rec = ORIG.get(n);
+        if (rec && v === rec.t) {
+            if (!isEn()) { n.nodeValue = rec.o; ORIG.delete(n); }
+            else { const t = tr(rec.o, n.parentElement); if (t !== rec.t) { rec.t = t; n.nodeValue = t; } }
+            return;
+        }
+        if (rec) ORIG.delete(n);          // แอปเขียนทับด้วยข้อความใหม่ → ถือเป็นข้อความเดิมใหม่
+        if (!isEn() || !v || !THAI.test(v)) return;
+        const t = tr(v, n.parentElement);
+        if (t !== v) { ORIG.set(n, { o: v, t }); n.nodeValue = t; }
+    }
+    function doAttrs(el) {
+        let m = AORIG.get(el);
+        ATTRS.forEach(a => {
+            const v = el.getAttribute(a), rec = m && m[a];
+            if (rec && v === rec.t) {
+                if (!isEn()) { el.setAttribute(a, rec.o); delete m[a]; }
+                else { const t = tr(rec.o, el); if (t !== rec.t) { rec.t = t; el.setAttribute(a, t); } }
+                return;
+            }
+            if (rec) delete m[a];
+            if (!isEn() || !v || !THAI.test(v)) return;
+            const t = tr(v, el);
+            if (t !== v) { if (!m) { m = {}; AORIG.set(el, m); } m[a] = { o: v, t }; el.setAttribute(a, t); }
+        });
+    }
+    function sweep(root) {
+        if (!root) return;
+        const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        const nodes = []; while (w.nextNode()) nodes.push(w.currentNode);
+        nodes.forEach(doText);
+        if (root.querySelectorAll) root.querySelectorAll('[placeholder],[title],[aria-label]').forEach(doAttrs);
+        if (root.nodeType === 1) doAttrs(root);
+    }
+    function sweepAll() {
+        sweep(pane());
+        document.querySelectorAll(OV).forEach(sweep);
+        if (paneActive()) document.querySelectorAll('.swal2-container').forEach(sweep);
+    }
+ 
+    let busy = false;
+    const mo = new MutationObserver((muts) => {
+        if (busy) return;
+        busy = true;
+        try {
+            for (const m of muts) {
+                if (m.type === 'childList') { m.addedNodes.forEach(n => { if (inScope(n)) { if (n.nodeType === 3) doText(n); else sweep(n); } }); }
+                else if (m.type === 'characterData') { if (inScope(m.target)) doText(m.target); }
+                else if (m.type === 'attributes') { if (inScope(m.target)) doAttrs(m.target); }
+            }
+        } catch (e) { console.warn('DP-I18N', e); }
+        finally { busy = false; try { mo.takeRecords(); } catch (e) { } }
+    });
+    mo.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ATTRS });
+ 
+    // กล่องยืนยัน / แจ้งเตือนแบบของเบราว์เซอร์ (confirm / alert) ที่หน้านี้ใช้ — แปลเฉพาะตอนอยู่หน้านี้และเป็นภาษาอังกฤษ
+    ['alert', 'confirm', 'prompt'].forEach(fn => {
+        const _o = window[fn];
+        if (typeof _o !== 'function') return;
+        window[fn] = function (msg) {
+            try { if (isEn() && paneActive() && typeof msg === 'string' && THAI.test(msg)) arguments[0] = tr(msg); } catch (e) { }
+            return _o.apply(this, arguments);
+        };
+    });
+ 
+    // ---------- สลับภาษา ----------
+    let last = isEn();
+    function onLang() { const n = isEn(); if (n === last) return; last = n; busy = true; try { sweepAll(); } finally { busy = false; try { mo.takeRecords(); } catch (e) { } } }
+    if (typeof window.setLanguage === 'function') {
+        const _sl = window.setLanguage;
+        window.setLanguage = function () { try { return _sl.apply(this, arguments); } finally { setTimeout(onLang, 80); } };
+    }
+    setInterval(() => { try { onLang(); } catch (e) { } }, 800);
+    try { if (isEn()) sweepAll(); } catch (e) { }
+})();
+// ===== จบ DP-I18N =====
+(function () {
+    if (window.__navCubeIcons) return; window.__navCubeIcons = true;
+ 
+    // สีลูกบาศก์ [ด้านบน, ด้านซ้าย, ด้านขวา]
+    const C = {
+        amber: ['#FCD34D', '#F59E0B', '#B45309'], indigo: ['#A5B4FC', '#6366F1', '#3730A3'], emerald: ['#86EFAC', '#22C55E', '#15803D'],
+        sky: ['#7DD3FC', '#0EA5E9', '#0369A1'], fuchsia: ['#F0ABFC', '#D946EF', '#86198F'], yellow: ['#FDE68A', '#EAB308', '#A16207'],
+        blue: ['#93C5FD', '#3B82F6', '#1D4ED8'], rose: ['#FDA4AF', '#F43F5E', '#9F1239'], lime: ['#BEF264', '#84CC16', '#4D7C0F'],
+        teal: ['#5EEAD4', '#14B8A6', '#0F766E'], cyan: ['#A5F3FC', '#06B6D4', '#0E7490'], slate: ['#CBD5E1', '#64748B', '#334155'],
+        stone: ['#D6D3D1', '#78716C', '#44403C'], orange: ['#FDBA74', '#F97316', '#C2410C'], violet: ['#C4B5FD', '#8B5CF6', '#5B21B6'],
+        pink: ['#F9A8D4', '#EC4899', '#9D174D'], red: ['#FCA5A5', '#EF4444', '#991B1B']
+    };
+    // สัญลักษณ์สีขาวบนหน้าลูกบาศก์ (พื้นที่ 40x44)
+    const G = {
+        stock: '<path d="M14 20.5l6 3.4 6-3.4"/><path d="M20 23.9V30"/>',
+        dash: '<path d="M13 29V24"/><path d="M20 33V20"/><path d="M27 29V16"/>',
+        imp: '<path d="M20 17v11"/><path d="M15.5 24l4.5 4.5 4.5-4.5"/>',
+        exp: '<path d="M20 29V18"/><path d="M15.5 22l4.5-4.5 4.5 4.5"/>',
+        rack: '<path d="M13 23h14"/><path d="M13 23l2.5-5h9l2.5 5"/><path d="M13 23v8h14v-8"/>',
+        count: '<path d="M14 18h12v14H14z"/><path d="M17.5 25.5l2.5 2.5 4-5"/>',
+        conv: '<path d="M13 20h14"/><path d="M23 16l4 4-4 4"/><path d="M27 30H13"/><path d="M17 26l-4 4 4 4"/>',
+        plan: '<path d="M14 19h12v12H14z"/><path d="M14 23h12"/><path d="M18 17v3"/><path d="M22 17v3"/><path d="M17.5 27l2 2 3.5-3.5"/>',
+        fc: '<path d="M13 30l5-6 4 3 6-9"/><path d="M23 18h5v5"/>',
+        scan: '<path d="M14 19v-2h3"/><path d="M26 19v-2h-3"/><path d="M14 29v2h3"/><path d="M26 29v2h-3"/><path d="M14 24h12"/>',
+        recv: '<path d="M20 16v10"/><path d="M16 22l4 4 4-4"/><path d="M14 31h12"/>',
+        hist: '<circle cx="20" cy="24" r="7"/><path d="M20 20v4l3 2"/>',
+        arch: '<path d="M13 19h14v4H13z"/><path d="M14.5 23v8h11v-8"/><path d="M18 27h4"/>',
+        prod: '<path d="M20 17l6 3v7l-6 3-6-3v-7z"/><path d="M14 20l6 3 6-3"/><path d="M20 23v7"/>',
+        user: '<path d="M14 19h12v12H14z"/><circle cx="18" cy="24" r="1.8"/><path d="M15.5 29c0-1.6 1.1-2.6 2.5-2.6s2.5 1 2.5 2.6"/><path d="M23 23h2.5"/><path d="M23 26.5h2.5"/>',
+        hold: '<path d="M20 16l7 3v5c0 4-3 6.5-7 8-4-1.5-7-4-7-8v-5z"/><path d="M20 21v4"/><path d="M20 28v.5"/>',
+        bell: '<path d="M20 17a5 5 0 0 0-5 5v4l-2 2h14l-2-2v-4a5 5 0 0 0-5-5z"/><path d="M18 31h4"/>'
+    };
+    // เมนู -> [สี, สัญลักษณ์]
+    const MAP = {
+        'pills-stock-tab': ['amber', 'stock'], 'pills-dashboard-tab': ['indigo', 'dash'],
+        'nav-import-item': ['emerald', 'imp'], 'nav-export-item': ['sky', 'exp'], 'nav-rack-item': ['fuchsia', 'rack'],
+        'nav-stock-count-item': ['yellow', 'count'], 'nav-convert-item': ['blue', 'conv'],
+        'nav-delivery-plan-item': ['rose', 'plan'], 'nav-forecast-item': ['lime', 'fc'], 'nav-lg-matching-item': ['teal', 'scan'], 'nav-lg-receive-item': ['cyan', 'recv'],
+        'nav-lot-hold-item': ['red', 'hold'], 'nav-history-item': ['slate', 'hist'], 'nav-archive-item': ['stone', 'arch'],
+        'nav-products-item': ['orange', 'prod'], 'nav-users-item': ['violet', 'user'], 'nav-announcements-item': ['pink', 'bell']
+    };
+ 
+    const st = document.createElement('style');
+    st.textContent = '#pills-tab .icon-nav-icon svg.i3d{width:28px;height:31px;margin:0 -3px;flex:none;overflow:visible}';
+    document.head.appendChild(st);
+ 
+    function cube(c, g) {
+        return '<svg class="i3d" width="28" height="31" viewBox="0 0 40 44" aria-hidden="true">'
+            + '<ellipse cx="20" cy="40" rx="12" ry="3" fill="rgba(0,0,0,.4)"/>'
+            + '<g stroke-linejoin="round" stroke-width="3">'
+            + '<path d="M20 4 L35 12 L20 20 L5 12 Z" fill="' + c[0] + '" stroke="' + c[0] + '"/>'
+            + '<path d="M5 12 L20 20 L20 36 L5 28 Z" fill="' + c[1] + '" stroke="' + c[1] + '"/>'
+            + '<path d="M35 12 L20 20 L20 36 L35 28 Z" fill="' + c[2] + '" stroke="' + c[2] + '"/></g>'
+            + '<g fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + g + '</g></svg>';
+    }
+    function apply() {
+        Object.keys(MAP).forEach(id => {
+            const b = document.getElementById(id);
+            const ic = b && b.querySelector('.icon-nav-icon');
+            if (!ic || ic.getAttribute('data-i3d')) return;
+            ic.setAttribute('data-i3d', '1');
+            ic.innerHTML = cube(C[MAP[id][0]], G[MAP[id][1]]);
+        });
+    }
+    try { apply(); } catch (e) { console.warn('NAV-CUBE-ICONS', e); }
+    // เมนูที่ระบบสร้างเพิ่มทีหลัง (เช่น รับแท็ก LG) ก็เปลี่ยนให้ด้วย
+    const nav = document.getElementById('pills-tab');
+    if (nav) new MutationObserver(() => { try { apply(); } catch (e) { console.warn('NAV-CUBE-ICONS', e); } }).observe(nav, { childList: true, subtree: true });
+})();
+(function () {
     if (window.__lgPlanI18n) return; window.__lgPlanI18n = true;
  
     const PANE = 'pills-lg-matching';
@@ -26685,6 +26993,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
     const lineOfPlan = (p) => String(p && p.line != null ? p.line : '').trim() || '-';
     const msOf = (v) => { if (!v) return null; const t = new Date(String(v)).getTime(); return isNaN(t) ? null : t; };
     const hh = (h) => (Math.round(h * 10) / 10).toFixed(1);
+    const fullSent = (st) => st.rows.length > 0 && st.unsent <= 0;
 
     // ---------- ข้อมูล UHT ----------
     function allRows() {
@@ -26742,7 +27051,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
         let idx = -1;
         if (!pp.nv && pg && String(pg.WO).trim() !== '-') idx = rows.findIndex(r => String(r.WO).trim() === String(pg.WO).trim());
         const hasProg = !!pg && (pp.nv || String(pg.WO).trim() === '-' || idx >= 0);
-        let sent = 0, produced = 0, rem = 0, planTotal = 0, planLeft = 0, doneN = 0;
+        let sent = 0, produced = 0, rem = 0, planTotal = 0, planLeft = 0, doneN = 0, unsent = 0;
         const partRows = [];
         rows.forEach((r, i) => {
             const sRow = parseFloat(r.scanned) || 0, o = parseFloat(r.orderQty) || 0;
@@ -26754,8 +27063,9 @@ renderLGTagPrintWindow = function(tags, printWin) {
             } else if (hasProg && idx >= 0) pr = i < idx ? o : (i === idx ? Math.min(o, parseFloat(pg.producedQty) || 0) : 0);
             sent += sRow; produced += Math.min(sRow, pr); planTotal += o;
             rem += Math.max(0, sRow - pr); planLeft += Math.max(0, o - pr);
+            unsent += Math.max(0, Math.max(0, o - pr) - Math.max(0, sRow - pr));
         });
-        return { rows, pg, idx, hasProg, nv: pp.nv, doneN, partRows, sent, produced, rem, planTotal, planLeft, cur: idx >= 0 ? rows[idx] : null, complete: pp.nv && rows.length > 0 && doneN === rows.length };
+        return { rows, pg, idx, hasProg, nv: pp.nv, doneN, partRows, sent, produced, rem, planTotal, planLeft, unsent, cur: idx >= 0 ? rows[idx] : null, complete: pp.nv && rows.length > 0 && doneN === rows.length };
     }
     // ข้อความ "LG ผลิตถึงไหน" (html)
     function whereHtml(st) {
@@ -26931,6 +27241,9 @@ renderLGTagPrintWindow = function(tags, printWin) {
         [/ต่อชม\./g, 'per h'],
         [/ผลิตถึง /g, 'produced up to '],
         [/LG ผลิตแล้ว/g, 'LG produced'],
+        [/ส่งครบแพลน/g, 'Plan fully sent'],
+        [/ไม่มีแพลนค้างส่งแล้ว/g, 'no plan left to send'],
+        [/\/ แพลน /g, '/ plan '],
         [/ผลิตครบ/g, 'Completed'],
         [/ผลิตแล้ว/g, 'produced '],
         [/ส่งเข้า /g, 'Sent in '],
@@ -27114,6 +27427,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
                 function preview() {
                     const pv = document.getElementById('lgu-pv'), pg = toPg(cur), st = lineState(cur, date, pg), u = uhtOf(cur);
                      if (st.complete) { pv.className = 'lgu-pv lgu-ok'; pv.innerHTML = `ผลิตครบ ${st.doneN}/${st.rows.length} WO<small>ส่งเข้า ${num(st.sent)} · LG ผลิตแล้ว ${num(st.produced)}</small>`; return; }
+                     if (fullSent(st)) { pv.className = 'lgu-pv lgu-ok'; pv.innerHTML = `ส่งครบแพลน 100%<small>ส่งเข้า ${num(st.sent)} · LG ผลิตแล้ว ${num(st.produced)} · ไม่มีแพลนค้างส่งแล้ว</small>`; return; }
                     if (!u) { pv.className = 'lgu-pv lgu-none'; pv.innerHTML = `ผลิตครบ ${st.doneN}/${st.rows.length} WO · ส่งเข้า ${num(st.sent)} · เหลือ ${num(st.rem)} ชิ้น<small>ยังไม่ได้ตั้ง UHT ของไลน์นี้ จึงยังคำนวณชั่วโมงไม่ได้</small>`; return; }
                     const h = st.rem / u, s = status(h);
                     pv.className = 'lgu-pv lgu-' + s;
@@ -27162,8 +27476,8 @@ renderLGTagPrintWindow = function(tags, printWin) {
             db.lgLineProgress = base;
             try { localStorage.setItem(PLSK, JSON.stringify(db.lgLineProgress)); } catch (e) { }
             const body = list.map(v => {
-                const st = lineState(v.line, date), u = uhtOf(v.line), h = u ? st.rem / u : 0, s = u ? status(h) : 'none';
-                return `<div class="lgu-rs ${s}"><span class="nm">ไลน์ ${esc(v.line)}</span><span style="font-size:.78rem;color:#475569;flex:1">ผลิตครบ <b>${st.doneN}/${st.rows.length}</b> WO<small>เหลือ ${num(st.rem)} ชิ้น${u ? ' ÷ UHT ' + num(u) : ''}</small></span><span class="hr">${u ? hh(h) + ' ชม.' : 'ยังไม่ตั้ง UHT'}</span></div>`;
+                const st = lineState(v.line, date), u = uhtOf(v.line), full = fullSent(st), h = u ? st.rem / u : 0, s = full ? 'ok' : (u ? status(h) : 'none');
+                return `<div class="lgu-rs ${s}"><span class="nm">ไลน์ ${esc(v.line)}</span><span style="font-size:.78rem;color:#475569;flex:1">ผลิตครบ <b>${st.doneN}/${st.rows.length}</b> WO<small>เหลือ ${num(st.rem)} ชิ้น${u ? ' ÷ UHT ' + num(u) : ''}</small></span><span class="hr">${full ? '100%' : (u ? hh(h) + ' ชม.' : 'ยังไม่ตั้ง UHT')}</span></div>`;
             }).join('');
             popDone('อัปเดตแล้ว', 'บันทึกความคืบหน้าการผลิต ' + list.length + ' ไลน์', body);
             refreshAll();
@@ -27194,18 +27508,18 @@ renderLGTagPrintWindow = function(tags, printWin) {
         const L = planLineStates(date);
         const btn = (canEdit() ? `<button type="button" class="btn btn-sm btn-outline-primary fw-bold" id="lgu-set-btn"><i class="bi bi-gear-fill me-1"></i>ตั้งค่า UHT</button>` : '')
             + (canProg() && L.length ? ` <button type="button" class="btn btn-sm btn-outline-success fw-bold" id="lgu-prog-btn"><i class="bi bi-check2-square me-1"></i>ติ๊ก WO ที่ LG ผลิตแล้ว</button>` : '');
-        const sig = date + '|' + L.map(x => x.line + ':' + x.st.planLeft + ':' + x.st.planTotal + ':' + uhtOf(x.line) + ':' + (x.st.hasProg ? x.st.produced : 'n')).join(',') + '|' + minH() + '|' + btn.length;
+const sig = date + '|' + L.map(x => x.line + ':' + x.st.planLeft + ':' + x.st.planTotal + ':' + x.st.unsent + ':' + uhtOf(x.line) + ':' + (x.st.hasProg ? x.st.produced : 'n')).join(',') + '|' + minH() + '|' + btn.length;
         if (strip.getAttribute('data-sig') === sig) return;
         strip.setAttribute('data-sig', sig);
         strip.innerHTML = L.length
-            ? `<span class="lb"><i class="bi bi-speedometer2"></i> แพลนที่เหลืออยู่ได้ (ขั้นต่ำ ${minH()} ชม.):</span>${L.map(x => x.st.complete ? `<span class="lgu-chip lgu-ok">ไลน์ ${esc(x.line)} <b>ผลิตครบ ${x.st.doneN}/${x.st.rows.length}</b></span>` : chipHtml(x.line, x.st.planLeft, x.st.hasProg ? 'แพลนที่ LG ยังไม่ได้ผลิต' : 'ยอดแพลน')).join('')}${btn}`
+            ? `<span class="lb"><i class="bi bi-speedometer2"></i> แพลนที่เหลืออยู่ได้ (ขั้นต่ำ ${minH()} ชม.):</span>${L.map(x => x.st.complete ? `<span class="lgu-chip lgu-ok">ไลน์ ${esc(x.line)} <b>ผลิตครบ ${x.st.doneN}/${x.st.rows.length}</b></span>` : fullSent(x.st) ? `<span class="lgu-chip lgu-ok">ไลน์ ${esc(x.line)} <b>ส่งครบแพลน 100%</b> <small>${num(x.st.sent)} / ${num(x.st.planTotal)}</small></span>` : chipHtml(x.line, x.st.planLeft, x.st.hasProg ? 'แพลนที่ LG ยังไม่ได้ผลิต' : 'ยอดแพลน')).join('')}${btn}`
             : `<span class="lb text-muted">ยังไม่มีแพลนของวันที่เลือก</span>${btn}`;
         const b = document.getElementById('lgu-set-btn'); if (b) b.addEventListener('click', openSettings);
         const p = document.getElementById('lgu-prog-btn'); if (p) p.addEventListener('click', () => openProgress('', date));
     }
     function planWarnings() {
         const date = planDateNow();
-        return planLineStates(date).filter(x => uhtOf(x.line) > 0 && !x.st.complete && x.st.planLeft / uhtOf(x.line) < minH())
+        return planLineStates(date).filter(x => uhtOf(x.line) > 0 && !x.st.complete && !fullSent(x.st) && x.st.planLeft / uhtOf(x.line) < minH())
             .map(x => ({ line: x.line, qty: x.st.planLeft, uht: uhtOf(x.line), h: x.st.planLeft / uhtOf(x.line), need: Math.ceil(minH() * uhtOf(x.line) - x.st.planLeft), prog: x.st.hasProg }));
     }
     if (typeof window.printLGTags === 'function') {
@@ -27249,6 +27563,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
             const l = mm[1].trim(), st = lineState(l, date), u = uhtOf(l);
             let html;
              if (st.complete) html = `<div class="lgu-ln ok"><i class="bi bi-check-circle-fill"></i> ผลิตครบ <b>${st.doneN}/${st.rows.length}</b> WO</div>`;
+             else if (fullSent(st)) html = `<div class="lgu-ln ok"><i class="bi bi-check-circle-fill"></i> <b>ส่งครบแพลน 100%</b> <span style="opacity:.75">(ส่งเข้า ${num(st.sent)} / แพลน ${num(st.planTotal)})</span></div>`;
             else if (!u) html = `<div class="lgu-ln none"><i class="bi bi-speedometer2"></i> ยังไม่ตั้ง UHT</div>`;
             else {
                 const h = st.rem / u, s = (st.sent > 0 || st.hasProg) ? status(h) : 'none';
@@ -27257,7 +27572,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
                 const stale = age !== null && age > 60 ? ` <span class="lgu-stale">· อัปเดตนานแล้ว ${Math.floor(age / 60)} ชม.</span>` : '';
                 const upd = st.hasProg && st.pg.updatedAt ? ` · อัปเดต ${hm2(st.pg.updatedAt)}` : '';
                 html = `<div class="lgu-ln ${s}"><i class="bi bi-speedometer2"></i> เหลืองานอยู่ได้ <b>${hh(h)} ชม.</b> <span style="opacity:.75">(ส่งเข้า ${num(st.sent)} − LG ผลิตแล้ว ${num(st.produced)} = ${num(st.rem)} ÷ UHT ${num(u)}${where ? ' · ' + where : ' · ยังไม่ระบุว่าผลิตถึงไหน'}${upd})</span>${stale}${canProg() ? ` <button type="button" class="lgu-mini" data-lgu-prog="${esc(l)}">อัปเดต</button>` : ''}</div>`;
-                if ((st.sent > 0 || st.hasProg) && h < minH()) low.push({ l, h, need: Math.ceil(minH() * u - st.rem) });
+                if ((st.sent > 0 || st.hasProg) && h < minH()) low.push({ l, h, need: Math.min(st.unsent, Math.ceil(minH() * u - st.rem)) });
             }
             const bar = ln.querySelector('.lgd-bar');
             (bar || ln).insertAdjacentHTML(bar ? 'afterend' : 'beforeend', html);
@@ -27291,6 +27606,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
         const rows = lines.map(l => {
             const u = uhtOf(l), st = lineState(l, date);
             if (st.complete) return `<div class="r"><span class="nm">ไลน์ ${esc(l)}</span><span class="lgu-chip lgu-ok"><i class="bi bi-check-circle-fill"></i> ผลิตครบ <b>${st.doneN}/${st.rows.length}</b> WO</span></div>`;
+            if (fullSent(st)) return `<div class="r"><span class="nm">ไลน์ ${esc(l)}</span><span class="lgu-chip lgu-ok"><i class="bi bi-check-circle-fill"></i> ส่งครบแพลน <b>100%</b> <small>${num(st.sent)} / ${num(st.planTotal)}</small></span></div>`;
             if (!u) return `<div class="r"><span class="nm">ไลน์ ${esc(l)}</span><span class="lgu-chip lgu-none">ยังไม่ตั้ง UHT</span></div>`;
             const h = st.rem / u, s = (st.sent > 0 || st.hasProg) ? status(h) : 'none';
             const age = st.hasProg ? agoMin(st.pg.updatedAt) : null;
