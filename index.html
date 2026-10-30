@@ -12437,7 +12437,7 @@ window.cancelDeliveryGroup = function(date, displayTime, customer) {
                     const matchCustomer = String(h.customer).trim() === safeCustomer;
                     const matchAutoTag = hRemarks.includes('AUTO') || hRemarks.includes('DELIVERY_PLAN');
                     const matchSameDay = hDate === safeDate;
-                    const matchLegacy = matchProduct && matchCustomer && matchAutoTag && matchSameDay;
+                    const matchLegacy = matchProduct && matchCustomer && matchAutoTag && matchSameDay && !hRemarks.includes('DELIVERY_PLAN:') && hRemarks.includes(safeTime);
                     
                     return matchID || matchLegacy;
                 });
@@ -33436,7 +33436,7 @@ ${fifo}</div>`;
                 const rem = String(h.remarks || '');
                 const hDate = typeof formatDate === 'function' ? formatDate(h.date) : String(h.date).split('T')[0];
                 const matchID = rem.includes(plan.id);
-                const matchLegacy = str(h.productId) === str(plan.productId) && str(h.customer) === k.cust && (rem.includes('AUTO') || rem.includes('DELIVERY_PLAN')) && hDate === k.date;
+                const matchLegacy = str(h.productId) === str(plan.productId) && str(h.customer) === k.cust && (rem.includes('AUTO') || rem.includes('DELIVERY_PLAN')) && hDate === k.date && !rem.includes('DELIVERY_PLAN:') && rem.includes(k.time);
                 if (!(matchID || matchLegacy)) return;
                 const already = (db.history || []).some((rev) => rev.type === 'reversal' && String(rev.remarks || '').includes(h.id));
                 if (!already) out.push(h);
@@ -33584,7 +33584,7 @@ ${fifo}</div>`;
             if (h.type !== 'export') return;
             const rem = String(h.remarks || '');
             const hDate = typeof formatDate === 'function' ? formatDate(h.date) : String(h.date).split('T')[0];
-            const match = rem.includes(plan.id) || (str(h.productId) === str(plan.productId) && str(h.customer) === k.cust && (rem.includes('AUTO') || rem.includes('DELIVERY_PLAN')) && hDate === k.date);
+            const match = rem.includes(plan.id) || (str(h.productId) === str(plan.productId) && str(h.customer) === k.cust && (rem.includes('AUTO') || rem.includes('DELIVERY_PLAN')) && hDate === k.date && !rem.includes('DELIVERY_PLAN:') && rem.includes(k.time));
             if (!match) return;
             if (!(db.history || []).some((r) => r.type === 'reversal' && String(r.remarks || '').includes(h.id))) rev.push(h);
         }));
