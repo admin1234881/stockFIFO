@@ -28508,7 +28508,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
         const when = g.t ? `<b>${esc(hm(g.t))}</b>${g.isToday ? '' : `<small>${esc(dmy(g.t))}</small>`}` : '<b>-</b>';
         return `<div class="lgr3-row pend ${g.stuck ? 'stuck' : ''}">
             <div class="tm">${when}</div>
-            <div class="mid"><div class="wo">${esc(wos)}</div><div class="pn">${esc(g.part)} · ไลน์ ${esc(g.line)} · ${esc(g.doc)}</div></div>
+            <div class="mid"><div class="wo">${esc(wos)}</div><div class="pn">${esc(g.part)} · ไลน์ ${esc(g.line)}</div><div class="pn"><b style="color:#0b1b33">${esc(g.doc)}</b>${(() => { const tg = (db.lgTagLog || []).find(x => up(x.docNumber) === g.doc); return tg && tg.seqNo && tg.batchTotal ? ` <span style="background:#0f172a;color:#fff;border-radius:10px;padding:1px 8px;font-weight:800;font-size:.72rem;white-space:nowrap"><i class="bi bi-tag-fill"></i> ${esc(tg.seqNo)}/${esc(tg.batchTotal)}</span>` : ''; })()}</div></div>
             <div class="rt"><span class="q amber">${num(g.qty)}<small> ชิ้น</small></span><span class="el ${g.stuck ? 'red' : ''}">${g.t ? '<i class="bi bi-clock-history"></i> ' + esc(ago(g.t, now)) : ''}</span></div>
         </div>`;
     }
