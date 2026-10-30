@@ -26360,125 +26360,6 @@ renderLGTagPrintWindow = function(tags, printWin) {
 })();
 // ===== จบ PDA-MODE =====
 (function () {
-    if (window.__pdaPend) return; window.__pdaPend = true;
- 
-    const PANE = 'pills-lg-receive', STUCK_MS = 3 * 3600 * 1000, MAXROWS = 10;
-    const $ = (id) => document.getElementById(id);
-    const isEn = () => { try { return currentLanguage === 'en'; } catch (e) { return false; } };
-    const L = (th, en) => isEn() ? en : th;
-    const pad = (n) => String(n).padStart(2, '0');
-    const up = (s) => String(s == null ? '' : s).trim().toUpperCase();
-    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    const dayKey = (t) => { const d = new Date(t); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
-    function ms(v) {
-        if (!v) return null;
-        if (v instanceof Date) return isNaN(v) ? null : v.getTime();
-        const s = String(v).trim(), t = new Date(s).getTime();
-        if (!isNaN(t) && /^\d{4}-\d{2}-\d{2}/.test(s)) return t;
-        const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ ,T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
-        if (m) { let y = +m[3]; if (y > 2400) y -= 543; return new Date(y, +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0)).getTime(); }
-        return isNaN(t) ? null : t;
-    }
-    function docOf(raw) {
-        try { if (raw && typeof parseLGBarcode === 'function') { const p = parseLGBarcode(String(raw)); if (p && p.docNumber) return up(p.docNumber); } } catch (e) { }
-        return '';
-    }
-    function waitTxt(t, now) {
-        if (!t) return '';
-        const m = Math.max(0, Math.round((now - t) / 60000)), h = Math.floor(m / 60), mm = m % 60;
-        if (m >= 1440) return L('ค้างมา ' + Math.floor(m / 1440) + ' วัน', Math.floor(m / 1440) + ' d old');
-        return h ? L('รอ ' + h + ' ชม. ' + pad(mm) + ' น.', 'waiting ' + h + ' h ' + pad(mm) + ' min') : L('รอ ' + mm + ' น.', 'waiting ' + mm + ' min');
-    }
- 
-    function compute() {
-        const now = Date.now(), today = dayKey(now);
-        const rec = new Map();
-        (db.lgReceiveLog || []).forEach(r => {
-            const d = up(r.docNumber); if (!d) return;
-            const t = ms(r.receivedAt), g = rec.get(d);
-            if (!g) rec.set(d, { t }); else if (t && (!g.t || t < g.t)) g.t = t;
-        });
-        const out = new Map();
-        (db.lgScanLog || []).forEach((s, i) => {
-            const d = docOf(s.rawBarcode) || up(s.docNumber) || ('#' + (s.id || i));
-            const t = ms(s.scannedAt);
-            let g = out.get(d);
-            if (!g) { g = { doc: d, t, wos: [] }; out.set(d, g); }
-            if (t && (!g.t || t < g.t)) g.t = t;
-            const w = up(s.WO); if (w && g.wos.indexOf(w) < 0) g.wos.push(w);
-        });
-        let first = null; rec.forEach(g => { if (g.t && (!first || g.t < first)) first = g.t; });
-        let trackFrom = null; if (first) { const d = new Date(first); trackFrom = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
-        const seq = new Map();
-        (db.lgTagLog || []).forEach(x => { const d = up(x.docNumber); if (d && x.seqNo && x.batchTotal) seq.set(d, x.seqNo + '/' + x.batchTotal); });
- 
-        let outToday = 0, carried = 0; const pend = [];
-        out.forEach(g => {
-            const isRec = rec.has(g.doc), isToday = g.t && dayKey(g.t) === today;
-            if (isToday) outToday++;
-            if (!isRec && trackFrom !== null && (!g.t || g.t >= trackFrom)) { pend.push(g); if (!isToday) carried++; }
-        });
-        pend.sort((a, b) => (a.t || 0) - (b.t || 0));
-        let recToday = 0; rec.forEach(g => { if (g.t && dayKey(g.t) === today) recToday++; });
-        const stuck = pend.filter(g => g.t && now - g.t > STUCK_MS).length;
-        return { now, pend, seq, total: outToday + carried, recToday, stuck };
-    }
- 
-    const css = document.createElement('style');
-    css.textContent = `
-    body:not(.pda-in) #pda-pend, body:not(.pda-in) #pda-pendlist { display:none !important; }
-    #pda-pend { position:sticky; top:52px; z-index:20; display:flex; align-items:center; gap:12px; color:#fff; padding:8px 14px; border-radius:16px; margin-bottom:12px; box-shadow:0 6px 16px rgba(0,0,0,.2); }
-    #pda-pend.amber { background:#B45309; } #pda-pend.red { background:#B91C1C; } #pda-pend.green { background:#15803D; }
-    #pda-pend .n { display:flex; align-items:baseline; gap:4px; line-height:1; }
-    #pda-pend .n b { font-size:3.1rem; font-weight:800; } #pda-pend .n span { font-size:1.7rem; font-weight:600; opacity:.85; }
-    #pda-pend .w { flex:1; min-width:0; line-height:1.25; } #pda-pend .w b { display:block; font-size:1.5rem; } #pda-pend .w small { font-size:.8rem; opacity:.95; }
-    #pda-pendlist { margin-top:12px; }
-    #pda-pendlist .card-body { padding:12px 14px !important; }
-    #pda-pendlist .hd { font-size:.9rem; font-weight:700; color:#64748B; margin-bottom:8px; }
-    #pda-pendlist .it { border-radius:12px; background:#FEF3C7; border:2px solid #B45309; padding:8px 12px; margin-bottom:8px; }
-    #pda-pendlist .it.old { background:#FEE2E2; border-color:#B91C1C; }
-    #pda-pendlist .it .r1 { display:flex; align-items:center; gap:8px; }
-    #pda-pendlist .it .doc { flex:1; min-width:0; font-size:1.15rem; font-weight:800; color:#0F172A; overflow-wrap:anywhere; }
-    #pda-pendlist .it .sq { flex:none; background:#0F172A; color:#fff; border-radius:999px; padding:2px 10px; font-size:.85rem; font-weight:700; white-space:nowrap; }
-    #pda-pendlist .it .r2 { font-size:.8rem; color:#475569; margin-top:2px; }
-    #pda-pendlist .it.old .r2 b { color:#B91C1C; }
-    #pda-pendlist .more { text-align:center; font-weight:700; color:#64748B; font-size:.9rem; }
-    #pda-pendlist .ok { display:flex; align-items:center; gap:8px; font-size:1.1rem; font-weight:700; color:#15803D; padding:4px 0; }
-    `;
-    document.head.appendChild(css);
- 
-    let lastSig = '';
-    function render() {
-        const pane = $(PANE); if (!pane || !document.body.classList.contains('pda-in')) return;
-        const row = pane.querySelector('.row'), card = pane.querySelector('.col-lg-7 > .card');
-        if (!row || !card) return;
-        let top = $('pda-pend'), box = $('pda-pendlist');
-        if (!top) { top = document.createElement('div'); top.id = 'pda-pend'; pane.insertBefore(top, row); lastSig = ''; }
-        if (!box) { box = document.createElement('div'); box.id = 'pda-pendlist'; box.className = 'card shadow-sm border-0'; box.style.borderRadius = '20px'; card.insertAdjacentElement('afterend', box); lastSig = ''; }
-        const c = compute();
-        const sig = [c.pend.map(g => g.doc).join(','), c.total, c.recToday, c.stuck, c.seq.size, isEn(), Math.floor(c.now / 60000)].join('|');
-        if (sig === lastSig) return; lastSig = sig;
- 
-        const n = c.pend.length, cls = n === 0 ? 'green' : (c.stuck ? 'red' : 'amber');
-        top.className = cls;
-        top.innerHTML = '<div class="n"><b>' + n + '</b><span>/' + Math.max(c.total, n) + '</span></div><div class="w"><b>' + (n === 0 ? L('ครบแล้ว', 'All received') : L('ค้างรับ', 'Pending')) + '</b><small>' + L('รับแล้ววันนี้ ' + c.recToday + ' แท็ก', 'Received today: ' + c.recToday + ' tags') + (c.stuck ? ' · ' + L('เกิน 3 ชม. ' + c.stuck + ' ใบ', 'over 3 h: ' + c.stuck) : '') + '</small></div>';
- 
-        let html = '<div class="card-body"><div class="hd">' + L('เลขที่แท็กค้างรับ', 'Pending tag numbers') + '</div>';
-        if (!n) html += '<div class="ok"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#15803D" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>' + L('ไม่มีแท็กค้างรับ', 'No pending tags') + '</div>';
-        else {
-            c.pend.slice(0, MAXROWS).forEach(g => {
-                const old = g.t && c.now - g.t > STUCK_MS, sq = c.seq.get(g.doc);
-                html += '<div class="it' + (old ? ' old' : '') + '"><div class="r1"><span class="doc">' + esc(g.doc) + '</span>' + (sq ? '<span class="sq">' + L('ใบที่ ', 'No. ') + esc(sq) + '</span>' : '') + '</div>'
-                    + '<div class="r2">' + (g.wos.length ? 'WO ' + esc(g.wos.join(', ')) + ' · ' : '') + '<b>' + esc(waitTxt(g.t, c.now)) + '</b></div></div>';
-            });
-            if (n > MAXROWS) html += '<div class="more">' + L('และอีก ' + (n - MAXROWS) + ' ใบ', '+' + (n - MAXROWS) + ' more') + '</div>';
-        }
-        box.innerHTML = html + '</div>';
-    }
-    setInterval(() => { try { render(); } catch (e) { } }, 1500);
-})();
-// ===== จบ PDA-PENDING =====
-(function () {
     if (window.__lgrGuard) return; window.__lgrGuard = true;
     const PANE = 'pills-lg-receive';
     const $ = (id) => document.getElementById(id);
@@ -28508,8 +28389,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
         const when = g.t ? `<b>${esc(hm(g.t))}</b>${g.isToday ? '' : `<small>${esc(dmy(g.t))}</small>`}` : '<b>-</b>';
         return `<div class="lgr3-row pend ${g.stuck ? 'stuck' : ''}">
             <div class="tm">${when}</div>
-            <div class="mid"><div class="wo">${esc(wos)}</div><div class="pn">${esc(g.part)} · ไลน์ ${esc(g.line)}</div><div class="pn"><b style="color:#0b1b33">${esc(g.doc)}</b>${(() => { const tg = (db.lgTagLog || []).find(x => up(x.docNumber) === g.doc); return tg && tg.seqNo && tg.batchTotal ? ` <span style="background:#0f172a;color:#fff;border-radius:10px;padding:1px 8px;font-weight:800;font-size:.72rem;white-space:nowrap"><i class="bi bi-tag-fill"></i> ${esc(tg.seqNo)}/${esc(tg.batchTotal)}</span>` : ''; })()}</div></div>
-            <div class="rt"><span class="q amber">${num(g.qty)}<small> ชิ้น</small></span><span class="el ${g.stuck ? 'red' : ''}">${g.t ? '<i class="bi bi-clock-history"></i> ' + esc(ago(g.t, now)) : ''}</span></div>
+            <div class="mid"><div class="wo">${esc(wos)}</div><div class="pn">${esc(g.part)} · ไลน์ ${esc(g.line)}</div><div class="pn">${(() => { const tg = (db.lgTagLog || []).find(x => up(x.docNumber) === g.doc); return tg && tg.seqNo && tg.batchTotal ? `<span style="background:#0f172a;color:#fff;border-radius:10px;padding:1px 8px;margin-right:6px;font-weight:800;font-size:.8rem;white-space:nowrap">${esc(tg.seqNo)}/${esc(tg.batchTotal)}</span>` : ''; })()}<b style="color:#0b1b33">${esc(g.doc)}</b></div></div>
         </div>`;
     }
     function recRow(g, today) {
