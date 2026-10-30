@@ -26177,7 +26177,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
         del: (k) => { try { localStorage.removeItem(k); } catch (e) { } }
     };
     try {
-        const m = new URLSearchParams(location.search).get('mode') || new URLSearchParams((location.hash.split('?')[1] || '')).get('mode');
+        const m = new URLSearchParams(location.search).get('mode') || new URLSearchParams((location.hash.split('?')[1] || '')).get('mode');   // รองรับทั้ง ?mode=.. และ #?mode=..
         if (m === 'pda') LS.set(KEY, '1');
         else if (m === 'normal') { LS.del(KEY); LS.del(UKEY); }
     } catch (e) { }
@@ -26216,7 +26216,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
     body.pda-in #main-dashboard header, body.pda-in .navbar, body.pda-in #announcements-display-area, body.pda-in #atx-dock { display:none !important; }
     body.pda-in #main-dashboard { padding-left:0 !important; padding-right:0 !important; }
     body.pda-in { padding-top:54px !important; background:#f3f6fb !important; }
-    body.pda-on:not(.pda-in):not(.pda-fb) #pda-bar, body.pda-on:not(.pda-in) #pda-flash { display:none !important; }
+    body.pda-on:not(.pda-in):not(.pda-fb) #pda-bar { display:none !important; }
     body.pda-fb { padding-top:54px !important; }
     body.pda-fb #pda-bar { display:flex !important; }
     body.pda-fb #pda-kb { display:none !important; }
@@ -26226,19 +26226,29 @@ renderLGTagPrintWindow = function(tags, printWin) {
     body.pda-in #lgr-cam-btn, body.pda-in #lgr-cam { display:none !important; }
     body.pda-in #${PANE} .col-lg-7, body.pda-in #${PANE} .col-lg-5 { width:100% !important; flex:0 0 100% !important; max-width:100% !important; }
     body.pda-in #${PANE} .lgr-scan { font-size:1.5rem !important; padding:18px 14px !important; }
-    body.pda-in #${PANE} .lgr-big { font-size:2.1rem !important; }
     #pda-bar{position:fixed;left:0;right:0;top:0;height:50px;z-index:2000;background:#c8102e;color:#fff;display:flex;align-items:center;gap:8px;padding:0 10px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.25)}
     #pda-bar .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:1.05rem}
     #pda-bar small{font-weight:600;opacity:.9;margin-left:6px}
     #pda-bar button{border:0;border-radius:10px;padding:7px 12px;font-weight:700;background:rgba(255,255,255,.2);color:#fff;font-size:.95rem}
     #pda-bar button:active{background:rgba(255,255,255,.4)}
-    #pda-flash{position:fixed;left:0;right:0;top:50px;bottom:0;z-index:1990;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px;color:#fff;pointer-events:none}
-    #pda-flash.show{display:flex;animation:pdaPop .18s ease-out}
-    #pda-flash.ok{background:#16a34a}#pda-flash.warn{background:#d97706}#pda-flash.err{background:#dc2626}
-    #pda-flash .b{font-size:2.6rem;font-weight:800;line-height:1.2}
-    #pda-flash .s{margin-top:14px;font-size:1.35rem;font-weight:600;line-height:1.5}
-    #pda-flash .s div{margin:2px 0}
-    @keyframes pdaPop{from{transform:scale(.96);opacity:.4}to{transform:scale(1);opacity:1}}
+    /* ผลสแกน: การ์ดขอบหนาใต้ช่องสแกน (เขียว = รับแล้ว / เหลือง = รับซ้ำ / แดง = ผิดปกติ) — ค้างอยู่จนกว่าจะยิงใบถัดไป */
+    body.pda-in #${PANE} .lgr-card { border-width:4px !important; border-radius:18px !important; padding:14px !important; margin-top:14px !important; animation:pdaPop .2s ease-out; }
+    body.pda-in #${PANE} .lgr-card.ok { background:#DCFCE7 !important; border-color:#15803D !important; }
+    body.pda-in #${PANE} .lgr-card.warn { background:#FEF3C7 !important; border-color:#B45309 !important; }
+    body.pda-in #${PANE} .lgr-card.err { background:#FEE2E2 !important; border-color:#B91C1C !important; }
+    body.pda-in #${PANE} .pda-hd { display:flex; align-items:center; gap:12px; }
+    body.pda-in #${PANE} .pda-ic { flex:none; width:50px; height:50px; border-radius:14px; display:flex; align-items:center; justify-content:center; }
+    body.pda-in #${PANE} .ok .pda-ic { background:#15803D; } body.pda-in #${PANE} .warn .pda-ic { background:#B45309; } body.pda-in #${PANE} .err .pda-ic { background:#B91C1C; }
+    body.pda-in #${PANE} .lgr-card .lgr-big { font-size:1.5rem !important; line-height:1.2 !important; }
+    body.pda-in #${PANE} .ok .lgr-big, body.pda-in #${PANE} .ok .lgr-note { color:#14532D; }
+    body.pda-in #${PANE} .warn .lgr-big, body.pda-in #${PANE} .warn .lgr-note { color:#78350F; }
+    body.pda-in #${PANE} .err .lgr-big, body.pda-in #${PANE} .err .lgr-note { color:#7F1D1D; }
+    body.pda-in #${PANE} .lgr-card .lgr-row { display:grid !important; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px !important; margin-top:12px !important; }
+    body.pda-in #${PANE} .lgr-card .lgr-row > div { background:#fff; border-radius:12px; padding:8px 10px; min-width:0; }
+    body.pda-in #${PANE} .lgr-card .lgr-row small { font-size:.75rem; }
+    body.pda-in #${PANE} .lgr-card .lgr-row b { font-size:1.05rem; overflow-wrap:anywhere; }
+    body.pda-in #${PANE} .lgr-card .lgr-note { background:transparent !important; padding:0 !important; margin-top:10px !important; font-size:.9rem !important; font-weight:500; }
+    @keyframes pdaPop { from { transform:scale(.97); opacity:.5; } to { transform:scale(1); opacity:1; } }
     `;
     document.head.appendChild(css);
     document.body.classList.add('pda-on');
@@ -26247,9 +26257,6 @@ renderLGTagPrintWindow = function(tags, printWin) {
     bar.id = 'pda-bar';
     bar.innerHTML = '<div class="t"></div><button type="button" id="pda-kb"></button><button type="button" id="pda-out"></button>';
     document.body.appendChild(bar);
-    const flash = document.createElement('div');
-    flash.id = 'pda-flash';
-    document.body.appendChild(flash);
  
     const $ = (id) => document.getElementById(id);
     let kbOn = false, fallback = false;
@@ -26321,30 +26328,24 @@ renderLGTagPrintWindow = function(tags, printWin) {
         } catch (e) { }
     }, 600);
  
-    // ---------- แจ้งผลเต็มจอ (เขียว = รับแล้ว / เหลือง = ซ้ำ / แดง = ผิดปกติ) ----------
-    let ft = null;
-    function showFlash(kind, cardEl) {
-        clearTimeout(ft);
-        const big = cardEl.querySelector('.lgr-big');
-        const rows = cardEl.querySelectorAll('.lgr-row > div');
-        let s = '';
-        rows.forEach(d => { const k = d.querySelector('small'), v = d.querySelector('b'); if (k && v) s += '<div>' + k.textContent + ': ' + v.textContent + '</div>'; });
-        if (!s) { const n = cardEl.querySelector('.lgr-note'); if (n) s = '<div>' + n.textContent + '</div>'; }
-        flash.className = 'show ' + kind;
-        flash.innerHTML = '<div class="b">' + (big ? big.innerHTML : '') + '</div><div class="s">' + s + '</div>';
-        ft = setTimeout(hideFlash, kind === 'ok' ? 1300 : 3200);
+    // ---------- ผลสแกน: ใส่ไอคอนสี่เหลี่ยมหน้าหัวข้อ (ตัดอีโมจิเดิมออก) ----------
+    const ICON = { ok: 'M5 12.5l4.5 4.5L19 7.5', warn: 'M9 9h10v10H9z M5 15V5h10', err: 'M12 4l9.5 16.5h-19z M12 10v4.5 M12 17.8v.01' };
+    function decorate(c) {
+        const k = ['ok', 'warn', 'err'].find(x => c.classList.contains(x));
+        const big = c.querySelector('.lgr-big');
+        if (!k || !big || c.dataset.pda) return;
+        c.dataset.pda = '1';
+        const tn = big.firstChild;
+        if (tn && tn.nodeType === 3) tn.nodeValue = tn.nodeValue.replace(/^[^\p{L}\p{N}]+/u, '');
+        const hd = document.createElement('div'); hd.className = 'pda-hd';
+        const ic = document.createElement('div'); ic.className = 'pda-ic';
+        ic.innerHTML = '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + ICON[k] + '"/></svg>';
+        big.parentNode.insertBefore(hd, big); hd.appendChild(ic); hd.appendChild(big);
     }
-    function hideFlash() { clearTimeout(ft); flash.className = ''; }
-    flash.style.pointerEvents = 'none';
     (function watch(n) {
         const r = $('lgr-result');
         if (!r) { if (n < 100) setTimeout(() => watch(n + 1), 400); return; }
-        new MutationObserver(() => {
-            const c = r.querySelector('.lgr-card');
-            if (!c) return;
-            if (c.classList.contains('wait')) { hideFlash(); return; }
-            ['ok', 'warn', 'err'].forEach(k => { if (c.classList.contains(k)) showFlash(k, c); });
-        }).observe(r, { childList: true });
+        new MutationObserver(() => { const c = r.querySelector('.lgr-card'); if (c) try { decorate(c); } catch (e) { } }).observe(r, { childList: true });
     })(0);
  
     // ---------- กันจอดับ ----------
@@ -26358,6 +26359,50 @@ renderLGTagPrintWindow = function(tags, printWin) {
     paintBar();
 })();
 // ===== จบ PDA-MODE =====
+(function () {
+    if (window.__lgrGuard) return; window.__lgrGuard = true;
+    const PANE = 'pills-lg-receive';
+    const $ = (id) => document.getElementById(id);
+    const paneActive = () => { const p = $(PANE); return !!p && p.classList.contains('active'); };
+    // มีหน้าต่างป๊อบอัพ/โมดอลที่ต้องกดอยู่ไหม (ป้ายเล็กมุมจอแบบ toast ไม่นับ)
+    const modalOpen = () => !!document.querySelector('.swal2-popup:not(.swal2-toast), .modal.show');
+    const isField = (el) => !!el && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable);
+ 
+    // 1) เครื่องสแกนพิมพ์ตัวอักษรตอนโฟกัสหลุด → ดึงโฟกัสกลับเข้าช่องสแกนก่อนตัวอักษรตกไปที่อื่น
+    document.addEventListener('keydown', (e) => {
+        try {
+            if (!paneActive() || modalOpen() || e.ctrlKey || e.altKey || e.metaKey) return;
+            const i = $('lgr-input'); if (!i || e.target === i || isField(e.target)) return;
+            if (e.key && e.key.length === 1) i.focus({ preventScroll: true });
+            else if (e.key === 'Enter' && i.value.trim().length > 10) i.focus({ preventScroll: true });
+        } catch (x) { }
+    }, true);
+    setInterval(() => {
+        try {
+            if (!paneActive() || modalOpen()) return;
+            const i = $('lgr-input');
+            if (i && (document.activeElement === document.body || !document.activeElement)) i.focus({ preventScroll: true });
+        } catch (x) { }
+    }, 400);
+ 
+    // 2) ข้อความเต็มช่อง (ยาวกว่า 10 ตัว) แต่ค้างอยู่เกิน 1.2 วินาทีโดยไม่ถูกส่ง → สั่งส่งให้เอง
+    let lastVal = '', since = 0;
+    setInterval(() => {
+        try {
+            const i = $('lgr-input');
+            if (!i || !paneActive()) { lastVal = ''; return; }
+            const v = i.value;
+            if (v.length <= 10) { lastVal = v; since = Date.now(); return; }
+            if (v !== lastVal) { lastVal = v; since = Date.now(); return; }
+            if (Date.now() - since > 1200) {
+                since = Date.now();
+                i.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', bubbles: true, cancelable: true }));
+            }
+        } catch (x) { }
+    }, 400);
+})();
+// ===== จบ LGR-INPUT-GUARD =====
+
 (function () {
     if (window.__dpI18n) return; window.__dpI18n = true;
  
