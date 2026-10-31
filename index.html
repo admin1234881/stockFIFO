@@ -26784,6 +26784,255 @@ renderLGTagPrintWindow = function(tags, printWin) {
 })();
 // ===== จบ NAV-GLOSSY-ICONS =====
 (function () {
+    if (window.__hrvPop) return; window.__hrvPop = true;
+    if (typeof Swal === 'undefined' || typeof Swal.fire !== 'function') { console.warn('HISTORY-REVERSE-POPUPS: ไม่พบ SweetAlert2'); return; }
+ 
+    const TITLES = ['ยืนยันการยกเลิกรายการ?', 'Confirm Transaction Reversal?'];
+    const isEn = () => { try { return currentLanguage === 'en'; } catch (e) { return false; } };
+    const I = {
+        th: {
+            title: 'ยกเลิกรายการนี้?', subEx: 'ส่งออก {n} ชิ้น → <b style="color:#047857">คืนเข้าสต็อก</b> · ย้อนกลับไม่ได้', subIm: 'รับเข้า {n} ชิ้น → <b style="color:#b91c1c">หักออกจากสต็อก</b> · ย้อนกลับไม่ได้',
+            lot: 'ล็อต', okLot: 'ล็อตนี้ยังไม่ถูกใช้ — ยกเลิกได้', why: 'เหตุผล', whyHint: '(ไม่บังคับ — บันทึกลงหมายเหตุ)', whyPh: 'พิมพ์เหตุผล หรือเลือกด้านบน',
+            c1: 'กรอกผิด', c2: 'ลูกค้ายกเลิก', c3: 'ส่งสินค้าไม่ได้', c4: 'อื่นๆ', no: 'ไม่ยกเลิก', yes: 'ยกเลิกรายการ', reasonTag: 'เหตุผล',
+            pTitle: 'กำลังยกเลิกรายการ…', pSub: 'กรุณารอสักครู่ อย่าเพิ่งปิดหน้านี้', s1: 'ตรวจสอบรายการและล็อต', s2: 'บันทึกรายการยกเลิก', s3: 'ปรับยอดสต็อกคงเหลือ',
+            okT: 'ยกเลิกรายการสำเร็จ', okEx: 'ส่งออก {n} ชิ้น ถูกคืนเข้าสต็อกแล้ว', okIm: 'รับเข้า {n} ชิ้น ถูกหักออกจากสต็อกแล้ว', bal: 'สต็อกคงเหลือ', saved: 'บันทึกรายการ "ยกเลิก" ไว้ในประวัติแล้ว', close: 'ปิด', auto: 'ปิดเองอัตโนมัติใน 3 วินาที',
+            fT: 'ยกเลิกไม่สำเร็จ', fSub: 'ยังไม่ยืนยันว่าบันทึกสำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วกด "ลองใหม่"<br>ระบบจะเช็คไม่ให้บันทึกซ้ำให้', detail: 'รายละเอียด', retry: 'ลองใหม่',
+            bT: 'ยกเลิกไม่ได้', bSub: 'สต็อกของล็อตนี้ถูกใช้ไปแล้ว', bUsed: 'ล็อตนี้ถูกส่งออกไปแล้ว', bSum: 'รวมที่ใช้ไป', bTip: 'ถ้ารับเข้าผิด ให้ใช้ <b>นับสต็อก</b> หรือ <b>ปรับยอด</b> แทน', ack: 'รับทราบ', pcs: 'ชิ้น'
+        },
+        en: {
+            title: 'Cancel this entry?', subEx: 'Export of {n} pcs → <b style="color:#047857">returned to stock</b> · cannot be undone', subIm: 'Import of {n} pcs → <b style="color:#b91c1c">deducted from stock</b> · cannot be undone',
+            lot: 'Lot', okLot: 'This lot is unused — can be cancelled', why: 'Reason', whyHint: '(optional — saved in the remarks)', whyPh: 'Type a reason or pick one above',
+            c1: 'Entered wrong', c2: 'Customer cancelled', c3: 'Could not deliver', c4: 'Other', no: 'Keep it', yes: 'Cancel entry', reasonTag: 'Reason',
+            pTitle: 'Cancelling the entry…', pSub: 'Please wait, do not close this page', s1: 'Checking entry and lot', s2: 'Saving the cancel entry', s3: 'Updating stock balance',
+            okT: 'Entry cancelled', okEx: 'Export of {n} pcs was returned to stock', okIm: 'Import of {n} pcs was deducted from stock', bal: 'Stock balance', saved: 'A "Cancelled" entry was saved in History', close: 'Close', auto: 'Closes automatically in 3 s',
+            fT: 'Could not cancel', fSub: 'Not confirmed as saved. Check the internet and press "Retry"<br>The system prevents duplicates', detail: 'Details', retry: 'Retry',
+            bT: 'Cannot cancel', bSub: 'Stock from this lot has already been used', bUsed: 'This lot has been exported', bSum: 'Total used', bTip: 'If the import was wrong, use <b>Stock Count</b> or an <b>adjustment</b> instead', ack: 'Got it', pcs: 'pcs'
+        }
+    };
+    const t = (k, v) => { let s = (I[isEn() ? 'en' : 'th'][k] != null ? I[isEn() ? 'en' : 'th'][k] : I.th[k]); Object.keys(v || {}).forEach(n => { s = s.split('{' + n + '}').join(v[n]); }); return s; };
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const str = (v) => String(v == null ? '' : v).trim();
+    const fmt = (n) => Number(n || 0).toLocaleString('en-US');
+    const _fire = Swal.fire.bind(Swal);
+ 
+    // ---------- สไตล์ ----------
+    const css = document.createElement('style'); css.id = 'hrv-css';
+    css.textContent = `
+.hrv-pop.swal2-popup{padding:0!important;border-radius:30px!important;width:min(440px,94vw)!important;box-shadow:0 30px 70px rgba(15,23,42,.45)!important;font-family:inherit;color:#0f172a;display:flex!important;flex-direction:column;overflow:hidden}
+.hrv-pop button:focus-visible,.hrv-pop input:focus-visible{outline:2px solid #2563eb;outline-offset:2px}
+.hrv-pop .swal2-html-container{margin:0!important;padding:28px 26px 4px!important;text-align:center!important;overflow:visible;font-size:14px;color:#0f172a}
+.hrv-pop .swal2-actions{margin:0!important;padding:16px 26px 22px!important;width:100%!important;box-sizing:border-box;gap:10px;flex-wrap:nowrap}
+.hrv-pop .swal2-actions button{flex:1 1 0;min-height:50px;margin:0!important;border-radius:14px!important;font:inherit;font-size:15px!important;font-weight:700!important;border:0;cursor:pointer;box-shadow:none!important;position:relative;overflow:hidden}
+.hrv-pop .swal2-actions .hrv-yes{flex:1.3 1 0;background:#e11d48;color:#fff;box-shadow:0 8px 18px rgba(225,29,72,.4)!important}
+.hrv-pop .swal2-actions .hrv-no{background:#e2e8f0;color:#334155;font-weight:600!important}
+.hrv-pop .swal2-actions .hrv-dark{background:#0f172a;color:#fff}
+.hrv-pop .swal2-actions .hrv-dark.auto::after{content:'';position:absolute;left:0;bottom:0;height:4px;background:#34d399;animation:hrvbar 3s linear forwards}
+@keyframes hrvbar{from{width:0}to{width:100%}}
+@keyframes hrvspin{to{transform:rotate(360deg)}}
+.hrv-sp{animation:hrvspin 1s linear infinite}
+.hrv-ic{width:76px;height:76px;margin:0 auto;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.hrv-h{font-size:22px;font-weight:700;margin-top:18px;line-height:1.25}
+.hrv-s{font-size:14px;color:#475569;margin-top:4px;line-height:1.5}
+.hrv-card{margin-top:16px;text-align:left;border:2px solid #e2e8f0;border-radius:16px;padding:12px 14px;display:flex;gap:12px;align-items:center}
+.hrv-card .ti{width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;flex:none}
+.hrv-card b{font-size:15px;display:block;overflow-wrap:anywhere}.hrv-card small{font-size:12.5px;color:#475569;display:block;margin-top:2px}
+.hrv-note{margin-top:14px;text-align:left;display:flex;gap:10px;align-items:center;border-radius:14px;padding:10px 14px;font-size:13px}
+.hrv-note.g{background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46}.hrv-note.r{background:#fff1f2;border:1px solid #fecdd3;color:#9f1239;align-items:flex-start;word-break:break-word}.hrv-note.b{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;align-items:flex-start;line-height:1.45}
+.hrv-why{margin-top:14px;text-align:left}.hrv-why label{font-size:12.5px;font-weight:600;color:#475569;display:block;margin-bottom:6px}.hrv-why label span{font-weight:400;color:#64748b}
+.hrv-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.hrv-chips button{border:1px solid #dbe2ee;background:#fff;color:#475569;font:inherit;font-size:12.5px;border-radius:99px;padding:6px 14px;min-height:34px;cursor:pointer}
+.hrv-chips button.on{border-color:#fecdd3;background:#fff1f2;color:#9f1239;font-weight:600}
+.hrv-in{width:100%;box-sizing:border-box;border:2px solid #dbe2ee;border-radius:14px;padding:10px 14px;font:inherit;font-size:15px;min-height:46px;color:#0f172a;background:#fff;outline:0}
+.hrv-in:focus{border-color:#e11d48;box-shadow:0 0 0 4px #ffe4e6}
+.hrv-steps{margin-top:20px;text-align:left;display:flex;flex-direction:column;gap:10px}
+.hrv-st{display:flex;align-items:center;gap:12px;font-size:14px;color:#64748b}
+.hrv-st i{width:26px;height:26px;border-radius:50%;border:2px solid #cbd5e1;flex:none;box-sizing:border-box;display:flex;align-items:center;justify-content:center}
+.hrv-st.act{color:#0f172a;font-weight:700;background:#fff1f2;border-radius:12px;padding:6px 8px;margin:0 -8px}.hrv-st.act i{border:3px solid #fecdd3;border-top-color:#e11d48;animation:hrvspin 1s linear infinite}
+.hrv-st.done{color:#047857;font-weight:600}.hrv-st.done i{background:#10b981;border-color:#10b981}.hrv-st.done i::after{content:'';width:6px;height:11px;border:solid #fff;border-width:0 3px 3px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.hrv-bar{margin-top:20px;height:8px;border-radius:99px;background:#e2e8f0;overflow:hidden;margin-bottom:22px}.hrv-bar div{height:100%;border-radius:99px;background:linear-gradient(90deg,#f43f5e,#e11d48);transition:width .5s}
+.hrv-bal{margin-top:18px;background:#f1f5f9;border-radius:16px;padding:12px 16px;text-align:left}
+.hrv-bal .r{display:flex;align-items:center;gap:10px;margin-top:10px}
+.hrv-tb{margin-top:14px;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;font-size:13px;text-align:left}
+.hrv-tb div{display:flex;justify-content:space-between;gap:10px;padding:9px 14px;border-bottom:1px solid #e2e8f0}.hrv-tb div:last-child{border:0;background:#f8fafc}
+`;
+    document.head.appendChild(css);
+ 
+    // ---------- ไอคอน ----------
+    const svg = (d, c, w, s) => '<svg width="' + (s || 22) + '" height="' + (s || 22) + '" viewBox="0 0 24 24" fill="none" stroke="' + c + '" stroke-width="' + (w || 2.3) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none"><path d="' + d + '"/></svg>';
+    const D = { undo: 'M3.5 12a8.5 8.5 0 1 0 2.6-6.1 M3.5 4.5v4.5H8', up: 'M12 16V5 M7.5 9.5L12 5l4.5 4.5 M5 19h14', down: 'M12 4v11 M7.5 10.5L12 15l4.5-4.5 M5 19h14', ok: 'M5 12.5l4.5 4.5L19 7.5', bang: 'M12 5v9 M12 18.6v.01', lock: 'M5 11h14v9.5H5z M8 11V8a4 4 0 0 1 8 0v3', info: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 11v5.5 M12 7.8v.01', warn: 'M12 3.5l9.5 16.5h-19z M12 10v4.5 M12 17.2v.01' };
+ 
+    // ---------- ข้อมูลช่วย ----------
+    const dateLbl = (v) => { const d = new Date(v); if (isNaN(d)) return ''; const lg = isEn() ? 'en-GB' : 'th-TH'; return d.toLocaleDateString(lg, { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + d.toLocaleTimeString(lg, { hour: '2-digit', minute: '2-digit', hour12: false }); };
+    const lotOf = (x) => { const raw = x.productionDate || x.ProductionDate || x.production_date; try { return typeof formatDate === 'function' ? (formatDate(raw) || str(raw)) : str(raw); } catch (e) { return str(raw); } };
+    const qtyOf = (x) => Math.abs(parseFloat(x.quantity) || 0);
+    const balOf = (pid) => { try { const s = (calculatedStock || []).find(r => str(r.productId) === str(pid)); return s ? Number(s.totalQuantity) : null; } catch (e) { return null; } };
+    function usedExports(item) {   // เหมือนเงื่อนไขเดิมของระบบ: ล็อตนี้มีส่งออกหลังวันรับเข้า ที่ยังไม่ถูกยกเลิก
+        if (item.type !== 'import') return [];
+        const lot = lotOf(item), rev = new Set();
+        (db.history || []).forEach(h => { if (h.type === 'reversal') { const m = /Reversal of transaction ID: (exp-[\w-]+)/.exec(h.remarks || ''); if (m) rev.add(m[1]); } });
+        return (db.history || []).filter(h => h.type === 'export' && str(h.productId) === str(item.productId) && lotOf(h) === lot && new Date(h.date) > new Date(item.date) && !rev.has(h.id));
+    }
+    const swal = (o) => _fire(Object.assign({ buttonsStyling: false, reverseButtons: true, focusConfirm: false, focusCancel: !!o.showCancelButton, showClass: { popup: '' }, hideClass: { popup: '' } }, o));
+    const typeBox = (item) => item.type === 'export'
+        ? ['#dbeafe', svg(D.up, '#1d4ed8')] : ['#d1fae5', svg(D.down, '#047857')];
+    const card = (item) => { const b = typeBox(item), inv = str(item.invoiceNumber); return '<div class="hrv-card"><div class="ti" style="background:' + b[0] + '">' + b[1] + '</div><div style="min-width:0"><b>' + esc(item.productId) + ' · ' + esc(item.productName) + '</b><small>' + esc(t('lot')) + ' ' + esc(lotOf(item) || '-') + (inv && inv !== '-' ? ' · ' + esc(inv) : '') + ' · ' + esc(dateLbl(item.date)) + '</small></div></div>'; };
+ 
+    // ---------- สถานะรอบการยกเลิก ----------
+    let FLOW = null, LAST = null, killer = null;
+    function end() { if (!FLOW) return; try { if (FLOW.arr) delete FLOW.arr.unshift; } catch (e) { } clearInterval(FLOW.poll); clearTimeout(killer); FLOW = null; }
+    function step(n) {
+        if (!FLOW) return;
+        FLOW.step = n;
+        const root = document.getElementById('hrv-steps'); if (!root) return;
+        root.querySelectorAll('.hrv-st').forEach((el, i) => { el.className = 'hrv-st' + (i + 1 < n ? ' done' : i + 1 === n ? ' act' : ''); });
+        const b = document.getElementById('hrv-bar'); if (b) b.style.width = ({ 1: 15, 2: 55, 3: 85 }[n] || 15) + '%';
+    }
+ 
+    // ---------- 1) ป็อบอัพยืนยัน (+เหตุผล) ----------
+    function confirmPopup(item) {
+        const used = usedExports(item);
+        if (used.length) {   // รับเข้าที่ล็อตถูกใช้ไปแล้ว → ยกเลิกไม่ได้
+            const sum = used.reduce((a, h) => a + qtyOf(h), 0);
+            const rows = used.slice(0, 4).map(h => '<div><span style="color:#475569">' + esc(dateLbl(h.date).split(' ')[0]) + (str(h.invoiceNumber) && str(h.invoiceNumber) !== '-' ? ' · ' + esc(h.invoiceNumber) : '') + '</span><b>' + fmt(qtyOf(h)) + ' ' + esc(t('pcs')) + '</b></div>').join('');
+            end();
+            return swal({
+                customClass: { popup: 'hrv-pop', confirmButton: 'hrv-dark' }, showCancelButton: false, confirmButtonText: t('ack'),
+                html: '<div class="hrv-ic" style="background:linear-gradient(135deg,#f59e0b,#fbbf24);box-shadow:0 0 0 8px #fef3c7">' + svg(D.lock, '#fff', 2.6, 38) + '</div><div class="hrv-h">' + esc(t('bT')) + '</div><div class="hrv-s">' + esc(t('bSub')) + '</div>' + card(item)
+                    + '<div style="margin-top:14px;font-size:12.5px;font-weight:600;color:#475569;text-align:left">' + esc(t('bUsed')) + '</div><div class="hrv-tb">' + rows + '<div><span style="font-weight:600">' + esc(t('bSum')) + '</span><b style="color:#b45309">' + fmt(sum) + ' ' + esc(t('pcs')) + '</b></div></div>'
+                    + '<div class="hrv-note b">' + svg(D.info, '#1e40af', 2.2, 18) + '<span>' + t('bTip') + '</span></div>'
+            }).then(() => ({ isConfirmed: false, isDismissed: true }));
+        }
+        const prefill = FLOW && FLOW.reason ? FLOW.reason : '';
+        const chips = [t('c1'), t('c2'), t('c3'), t('c4')].map((c, i) => '<button type="button" data-c="' + (i === 3 ? '' : esc(c)) + '">' + esc(c) + '</button>').join('');
+        return swal({
+            customClass: { popup: 'hrv-pop', confirmButton: 'hrv-yes', cancelButton: 'hrv-no' }, showCancelButton: true, confirmButtonText: t('yes'), cancelButtonText: t('no'),
+            html: '<div class="hrv-ic" style="background:#ffe4e6;box-shadow:0 0 0 8px #fff1f2">' + svg(D.undo, '#e11d48', 2.2, 38) + '</div><div class="hrv-h">' + esc(t('title')) + '</div>'
+                + '<div class="hrv-s">' + t(item.type === 'export' ? 'subEx' : 'subIm', { n: fmt(qtyOf(item)) }) + '</div>' + card(item)
+                + (item.type === 'import' ? '<div class="hrv-note g">' + svg(D.ok, '#065f46', 2.6, 18) + '<span>' + esc(t('okLot')) + '</span></div>' : '')
+                + '<div class="hrv-why"><label for="hrv-why">' + esc(t('why')) + ' <span>' + esc(t('whyHint')) + '</span></label><div class="hrv-chips">' + chips + '</div><input id="hrv-why" class="hrv-in" type="text" maxlength="120" autocomplete="off" placeholder="' + esc(t('whyPh')) + '" value="' + esc(prefill) + '"></div>',
+            didOpen: (el) => {
+                const inp = el.querySelector('#hrv-why'), bs = el.querySelectorAll('.hrv-chips button');
+                const mark = () => bs.forEach(b => b.classList.toggle('on', b.dataset.c !== '' && b.dataset.c === inp.value));
+                bs.forEach(b => b.addEventListener('click', () => { inp.value = b.dataset.c; mark(); inp.focus(); }));
+                inp.addEventListener('input', mark);
+                inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); Swal.clickConfirm(); } });
+                mark();
+            },
+            preConfirm: () => { const i = document.getElementById('hrv-why'); return { reason: i ? i.value.trim() : '' }; }
+        });
+    }
+ 
+    // ---------- 2) กำลังยกเลิก ----------
+    function progressPopup() {
+        _fire({
+            customClass: { popup: 'hrv-pop' }, buttonsStyling: false, showConfirmButton: false, allowOutsideClick: false, allowEscapeKey: false, showClass: { popup: '' }, hideClass: { popup: '' },
+            html: '<div class="hrv-ic" style="position:relative"><svg class="hrv-sp" width="84" height="84" viewBox="0 0 84 84" fill="none" aria-hidden="true" style="position:absolute;left:-4px;top:-4px"><circle cx="42" cy="42" r="36" stroke="#fee2e2" stroke-width="7"/><path d="M42 6a36 36 0 0 1 36 36" stroke="#e11d48" stroke-width="7" stroke-linecap="round"/></svg>' + svg(D.undo, '#e11d48', 2.2, 30) + '</div>'
+                + '<div class="hrv-h">' + esc(t('pTitle')) + '</div><div class="hrv-s">' + esc(t('pSub')) + '</div>'
+                + '<div class="hrv-steps" id="hrv-steps"><div class="hrv-st act"><i></i>' + esc(t('s1')) + '</div><div class="hrv-st"><i></i>' + esc(t('s2')) + '</div><div class="hrv-st"><i></i>' + esc(t('s3')) + '</div></div>'
+                + '<div class="hrv-bar"><div id="hrv-bar" style="width:15%"></div></div>'
+        });
+    }
+ 
+    // ---------- 3) สำเร็จ ----------
+    function successPopup() {
+        if (!FLOW) return;
+        const item = FLOW.item, before = FLOW.before, after = balOf(item.productId);
+        end();
+        const bal = (before != null && after != null) ? '<div class="r"><span style="font-size:13px;color:#475569;flex-grow:1">' + esc(t('bal')) + '</span><span style="font-size:18px;font-weight:600;color:#64748b;text-decoration:line-through">' + fmt(before) + '</span>' + svg('M4 12h15 M13.5 6.5L19 12l-5.5 5.5', '#475569', 2.4, 18) + '<span style="font-size:24px;font-weight:700;color:#047857">' + fmt(after) + '</span></div>' : '';
+        _fire({
+            customClass: { popup: 'hrv-pop', confirmButton: 'hrv-dark auto' }, buttonsStyling: false, confirmButtonText: t('close'), timer: 3000, showClass: { popup: '' }, hideClass: { popup: '' },
+            html: '<div class="hrv-ic" style="width:84px;height:84px;background:linear-gradient(135deg,#10b981,#34d399);box-shadow:0 0 0 9px #d1fae5">' + svg(D.ok, '#fff', 3, 42) + '</div><div class="hrv-h">' + esc(t('okT')) + '</div>'
+                + '<div class="hrv-s">' + esc(t(item.type === 'export' ? 'okEx' : 'okIm', { n: fmt(qtyOf(item)) })) + '</div>'
+                + '<div class="hrv-bal"><b style="font-size:15px;display:block;overflow-wrap:anywhere">' + esc(item.productId) + ' · ' + esc(item.productName) + '</b><small style="font-size:12.5px;color:#475569">' + esc(t('lot')) + ' ' + esc(lotOf(item) || '-') + '</small>' + bal + '</div>'
+                + '<div class="hrv-s" style="font-size:12.5px;margin-top:12px">' + esc(t('saved')) + '</div><div style="font-size:12px;color:#64748b;margin:12px 0 -8px">' + esc(t('auto')) + '</div>'
+        });
+    }
+ 
+    // ---------- 4) ไม่สำเร็จ ----------
+    function failPopup(detail) {
+        const item = FLOW && FLOW.item, reason = FLOW ? FLOW.reason : ''; end();
+        _fire({
+            customClass: { popup: 'hrv-pop', confirmButton: 'hrv-yes', cancelButton: 'hrv-no' }, buttonsStyling: false, reverseButtons: true, showCancelButton: true, confirmButtonText: t('retry'), cancelButtonText: t('close'), focusConfirm: false, showClass: { popup: '' }, hideClass: { popup: '' },
+            html: '<div class="hrv-ic" style="width:84px;height:84px;background:linear-gradient(135deg,#f59e0b,#fbbf24);box-shadow:0 0 0 9px #fef3c7">' + svg(D.bang, '#fff', 2.8, 42) + '</div><div class="hrv-h">' + esc(t('fT')) + '</div><div class="hrv-s">' + t('fSub') + '</div>'
+                + (str(detail) ? '<div class="hrv-note r"><span><b>' + esc(t('detail')) + ':</b> ' + esc(str(detail).slice(0, 200)) + '</span></div>' : '')
+        }).then(r => { if (r && r.isConfirmed && item) { LAST = { item: item, reason: reason || '', retry: true }; try { window.app.reverseHistory(item); } catch (e) { console.warn('HISTORY-REVERSE-POPUPS', e); } } });
+    }
+ 
+    // ---------- ครอบ Swal.fire: ดักเฉพาะช่วงที่กำลังยกเลิกรายการประวัติ ----------
+    Swal.fire = function () {
+        const a = arguments;
+        try {
+            if (FLOW) {
+                const o = a[0];
+                if (!FLOW.confirmed && o && typeof o === 'object' && TITLES.indexOf(o.title) >= 0) {   // กล่องยืนยันเดิม → ใช้แบบใหม่
+                    const f = FLOW, item = f.item;
+                    if (LAST && LAST.retry && LAST.item === item) {   // กด "ลองใหม่" → ข้ามการถามซ้ำ
+                        f.reason = LAST.reason; LAST = null; f.confirmed = true; progressPopup(); armWatch();
+                        return Promise.resolve({ isConfirmed: true, isDenied: false, isDismissed: false, value: { reason: f.reason } });
+                    }
+                    return Promise.resolve(confirmPopup(item)).then((r) => {
+                        if (r && r.isConfirmed) { f.confirmed = true; f.reason = (r.value && r.value.reason) || ''; LAST = { item: item, reason: f.reason }; progressPopup(); armWatch(); }
+                        else end();
+                        return r;
+                    });
+                }
+                if (FLOW.confirmed && ((a.length >= 3 && a[2] === 'error') || (o && typeof o === 'object' && o.icon === 'error'))) {   // showError → ป็อบอัพไม่สำเร็จ
+                    const msg = typeof o === 'object' ? o.text : a[1];
+                    return Promise.resolve(failPopup(msg));
+                }
+            }
+        } catch (e) { console.warn('HISTORY-REVERSE-POPUPS', e); }
+        return _fire.apply(Swal, a);
+    };
+ 
+    // เฝ้าความคืบหน้า: ตรวจจับตอนที่ระบบเพิ่มรายการ "ยกเลิก" เข้า db.history = สำเร็จ
+    function armWatch() {
+        const f = FLOW; if (!f) return;
+        try { f.before = balOf(f.item.productId); } catch (e) { }
+        const tag = 'Reversal of transaction ID: ' + f.item.id;
+        const isMine = (h) => h && h.type === 'reversal' && String(h.remarks || '').indexOf(tag) === 0;
+        try {
+            f.arr = db.history; const un = f.arr.unshift;
+            Object.defineProperty(f.arr, 'unshift', { configurable: true, writable: true, value: function () { const r = un.apply(this, arguments); try { if (FLOW === f && isMine(arguments[0])) setTimeout(() => { if (FLOW === f) successPopup(); }, 0); } catch (e) { } return r; } });
+        } catch (e) { }
+        f.poll = setInterval(() => { try { if (FLOW === f && f.appended && (db.history || []).some(isMine)) successPopup(); } catch (e) { } }, 250);
+    }
+ 
+    // ใส่เหตุผลลงหมายเหตุของรายการยกเลิก + เดินขั้นตอนตามการบันทึกจริง
+    const _call = callAppsScript;
+    callAppsScript = async function (action, payload) {
+        const mine = FLOW && FLOW.confirmed && action === 'appendHistory' && payload && payload.type === 'reversal' && String(payload.remarks || '').indexOf('Reversal of transaction ID: ' + FLOW.item.id) === 0;
+        const f = FLOW;
+        if (mine) {
+            if (f.reason && String(payload.remarks).indexOf(' | ' + t('reasonTag') + ': ') < 0) payload.remarks = String(payload.remarks) + ' | ' + t('reasonTag') + ': ' + f.reason;
+            step(2);
+        }
+        const r = await _call.apply(this, arguments);
+        if (mine && FLOW === f) { f.appended = true; step(3); }
+        return r;
+    };
+ 
+    // ---------- ครอบตัวเริ่มยกเลิก ----------
+    function hook() {
+        if (!window.app || typeof window.app.reverseHistory !== 'function') return false;
+        if (window.app.reverseHistory.__hrv) return true;
+        const orig = window.app.reverseHistory;
+        window.app.reverseHistory = function (item) {
+            if (FLOW) return;   // กำลังทำอยู่ กันกดซ้ำ
+            if (!item || item.type === 'reversal') return orig.apply(this, arguments);
+            const keep = LAST && LAST.retry && LAST.item === item;
+            if (!keep) LAST = null;
+            FLOW = { item: item, reason: '', confirmed: false, step: 1 };
+            killer = setTimeout(end, 120000);
+            try { return orig.apply(this, arguments); } catch (e) { end(); throw e; }
+        };
+        window.app.reverseHistory.__hrv = true;
+        return true;
+    }
+    if (!hook()) { let n = 0; const iv = setInterval(() => { if (hook() || ++n > 120) clearInterval(iv); }, 500); }
+})();
+// ===== จบ HISTORY-REVERSE-POPUPS =====
+(function () {
     if (window.__lgPlanI18n) return; window.__lgPlanI18n = true;
  
     const PANE = 'pills-lg-matching';
