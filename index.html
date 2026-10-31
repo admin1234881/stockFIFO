@@ -26711,6 +26711,79 @@ renderLGTagPrintWindow = function(tags, printWin) {
     if (nav) new MutationObserver(() => { try { apply(); } catch (e) { console.warn('NAV-CUBE-ICONS', e); } }).observe(nav, { childList: true, subtree: true });
 })();
 (function () {
+    if (window.__navGloss) return; window.__navGloss = true;
+ 
+    // เมนู -> [สี, เส้นสัญลักษณ์]
+    const MAP = {
+        'pills-stock-tab': ['#F59E0B', 'M12 3l8 4.5v9L12 21l-8-4.5v-9z M4 7.5l8 4.5 8-4.5 M12 12v9'],
+        'pills-dashboard-tab': ['#8B5CF6', 'M5 20v-7 M12 20V5 M19 20v-10'],
+        'nav-import-item': ['#10B981', 'M12 4v11 M7.5 10.5L12 15l4.5-4.5 M5 19h14'],
+        'nav-export-item': ['#3B82F6', 'M12 16V5 M7.5 9.5L12 5l4.5 4.5 M5 19h14'],
+        'nav-rack-item': ['#D946EF', 'M4 9h16v10H4z M3 5h18v4H3z M10 13h4'],
+        'nav-stock-count-item': ['#EAB308', 'M8 4h8v3H8z M6 5.5H5v15h14v-15h-1 M8.5 14l2.5 2.5 4.5-5'],
+        'nav-convert-item': ['#6366F1', 'M4 8h13 M13.5 4.5L17 8l-3.5 3.5 M20 16H7 M10.5 12.5L7 16l3.5 3.5'],
+        'nav-delivery-plan-item': ['#F43F5E', 'M2.5 6.5h11v9h-11z M13.5 9.5h4l3 3v3h-7z M5.2 18a1.8 1.8 0 1 0 3.6 0 1.8 1.8 0 1 0-3.6 0z M15.2 18a1.8 1.8 0 1 0 3.6 0 1.8 1.8 0 1 0-3.6 0z'],
+        'nav-forecast-item': ['#84CC16', 'M3.5 17l5.5-5.5 4 4 7-8 M15.5 7.5H20v4.5'],
+        'nav-lg-matching-item': ['#14B8A6', 'M4 8V5h3 M17 5h3v3 M20 16v3h-3 M7 19H4v-3 M7 8v8 M10.5 8v8 M14 8v8 M17 8v8'],
+        'nav-lg-receive-item': ['#06B6D4', 'M12 3v9 M8.5 8.5L12 12l3.5-3.5 M4 13v6h16v-6 M4 13h4l1.5 2.5h5L16 13h4'],
+        'nav-lot-hold-item': ['#EF4444', 'M12 3l7.5 3v5.5c0 4.5-3.2 8-7.5 9.5-4.3-1.5-7.5-5-7.5-9.5V6z M12 8.5v4 M12 15.8v.01'],
+        'nav-history-item': ['#0EA5E9', 'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z M12 8v4.5l3 2'],
+        'nav-archive-item': ['#94A3B8', 'M3.5 5h17v4h-17z M5 9v10h14V9 M9.5 13h5'],
+        'nav-products-item': ['#F97316', 'M8.5 3.5h7v6h-7z M3.5 11.5h7v6h-7z M13.5 11.5h7v6h-7z'],
+        'nav-users-item': ['#7C3AED', 'M3.5 5.5h17v13h-17z M7.5 11a1.5 1.5 0 1 0 3 0 1.5 1.5 0 1 0-3 0z M5.8 16.5c.6-1.8 1.8-2.5 3.2-2.5s2.6.7 3.2 2.5 M14.5 10h4 M14.5 13.5h3'],
+        'nav-announcements-item': ['#EC4899', 'M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z M10 20.5a2 2 0 0 0 4 0']
+    };
+    const rgb = (h) => [1, 3, 5].map((k) => parseInt(h.substr(k, 2), 16));
+    const mix = (h, t, a) => { const c = rgb(h), tt = t === 'w' ? [255, 255, 255] : [0, 0, 0]; return 'rgb(' + c.map((v, k) => Math.round(v + (tt[k] - v) * a)).join(',') + ')'; };
+ 
+    const st = document.createElement('style'); st.id = 'nav-gloss-css';
+    st.textContent = `
+    #pills-tab.icon-nav-container{
+        background:
+            radial-gradient(circle at 0 0, rgba(96,165,250,.28), rgba(96,165,250,0) 300px),
+            radial-gradient(circle at 100% 100%, rgba(168,85,247,.20), rgba(168,85,247,0) 300px),
+            linear-gradient(180deg,#12294a 0%,#0b1c36 52%,#07111f 100%);
+        box-shadow:0 24px 50px rgba(7,17,31,.5),0 0 0 1px rgba(255,255,255,.06),inset 0 1px 0 rgba(255,255,255,.16),inset 1px 0 0 rgba(255,255,255,.07);
+    }
+    #pills-tab.icon-nav-container:hover,#pills-tab.icon-nav-container:has(:focus-visible),#pills-tab.icon-nav-container.dhm-open{
+        box-shadow:0 30px 64px rgba(7,17,31,.6),0 0 0 1px rgba(255,255,255,.08),inset 0 1px 0 rgba(255,255,255,.16),inset 1px 0 0 rgba(255,255,255,.07);
+    }
+    #pills-tab .nav-group-title{color:#8fa4c8;font-weight:600;letter-spacing:.4px}
+    #pills-tab .icon-nav-btn{height:42px;padding:0 5px 0 5px;gap:12px;border-radius:14px;color:#d6e2f6}
+    #pills-tab .icon-nav-btn:hover{background:rgba(255,255,255,.08)}
+    #pills-tab .icon-nav-btn.active{background:linear-gradient(90deg,rgba(59,130,246,.38),rgba(59,130,246,.10));color:#fff;box-shadow:inset 0 0 0 1px rgba(147,197,253,.4),0 8px 18px rgba(37,99,235,.35)}
+    #pills-tab .icon-nav-btn.active .icon-nav-label{font-weight:700}
+    #pills-tab .icon-nav-icon{width:auto;flex:none}
+    #pills-tab .icon-nav-icon .gl-tile{position:relative;flex:none;width:34px;height:34px;margin-bottom:3px;border-radius:11px;display:flex;align-items:center;justify-content:center;
+        background:linear-gradient(165deg,var(--l) 0%,var(--c) 48%,var(--d) 100%);
+        box-shadow:0 3px 0 var(--dd),0 7px 11px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.6),inset 0 -2px 3px rgba(0,0,0,.25);
+        transition:transform .12s ease,box-shadow .12s ease}
+    #pills-tab .icon-nav-icon .gl-tile::before{content:'';position:absolute;left:3px;right:3px;top:2px;height:14px;border-radius:9px 9px 12px 12px;background:linear-gradient(180deg,rgba(255,255,255,.55),rgba(255,255,255,0))}
+    #pills-tab .icon-nav-icon .gl-tile svg{position:relative;width:19px;height:19px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4))}
+    #pills-tab .icon-nav-btn:hover .gl-tile{transform:translateY(-1px)}
+    #pills-tab .icon-nav-btn:active .gl-tile{transform:translateY(2px);box-shadow:0 1px 0 var(--dd),0 3px 6px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.5),inset 0 -2px 3px rgba(0,0,0,.25)}
+    #pills-tab .icon-nav-badge{top:2px;right:4px}
+    `;
+    document.head.appendChild(st);
+ 
+    function tile(c, d) {
+        return '<span class="gl-tile" style="--c:' + c + ';--l:' + mix(c, 'w', .38) + ';--d:' + mix(c, 'b', .22) + ';--dd:' + mix(c, 'b', .58) + '">'
+            + '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + d + '"/></svg></span>';
+    }
+    function apply() {
+        Object.keys(MAP).forEach((id) => {
+            const b = document.getElementById(id);
+            const ic = b && b.querySelector('.icon-nav-icon');
+            if (!ic || ic.querySelector('.gl-tile')) return;
+            ic.innerHTML = tile(MAP[id][0], MAP[id][1]);
+        });
+    }
+    try { apply(); } catch (e) { console.warn('NAV-GLOSSY-ICONS', e); }
+    const nav = document.getElementById('pills-tab');
+    if (nav) new MutationObserver(() => { try { apply(); } catch (e) { console.warn('NAV-GLOSSY-ICONS', e); } }).observe(nav, { childList: true, subtree: true });
+})();
+// ===== จบ NAV-GLOSSY-ICONS =====
+(function () {
     if (window.__lgPlanI18n) return; window.__lgPlanI18n = true;
  
     const PANE = 'pills-lg-matching';
@@ -30207,7 +30280,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
         try {
             await resync();
             const r = keys && keys.size ? summary(Array.from(keys)) : null;
-            const stale = isReturn && res && !res.ver;
+            const stale = isReturn && res && res.op === 'lgReturn' && typeof res.count !== 'number';
             const n = isReturn && res ? stillThere(res.scanIds) : 0;
             if (stale || n) {
                 let h = '<b style="color:#b91c1c">⚠ ' + esc(stale ? t('stale') : t('notGone', { n: n })) + '</b>';
