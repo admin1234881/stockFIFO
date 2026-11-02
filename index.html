@@ -26813,7 +26813,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
     const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const str = (v) => String(v == null ? '' : v).trim();
     const fmt = (n) => Number(n || 0).toLocaleString('en-US');
-    const _fire = Swal.fire.bind(Swal);
+    const _fireRaw = Swal.fire, _fire = _fireRaw.bind(Swal);
  
     // ---------- สไตล์ ----------
     const css = document.createElement('style'); css.id = 'hrv-css';
@@ -26982,7 +26982,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
                 }
             }
         } catch (e) { console.warn('HISTORY-REVERSE-POPUPS', e); }
-        return _fire.apply(Swal, a);
+        return _fireRaw.apply(this || Swal, a);
     };
  
     // เฝ้าความคืบหน้า: ตรวจจับตอนที่ระบบเพิ่มรายการ "ยกเลิก" เข้า db.history = สำเร็จ
@@ -27032,6 +27032,102 @@ renderLGTagPrintWindow = function(tags, printWin) {
     if (!hook()) { let n = 0; const iv = setInterval(() => { if (hook() || ++n > 120) clearInterval(iv); }, 500); }
 })();
 // ===== จบ HISTORY-REVERSE-POPUPS =====
+(function () {
+    if (window.__loginC) return; window.__loginC = true;
+ 
+    const css = document.createElement('style'); css.id = 'atx-c-css';
+    css.textContent = `
+#login-page .atx-login { background: linear-gradient(180deg,#fdf2f4 0%,#fce7ea 55%,#f8fafc 100%); overflow: hidden; }
+#login-page .atx-login::before { content:''; position:absolute; left:-80px; top:-100px; width:520px; height:520px; border-radius:50%; background:radial-gradient(circle,rgba(200,16,46,.14),rgba(200,16,46,0) 68%); pointer-events:none; }
+#login-page .atx-c-bg { position:absolute; inset:0; z-index:1; pointer-events:none; }
+#login-page .atx-c-road { position:absolute; left:0; right:0; bottom:0; height:150px; background:#475569; }
+#login-page .atx-c-road::after { content:''; position:absolute; left:0; right:0; top:74px; height:5px; background:repeating-linear-gradient(90deg,transparent 0 60px,#e2e8f0 60px 100px); }
+#login-page .atx-c-truck { position:absolute; left:30px; bottom:126px; width:min(560px,42vw); height:auto; }
+ 
+#login-page .atx-left { flex:1 1 55%; position:static; overflow:visible; background:none; color:#0f172a; padding:40px 56px 160px; z-index:2; }
+#login-page .atx-eyebrow { display:none; }
+#login-page .atx-clockbox { position:absolute; top:34px; right:56px; z-index:3; color:#0f172a; }
+#login-page .atx-clock { color:#0f172a; }
+#login-page .atx-date { color:#475569; }
+#login-page .atx-hero { justify-content:flex-start; }
+#login-page .atx-brandrow { gap:14px; }
+#login-page .atx-logo { width:52px; height:52px; border-radius:16px; background:linear-gradient(135deg,#ef4444,#c8102e); box-shadow:0 10px 22px rgba(200,16,46,.4); }
+#login-page .atx-logo svg { width:28px; height:28px; }
+#login-page .atx-title { font-size:24px; font-weight:700; letter-spacing:0; color:#0f172a; }
+#login-page .atx-title span { color:#c8102e; }
+#login-page .atx-sub { font-size:13px; color:#475569; font-weight:500; margin:-14px 0 0 66px; }
+#login-page .atx-c-head { font-size:clamp(36px,3.6vw,52px); font-weight:700; line-height:1.15; letter-spacing:-.5px; margin-top:clamp(18px,3.5vh,36px); color:#0f172a; }
+#login-page .atx-desc { font-size:17px; color:#475569; max-width:480px; line-height:1.65; margin-top:16px; }
+#login-page .atx-chips { max-width:540px; margin-top:26px; gap:10px; }
+#login-page .atx-chip { height:50px; background:#fff; border:1px solid #e2e8f0; color:#0f172a; font-weight:600; border-radius:16px; }
+#login-page .atx-chip-ic { width:32px; height:32px; border-radius:10px; }
+#login-page .atx-wide { max-width:540px; background:#fff; border:1px solid #e2e8f0; border-radius:16px; color:#0f172a; }
+#login-page .atx-wide .atx-chip-ic { background:#ef4444 !important; }
+#login-page .atx-wide > div:last-child > div:first-child { color:#0f172a !important; font-weight:600 !important; }
+#login-page .atx-wide > div:last-child > div:last-child { color:#475569 !important; }
+#login-page .atx-foot { position:absolute; left:0; right:0; bottom:14px; text-align:center; color:#e2e8f0; z-index:3; }
+ 
+#login-page .atx-right { flex:0 0 580px; background:transparent; overflow:visible; z-index:2; }
+#login-page .atx-scene { display:none; }
+#login-page .atx-manual { top:34px; right:250px; }
+#login-page .atx-manual .btn { border-radius:99px; min-height:44px; padding:0 16px; font-weight:600; border:1px solid #cbd5e1; background:#fff; color:#334155; }
+#login-page .atx-card-wrap { justify-content:flex-end; padding:clamp(36px,16vh,170px) 96px 0 0; }
+#login-page .atx-card { max-width:460px; padding:34px 36px 26px; border-radius:30px; background:#fff; border:0; box-shadow:0 30px 70px rgba(127,20,38,.22),0 2px 6px rgba(15,23,42,.08); -webkit-backdrop-filter:none; backdrop-filter:none; }
+#login-page .atx-card-head { gap:16px; margin-bottom:8px; }
+#login-page #login-avatar-container > div { border-color:#fecdd3 !important; }
+#login-page .atx-c-wel { font-size:13px; font-weight:600; color:#c8102e; }
+#login-page .atx-card-title { font-size:28px; font-weight:700; line-height:1.2; }
+#login-page .atx-card-sub { font-size:14px; color:#475569; }
+#login-page .atx-label { font-size:13.5px; font-weight:600; color:#334155; margin:16px 0 6px; }
+#login-page .atx-field { height:56px; border-radius:16px; border:2px solid #cbd5e1; background:#f8fafc; color:#64748b; }
+#login-page .atx-field input { font-size:16.5px; font-weight:500; }
+#login-page .atx-field:focus-within { border-color:#c8102e; box-shadow:0 0 0 4px rgba(200,16,46,.14); background:#fff; }
+#login-page .atx-btn { height:58px; border-radius:16px; font-size:17px; font-weight:700; margin-top:22px; background:linear-gradient(135deg,#dc2626,#c8102e); box-shadow:0 12px 26px rgba(200,16,46,.38); }
+#login-page .atx-help { margin-top:20px; font-size:12.5px; color:#475569; line-height:1.6; }
+ 
+@media (max-width:991px) {
+    #login-page .atx-right { flex:1 1 auto; }
+    #login-page .atx-card-wrap { justify-content:center; padding:clamp(28px,7vh,64px) 24px 0; }
+    #login-page .atx-manual { right:20px; top:16px; }
+    #login-page .atx-c-truck { display:none; }
+}
+@media (max-height:840px) { #login-page .atx-c-truck { display:none; } }
+`;
+    document.head.appendChild(css);
+ 
+    const TRUCK = '<svg class="atx-c-truck" viewBox="0 0 640 250" fill="none" aria-hidden="true"><ellipse cx="320" cy="232" rx="290" ry="10" fill="#0f172a" opacity=".12"/><rect x="40" y="40" width="360" height="150" rx="14" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/><rect x="40" y="132" width="360" height="22" fill="#c8102e"/><rect x="40" y="154" width="360" height="6" fill="#7f1426"/><text x="76" y="108" font-family="Mitr, sans-serif" font-size="46" font-weight="600" fill="#b3141f">ATECH</text><text x="78" y="128" font-family="Mitr, sans-serif" font-size="13" fill="#5b6b82" letter-spacing="3">FG STOCK</text><path d="M410 78h110l54 52v60H410z" fill="#dc2626"/><path d="M430 92h84l38 38H430z" fill="#fecaca"/><rect x="40" y="184" width="534" height="14" rx="4" fill="#334155"/><circle cx="110" cy="204" r="30" fill="#111827"/><circle cx="110" cy="204" r="13" fill="#cbd5e1"/><circle cx="200" cy="204" r="30" fill="#111827"/><circle cx="200" cy="204" r="13" fill="#cbd5e1"/><circle cx="500" cy="204" r="30" fill="#111827"/><circle cx="500" cy="204" r="13" fill="#cbd5e1"/><rect x="560" y="150" width="20" height="14" rx="4" fill="#fbbf24"/></svg>';
+ 
+    function build() {
+        const login = document.querySelector('#login-page .atx-login'); if (!login) return false;
+        if (!login.querySelector('.atx-c-bg')) login.insertAdjacentHTML('afterbegin', '<div class="atx-c-bg" aria-hidden="true"><div class="atx-c-road"></div>' + TRUCK + '</div>');
+        const sub = login.querySelector('.atx-sub');
+        if (sub && !login.querySelector('.atx-c-head')) sub.insertAdjacentHTML('afterend', '<div class="atx-c-head">สต็อกถูกต้อง<br>รถออกตรงเวลา</div>');
+        const tt = login.querySelector('.atx-card-title');
+        if (tt && !login.querySelector('.atx-c-wel')) tt.insertAdjacentHTML('beforebegin', '<div class="atx-c-wel">ยินดีต้อนรับ</div>');
+        return true;
+    }
+    if (!build()) { let n = 0; const iv = setInterval(() => { if (build() || ++n > 40) clearInterval(iv); }, 250); }
+})();
+// ===== จบ LOGIN-C =====
+(function () {
+    if (window.__loginContact) return; window.__loginContact = true;
+    const css = document.createElement('style');
+    css.textContent = '#login-page .atx-help .atx-c-contact{display:inline-block;white-space:nowrap;font-weight:700;color:#0f172a;margin-top:2px}';
+    document.head.appendChild(css);
+    const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    function fix() {
+        const h = document.querySelector('#login-page .atx-help');
+        if (!h) return false;
+        if (h.querySelector('.atx-c-contact')) return true;
+        const txt = h.textContent || '', i = txt.indexOf('Kraiwich');
+        if (i < 0) return false;
+        const a = txt.slice(0, i).replace(/[\s·•|]+$/, '').trim(), b = txt.slice(i).trim();
+        h.innerHTML = esc(a) + '<br><span class="atx-c-contact">' + esc(b) + '</span>';
+        return true;
+    }
+    if (!fix()) { let n = 0; const iv = setInterval(() => { if (fix() || ++n > 40) clearInterval(iv); }, 250); }
+})();
+// ===== จบ LOGIN-CONTACT =====
 (function () {
     if (window.__lgPlanI18n) return; window.__lgPlanI18n = true;
  
@@ -34320,6 +34416,229 @@ ${plateTxt ? `<div><i class="bi bi-check-circle-fill"></i><span>${esc(t('c3', { 
         });
     }
 })();
+(function () {
+    if (window.__qePop) return; window.__qePop = true;
+    if (typeof Swal === 'undefined' || typeof Swal.fire !== 'function') { console.warn('QTY-EDIT-POPUPS: ไม่พบ SweetAlert2'); return; }
+ 
+    const isEn = () => { try { return currentLanguage === 'en'; } catch (e) { return false; } };
+    const I = {
+        th: {
+            title: 'แก้จำนวนจัดส่ง', sub: 'ปรับยอดของพาร์ทนี้', old: 'ยอดเดิม', now: 'ยอดใหม่', pcs: 'ชิ้น', box: 'กล่อง', same: 'ยอดยังเท่าเดิม', up: 'เพิ่ม {n} ชิ้น', down: 'ลด {n} ชิ้น',
+            save: 'บันทึกยอดใหม่', cancel: 'ยกเลิก', needQty: 'กรุณาระบุจำนวนที่มากกว่า 0', needDiff: 'ยอดใหม่ยังเท่ากับยอดเดิม — เปลี่ยนตัวเลขก่อนบันทึก', quick: 'ปรับเร็ว',
+            jD: 'ส่งสินค้า', jK: 'รับแพ็คกิ้ง', jO: 'อื่นๆ', st_Pending: 'รอจัดส่ง', st_Delivering: 'กำลังจัดส่ง', st_Completed: 'จบงาน', st_Cancelled: 'ยกเลิก', at: 'รอบ',
+            pTitle: 'กำลังบันทึกยอดใหม่…', pSub: 'กรุณารอสักครู่ อย่าเพิ่งปิดหน้านี้',
+            okT: 'อัปเดตจำนวนเรียบร้อย', okS: 'บันทึกยอดใหม่ของพาร์ทนี้แล้ว', close: 'ปิด', auto: 'ปิดอัตโนมัติใน 3 วินาที',
+            fT: 'บันทึกไม่สำเร็จ', fS: 'ยอดในแผนยังเป็นค่าเดิม ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่', detail: 'รายละเอียด', retry: 'ลองใหม่', nf: 'ไม่พบรายการนี้', nfS: 'กรุณารีเฟรชหน้าเว็บแล้วลองอีกครั้ง'
+        },
+        en: {
+            title: 'Edit delivery quantity', sub: 'Adjust the quantity of this part', old: 'Current', now: 'New quantity', pcs: 'pcs', box: 'box', same: 'Same as before', up: '+{n} pcs', down: '−{n} pcs',
+            save: 'Save new quantity', cancel: 'Cancel', needQty: 'Enter a quantity greater than 0', needDiff: 'The new quantity equals the current one — change it first', quick: 'Quick adjust',
+            jD: 'Delivery', jK: 'Pack pickup', jO: 'Other', st_Pending: 'Pending', st_Delivering: 'Delivering', st_Completed: 'Completed', st_Cancelled: 'Cancelled', at: 'Trip',
+            pTitle: 'Saving the new quantity…', pSub: 'Please wait, do not close this page',
+            okT: 'Quantity updated', okS: 'The new quantity of this part was saved', close: 'Close', auto: 'Closes automatically in 3 s',
+            fT: 'Could not save', fS: 'The plan still has the old quantity. Check the internet and try again', detail: 'Details', retry: 'Retry', nf: 'Item not found', nfS: 'Please refresh the page and try again'
+        }
+    };
+    const t = (k, v) => { let s = (I[isEn() ? 'en' : 'th'][k] != null ? I[isEn() ? 'en' : 'th'][k] : I.th[k]); Object.keys(v || {}).forEach(n => { s = s.split('{' + n + '}').join(v[n]); }); return s; };
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const str = (v) => String(v == null ? '' : v).trim();
+    const fmt = (n) => Number(n || 0).toLocaleString('en-US');
+    const ftime = (v) => { const s = typeof window.formatTimeDisplay === 'function' ? window.formatTimeDisplay(v) : String(v).replace(/^'+/, '').trim(); return s === '-' ? '' : str(s); };
+    const jobOf = (p) => { const j = str(p.jobType); return j === 'Pickup' ? 'K' : j === 'Other' ? 'O' : 'D'; };
+    const _fireRaw = Swal.fire;
+    const fire = (o) => _fireRaw.call(Swal, Object.assign({ buttonsStyling: false, reverseButtons: true, focusConfirm: false, showClass: { popup: '' }, hideClass: { popup: '' } }, o));
+ 
+    // ---------- สไตล์ ----------
+    const css = document.createElement('style'); css.id = 'qe-css';
+    css.textContent = `
+.qe-pop.swal2-popup{padding:0!important;border-radius:28px!important;overflow:hidden;width:min(440px,94vw)!important;text-align:left;font-family:inherit;color:#0f172a;box-shadow:0 30px 70px rgba(15,23,42,.45)!important;display:flex!important;flex-direction:column;--a:#2563eb;--b:#0ea5e9;--r:#dbeafe;--s:rgba(14,165,233,.4)}
+.qe-pop .swal2-html-container{margin:0!important;padding:0!important;text-align:left!important;overflow-y:auto;overflow-x:hidden;max-height:calc(100vh - 220px);flex:1 1 auto;font-size:14px;color:#0f172a}
+.qe-pop .swal2-actions{margin:0!important;padding:16px 24px 20px!important;justify-content:flex-end!important;width:100%!important;box-sizing:border-box;gap:10px;flex:none}
+.qe-pop .swal2-validation-message{margin:12px 24px 0!important;border-radius:14px;background:#fff1f2!important;color:#9f1239!important;border:1px solid #fecdd3;justify-content:flex-start;text-align:left;font-size:13px;padding:10px 14px;line-height:1.5}
+.qe-pop .swal2-validation-message::before{background:#e11d48!important}
+.qe-hd{padding:20px 24px 16px;display:flex;gap:14px;align-items:center;color:#fff;background:linear-gradient(135deg,var(--a),var(--b))}
+.qe-hd .ic{width:52px;height:52px;border-radius:17px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;flex:none}
+.qe-hd h2{margin:0;font-size:20px;letter-spacing:-.3px;color:#fff;font-weight:700;line-height:1.25}.qe-hd small{opacity:.9;font-size:12.5px;display:block;margin-top:2px;font-weight:400}
+.qe-b{padding:18px 24px 4px}
+.qe-part{background:#f1f5f9;border-radius:16px;padding:12px 14px}
+.qe-part .r1{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.qe-part b.id{font-size:16px;color:var(--a);overflow-wrap:anywhere}
+.qe-part .nm{font-size:13px;color:#475569;margin-top:2px;overflow-wrap:anywhere}
+.qe-part .r2{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px;font-size:12.5px;color:#475569}
+.qe-tag{font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px;background:#dbeafe;color:#2563eb;white-space:nowrap}.qe-tag.k{background:#ccfbf1;color:#0d9488}.qe-tag.o{background:#fef3c7;color:#92400e}.qe-tag.s{background:#e2e8f0;color:#334155}
+.qe-cmp{display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px;align-items:center;margin-top:14px}
+.qe-old{text-align:center;padding:0 6px;white-space:nowrap}.qe-old small,.qe-new small{display:block;font-size:11.5px;color:#94a3b8}
+.qe-old b{font-size:28px;letter-spacing:-1px;color:#94a3b8;text-decoration:line-through;text-decoration-thickness:2px;line-height:1.2}
+.qe-new{min-width:0}.qe-new label{display:block;font-size:11.5px;color:#64748b;margin-bottom:4px}
+.qe-step{display:flex;align-items:stretch;border:2px solid #dbe2ee;border-radius:16px;overflow:hidden;background:#fff}
+.qe-step:focus-within{border-color:var(--a);box-shadow:0 0 0 4px var(--r)}.qe-step.bad{border-color:#f43f5e!important;box-shadow:0 0 0 4px #ffe4e6!important}
+.qe-step button{border:0;background:#f1f5f9;color:#334155;width:46px;font:inherit;font-size:22px;font-weight:700;cursor:pointer;flex:none;min-height:54px}.qe-step button:active{background:#e2e8f0}
+.qe-step input{flex:1 1 0;width:0;min-width:0;border:0;outline:0;text-align:center;font:inherit;font-size:26px;font-weight:700;color:#0f172a;background:#fff;padding:6px;-moz-appearance:textfield}
+.qe-step input::-webkit-outer-spin-button,.qe-step input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.qe-diff{margin-top:12px;border-radius:14px;padding:9px 14px;font-size:13px;font-weight:600;display:flex;gap:8px;align-items:center;background:#f1f5f9;color:#64748b}
+.qe-diff.up{background:#ecfdf5;color:#047857}.qe-diff.dn{background:#fffbeb;color:#92400e}
+.qe-quick{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:12px;font-size:12px;color:#94a3b8}
+.qe-quick button{border:1px solid #dbe2ee;background:#fff;color:#475569;border-radius:99px;padding:5px 13px;font:inherit;font-size:12.5px;cursor:pointer;min-height:32px}.qe-quick button:hover{border-color:var(--a);color:var(--a)}
+.qe-bt{border:0;border-radius:14px;padding:12px 20px;font:inherit;font-size:14.5px;font-weight:600;display:inline-flex;gap:8px;align-items:center;justify-content:center;white-space:nowrap;cursor:pointer;margin:0;position:relative;overflow:hidden}
+.qe-bt:focus{outline:0;box-shadow:0 0 0 4px var(--r)}
+.qe-c{background:#f1f5f9;color:#475569}.qe-p{background:linear-gradient(135deg,var(--a),var(--b));color:#fff;box-shadow:0 8px 18px var(--s)}
+.qe-p.auto::after{content:'';position:absolute;left:0;bottom:0;height:4px;background:#bbf7d0;animation:qebar 3s linear forwards}
+@keyframes qebar{from{width:0}to{width:100%}}@keyframes qespin{to{transform:rotate(360deg)}}
+.qe-sp{animation:qespin 1s linear infinite}
+.qe-c2{padding:28px 26px 4px;text-align:center}
+.qe-ic{width:84px;height:84px;margin:0 auto;border-radius:50%;display:flex;align-items:center;justify-content:center;position:relative}
+.qe-h{font-size:22px;font-weight:700;margin-top:18px;line-height:1.25}.qe-s{font-size:14px;color:#475569;margin-top:4px;line-height:1.5}
+.qe-sum{margin-top:16px;background:#f1f5f9;border-radius:16px;padding:12px 16px;text-align:left}
+.qe-sum b.id{font-size:15px;display:block;overflow-wrap:anywhere}.qe-sum small{font-size:12.5px;color:#475569;display:block;margin-top:1px}
+.qe-sum .nums{display:flex;align-items:center;gap:10px;margin-top:10px}
+.qe-sum .nums .o{font-size:18px;font-weight:600;color:#94a3b8;text-decoration:line-through}.qe-sum .nums .n{white-space:nowrap;font-size:26px;font-weight:700;color:#047857;letter-spacing:-.5px}
+.qe-sum .nums .d{margin-left:auto;font-size:12.5px;font-weight:700;padding:3px 11px;border-radius:99px}
+.qe-sum .nums .d.up{background:#d1fae5;color:#047857}.qe-sum .nums .d.dn{background:#fef3c7;color:#92400e}
+.qe-note{margin-top:14px;text-align:left;display:flex;gap:10px;border-radius:14px;padding:10px 14px;font-size:13px;background:#fff1f2;border:1px solid #fecdd3;color:#9f1239;word-break:break-word}
+.qe-pop.qe-res .swal2-actions{padding:16px 26px 22px!important}.qe-pop.qe-res .swal2-actions button{flex:1 1 0}
+.qe-bar{margin:22px 0 24px;height:8px;border-radius:99px;background:#e2e8f0;overflow:hidden}.qe-bar i{display:block;height:100%;width:40%;border-radius:99px;background:linear-gradient(90deg,#0ea5e9,#2563eb);animation:qeslide 1.2s ease-in-out infinite}
+@keyframes qeslide{0%{margin-left:-40%}100%{margin-left:100%}}
+@media (max-width:520px){.qe-hd{padding:16px 18px 14px}.qe-b{padding:14px 18px 2px}.qe-pop .swal2-actions{padding:14px 18px 18px!important}}
+`;
+    document.head.appendChild(css);
+ 
+    const svg = (d, c, w, s) => '<svg width="' + (s || 22) + '" height="' + (s || 22) + '" viewBox="0 0 24 24" fill="none" stroke="' + c + '" stroke-width="' + (w || 2.3) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none"><path d="' + d + '"/></svg>';
+    const D = { edit: 'M4 20h4L19 9l-4-4L4 16z M13.5 6.5l4 4', ok: 'M5 12.5l4.5 4.5L19 7.5', bang: 'M12 5v9 M12 18.6v.01', up: 'M12 19V6 M6.5 11.5L12 6l5.5 5.5', dn: 'M12 5v13 M6.5 12.5L12 18l5.5-5.5' };
+ 
+    // ---------- ข้อมูลพาร์ท ----------
+    const fbOf = (pid) => { try { const p = (db.products || []).find(x => str(x.id) === str(pid)); return p ? (parseInt(p.fullBoxQuantity, 10) || 0) : 0; } catch (e) { return 0; } };
+    const dateOf = (p) => { try { return typeof formatDate === 'function' ? str(formatDate(p.date)) : str(p.date).split('T')[0]; } catch (e) { return ''; } };
+    function partCard(p) {
+        const j = jobOf(p), tag = '<span class="qe-tag ' + (j === 'K' ? 'k' : j === 'O' ? 'o' : '') + '">' + esc(t('j' + j)) + '</span>';
+        const st = str(p.status), stTag = st ? '<span class="qe-tag s">' + esc(I.th['st_' + st] ? t('st_' + st) : st) + '</span>' : '';
+        const tm = ftime(p.time);
+        return '<div class="qe-part"><div class="r1"><b class="id">' + esc(p.productId) + '</b>' + tag + stTag + '</div>'
+            + (str(p.productName) && str(p.productName) !== '-' ? '<div class="nm">' + esc(p.productName) + '</div>' : '')
+            + '<div class="r2"><span><b style="color:#0f172a">' + esc(p.customer) + '</b></span>' + (tm ? '<span>· ' + esc(t('at')) + ' ' + esc(tm) + '</span>' : '') + (dateOf(p) ? '<span>· ' + esc(dateOf(p)) + '</span>' : '') + (str(p.invoiceNumber) && str(p.invoiceNumber) !== '-' ? '<span>· ' + esc(p.invoiceNumber) + '</span>' : '') + '</div></div>';
+    }
+    const diffTxt = (d) => d > 0 ? t('up', { n: fmt(d) }) : d < 0 ? t('down', { n: fmt(-d) }) : t('same');
+ 
+    // ---------- 1) ป็อบอัพแก้ยอด ----------
+    function editPopup(p, old) {
+        const fb = fbOf(p.productId), jumps = [];
+        if (fb > 0 && [10, 50].indexOf(fb) < 0) jumps.push(-fb, fb);
+        jumps.push(-50, -10, 10, 50);
+        const chips = jumps.map(n => '<button type="button" data-d="' + n + '">' + (n > 0 ? '+' : '−') + fmt(Math.abs(n)) + (fb > 0 && Math.abs(n) === fb && [10, 50].indexOf(fb) < 0 ? ' (' + esc(t('box')) + ')' : '') + '</button>').join('');
+        return fire({
+            customClass: { popup: 'qe-pop', confirmButton: 'qe-bt qe-p', cancelButton: 'qe-bt qe-c' }, showCancelButton: true,
+            confirmButtonText: svg(D.ok, '#fff', 2.6, 18) + ' ' + esc(t('save')), cancelButtonText: esc(t('cancel')),
+            html: '<div class="qe-hd"><div class="ic">' + svg(D.edit, '#fff', 2.2, 28) + '</div><div><h2>' + esc(t('title')) + '</h2><small>' + esc(t('sub')) + '</small></div></div>'
+                + '<div class="qe-b">' + partCard(p)
+                + '<div class="qe-cmp"><div class="qe-old"><small>' + esc(t('old')) + '</small><b>' + fmt(old) + '</b><small>' + esc(t('pcs')) + '</small></div>'
+                + '<div class="qe-new"><label for="qe-in">' + esc(t('now')) + ' (' + esc(t('pcs')) + ')</label><div class="qe-step" id="qe-step"><button type="button" data-s="-1" aria-label="-1">−</button><input id="qe-in" type="number" inputmode="numeric" min="1" step="1" value="' + old + '"><button type="button" data-s="1" aria-label="+1">+</button></div></div></div>'
+                + '<div class="qe-diff" id="qe-diff">' + esc(t('same')) + '</div>'
+                + '<div class="qe-quick"><span>' + esc(t('quick')) + '</span>' + chips + '</div></div>',
+            didOpen: (el) => {
+                const inp = el.querySelector('#qe-in'), diff = el.querySelector('#qe-diff'), box = el.querySelector('#qe-step');
+                const val = () => parseInt(inp.value, 10);
+                const upd = () => {
+                    const v = val(), d = isNaN(v) ? 0 : v - old;
+                    box.classList.remove('bad'); try { Swal.resetValidationMessage(); } catch (e) { }
+                    diff.className = 'qe-diff' + (d > 0 ? ' up' : d < 0 ? ' dn' : '');
+                    diff.innerHTML = (d > 0 ? svg(D.up, '#047857', 2.6, 16) : d < 0 ? svg(D.dn, '#92400e', 2.6, 16) : '') + '<span>' + esc(diffTxt(d)) + '</span>';
+                };
+                const set = (n) => { inp.value = String(Math.max(1, Math.round(n))); upd(); };
+                el.querySelectorAll('[data-s]').forEach(b => b.addEventListener('click', () => set((isNaN(val()) ? old : val()) + parseInt(b.dataset.s, 10))));
+                el.querySelectorAll('[data-d]').forEach(b => b.addEventListener('click', () => set((isNaN(val()) ? old : val()) + parseInt(b.dataset.d, 10))));
+                inp.addEventListener('input', upd);
+                inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); Swal.clickConfirm(); } });
+                upd(); inp.focus(); inp.select();
+            },
+            preConfirm: () => {
+                const inp = document.getElementById('qe-in'), v = parseInt(inp && inp.value, 10), box = document.getElementById('qe-step');
+                if (isNaN(v) || v <= 0) { if (box) box.classList.add('bad'); Swal.showValidationMessage(t('needQty')); return false; }
+                if (v === old) { if (box) box.classList.add('bad'); Swal.showValidationMessage(t('needDiff')); return false; }
+                return v;
+            }
+        });
+    }
+ 
+    // ---------- 2) กำลังบันทึก ----------
+    function progressPopup() {
+        fire({
+            customClass: { popup: 'qe-pop qe-res' }, showConfirmButton: false, allowOutsideClick: false, allowEscapeKey: false,
+            html: '<div class="qe-c2"><div class="qe-ic"><svg class="qe-sp" width="92" height="92" viewBox="0 0 84 84" fill="none" aria-hidden="true" style="position:absolute;left:-4px;top:-4px"><circle cx="42" cy="42" r="36" stroke="#dbeafe" stroke-width="6"/><path d="M42 6a36 36 0 0 1 36 36" stroke="#2563eb" stroke-width="6" stroke-linecap="round"/></svg>'
+                + '<div style="width:84px;height:84px;border-radius:50%;background:#eff6ff;display:flex;align-items:center;justify-content:center">' + svg(D.edit, '#2563eb', 2.2, 36) + '</div></div>'
+                + '<div class="qe-h">' + esc(t('pTitle')) + '</div><div class="qe-s">' + esc(t('pSub')) + '</div><div class="qe-bar"><i></i></div></div>'
+        });
+    }
+ 
+    // ---------- 3) สำเร็จ ----------
+    function successPopup(p, old, now) {
+        const d = now - old;
+        fire({
+            customClass: { popup: 'qe-pop qe-res', confirmButton: 'qe-bt qe-p auto' }, showCancelButton: false, confirmButtonText: esc(t('close')), timer: 3000,
+            html: '<div class="qe-c2"><div class="qe-ic" style="background:linear-gradient(135deg,#10b981,#34d399);box-shadow:0 0 0 9px #d1fae5">' + svg(D.ok, '#fff', 3, 44) + '</div>'
+                + '<div class="qe-h">' + esc(t('okT')) + '</div><div class="qe-s">' + esc(t('okS')) + '</div>'
+                + '<div class="qe-sum"><b class="id">' + esc(p.productId) + (str(p.productName) && str(p.productName) !== '-' ? ' · ' + esc(p.productName) : '') + '</b><small>' + esc(p.customer) + (ftime(p.time) ? ' · ' + esc(t('at')) + ' ' + esc(ftime(p.time)) : '') + '</small>'
+                + '<div class="nums"><span class="o">' + fmt(old) + '</span><span style="color:#94a3b8">→</span><span class="n">' + fmt(now) + ' <small style="font-size:13px;font-weight:600;color:#475569">' + esc(t('pcs')) + '</small></span><span class="d ' + (d > 0 ? 'up' : 'dn') + '">' + esc(diffTxt(d)) + '</span></div></div>'
+                + '<div style="font-size:12px;color:#64748b;margin:14px 0 -6px">' + esc(t('auto')) + '</div></div>'
+        });
+    }
+ 
+    // ---------- 4) ไม่สำเร็จ ----------
+    function failPopup(detail, retry, nf) {
+        fire({
+            customClass: { popup: 'qe-pop qe-res', confirmButton: 'qe-bt qe-p', cancelButton: 'qe-bt qe-c' }, showCancelButton: !!retry, confirmButtonText: esc(retry ? t('retry') : t('close')), cancelButtonText: esc(t('close')), focusConfirm: false,
+            html: '<div class="qe-c2"><div class="qe-ic" style="background:linear-gradient(135deg,#f59e0b,#fbbf24);box-shadow:0 0 0 9px #fef3c7">' + svg(D.bang, '#fff', 2.8, 44) + '</div>'
+                + '<div class="qe-h">' + esc(t(nf ? 'nf' : 'fT')) + '</div><div class="qe-s">' + esc(t(nf ? 'nfS' : 'fS')) + '</div>'
+                + (!nf && str(detail) ? '<div class="qe-note"><span><b>' + esc(t('detail')) + ':</b> ' + esc(str(detail).slice(0, 200)) + '</span></div>' : '') + '</div>'
+        }).then(r => { if (retry && r && r.isConfirmed) retry(); });
+    }
+ 
+    // ---------- ครอบ Swal.fire: ดักเฉพาะช่วงที่ฟังก์ชันแก้ยอดทำงาน ----------
+    let CTX = null;
+    const _chain = Swal.fire;
+    Swal.fire = function () {
+        const a = arguments, o = a[0], c = CTX;
+        if (c) {
+            try {
+                if (o && typeof o === 'object' && o.input === 'number' && !c.asked) {   // กล่องแก้ยอดเดิม → แบบใหม่
+                    c.asked = true;
+                    return editPopup(c.plan, c.old).then((r) => {
+                        if (r && r.isConfirmed && r.value) { c.now = r.value; return { isConfirmed: true, isDenied: false, isDismissed: false, value: String(r.value) }; }
+                        return { isConfirmed: false, isDenied: false, isDismissed: true, dismiss: r && r.dismiss };
+                    });
+                }
+                if (c.now && o && typeof o === 'object' && o.title === 'กำลังบันทึก...') { progressPopup(); return Promise.resolve({ isConfirmed: false, isDismissed: true }); }
+                if (c.now && o && typeof o === 'object' && o.icon === 'success') { c.ok = true; successPopup(c.plan, c.old, c.now); return Promise.resolve({ isConfirmed: false, isDismissed: true }); }
+                if (typeof o === 'string' && a[2] === 'error') {   // ฟังก์ชันเดิมแจ้งข้อผิดพลาด
+                    const nf = !c.asked;
+                    if (!nf) { c.plan.quantity = c.old; c.failed = true; try { if (typeof renderDeliveryPlanTable === 'function') renderDeliveryPlanTable(c.date); } catch (e) { } }
+                    const id = c.id, date = c.date;
+                    failPopup(a[1], nf ? null : function () { try { window.editPlanItemQuantity(id, date); } catch (e) { } }, nf);
+                    return Promise.resolve({ isConfirmed: false, isDismissed: true });
+                }
+            } catch (e) { console.warn('QTY-EDIT-POPUPS', e); }
+        }
+        return _chain.apply(this, a);
+    };
+ 
+    // ---------- ครอบฟังก์ชันเดิม (ประกาศภายหลังแพตช์นี้ จึงใช้ getter/setter ของ window) ----------
+    (function () {
+        let legacy = window.editPlanItemQuantity, depth = 0;
+        const wrapper = function (itemId, dateStr) {
+            if (typeof legacy !== 'function') return;
+            if (depth > 0) return;
+            let plan = null;
+            try { plan = (db.deliveryPlans || []).find(p => str(p.id) === str(itemId)) || null; } catch (e) { }
+            depth++;
+            CTX = { plan: plan, old: plan ? (parseInt(plan.quantity, 10) || 0) : 0, id: itemId, date: dateStr, asked: false, now: 0 };
+            let r;
+            try { r = legacy.apply(this, arguments); } catch (e) { CTX = null; depth--; throw e; }
+            const done = () => { CTX = null; depth--; };
+            if (r && typeof r.then === 'function') return r.then((v) => { done(); return v; }, (e) => { done(); throw e; });
+            done(); return r;
+        };
+        Object.defineProperty(window, 'editPlanItemQuantity', { configurable: true, enumerable: true, get() { return wrapper; }, set(v) { legacy = v; } });
+    })();
+})();
+// ===== จบ QTY-EDIT-POPUPS =====
 (function () {
     if (window.__hsBwide) return; window.__hsBwide = true;
     const s = document.createElement('style'); s.id = 'hsB-wide-css';
