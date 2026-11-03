@@ -34640,6 +34640,774 @@ ${plateTxt ? `<div><i class="bi bi-check-circle-fill"></i><span>${esc(t('c3', { 
 })();
 // ===== จบ QTY-EDIT-POPUPS =====
 (function () {
+    if (window.__dpuPop) return; window.__dpuPop = true;
+    if (typeof Swal === 'undefined' || typeof Swal.fire !== 'function') { console.warn('DP-UPLOAD-POPUPS: ไม่พบ SweetAlert2'); return; }
+ 
+    const isEn = () => { try { return currentLanguage === 'en'; } catch (e) { return false; } };
+    const I = {
+        th: {
+            rTitle: 'กำลังอ่านไฟล์ Excel…', rSub: 'กรุณารอสักครู่ อย่าเพิ่งปิดหน้านี้',
+            okT: 'อัปโหลดแผนจัดส่งสำเร็จ', okS: 'เพิ่มคิวงานลงตารางแล้ว', dayOf: 'ดึงคิวงานของวันที่', range: 'ช่วงวันที่ {a} – {b} ({n} วัน) · ตารางแสดงวันที่ {c}',
+            sItems: 'รายการ', sTrips: 'เที่ยวรถ', sPcs: 'ชิ้น', pick: 'รับแพ็คกิ้ง {n} เที่ยว', ok: 'ตกลง', close: 'ปิด',
+            saving: 'กำลังบันทึกลง Google Sheet…', saved: 'บันทึกลง Google Sheet เรียบร้อย', savedSub: 'ข้อมูลครบแล้ว ใช้งานต่อได้เลย',
+            sfail: 'ยังไม่ยืนยันว่าบันทึกลง Google Sheet สำเร็จ', sfailSub: 'รายการแสดงบนหน้าจอแล้ว แต่ถ้ารีเฟรชตอนนี้อาจหาย — กดปุ่มโหลดใหม่ (⟳) เช็คว่ารายการครบก่อน แล้วค่อยอัปโหลดซ้ำ ไม่งั้นอาจซ้ำ',
+            nfT: 'รหัสสินค้าไม่มีในระบบ {n} รายการ (ถูกข้าม)', nfMore: 'และอีก {n} รหัส',
+            aT: 'ไม่พบสินค้าในระบบเลย', aS: 'รหัสสินค้าในไฟล์ไม่มีในฐานข้อมูลทั้งหมด', aTip: 'ตรวจว่าใส่รหัสในคอลัมน์ Part No (คอลัมน์ D) ถูกต้อง และสินค้าถูกเพิ่มในระบบแล้ว', tpl: 'โหลดเทมเพลต',
+            eT: 'ไม่พบข้อมูลในไฟล์', eS: 'ไม่มีรายการจัดส่งที่อ่านได้จากไฟล์นี้', eTip1: 'ใช้ไฟล์ตามเทมเพลต (8 คอลัมน์) และข้อมูลเริ่มที่แถวที่ 2', eTip2: 'คอลัมน์ A ต้องมีวันที่ · รับแพ็คกิ้งต้องมีชื่อลูกค้า',
+            fT: 'อัปโหลดไม่สำเร็จ', detail: 'รายละเอียด', file: 'ไฟล์'
+        },
+        en: {
+            rTitle: 'Reading the Excel file…', rSub: 'Please wait, do not close this page',
+            okT: 'Delivery plan uploaded', okS: 'The jobs were added to the table', dayOf: 'Jobs for', range: 'Dates {a} – {b} ({n} days) · table shows {c}',
+            sItems: 'Items', sTrips: 'Trips', sPcs: 'Pcs', pick: '{n} packaging pickup trip(s)', ok: 'OK', close: 'Close',
+            saving: 'Saving to Google Sheet…', saved: 'Saved to Google Sheet', savedSub: 'Everything is saved — carry on',
+            sfail: 'Could not confirm the save to Google Sheet', sfailSub: 'The rows are on screen but may disappear on refresh — press reload (⟳) and check they are all there before uploading again, or you may get duplicates',
+            nfT: '{n} product code(s) not in the system (skipped)', nfMore: 'and {n} more',
+            aT: 'No products found in the system', aS: 'None of the product codes in the file exist in the database', aTip: 'Check the Part No column (column D) and make sure the products are added in the system', tpl: 'Download template',
+            eT: 'No data found in the file', eS: 'No delivery rows could be read from this file', eTip1: 'Use the template (8 columns) and start data on row 2', eTip2: 'Column A needs a date · pickups need a customer name',
+            fT: 'Upload failed', detail: 'Details', file: 'File'
+        }
+    };
+    const t = (k, v) => { let s = (I[isEn() ? 'en' : 'th'][k] != null ? I[isEn() ? 'en' : 'th'][k] : I.th[k]); Object.keys(v || {}).forEach(n => { s = s.split('{' + n + '}').join(v[n]); }); return s; };
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const str = (v) => String(v == null ? '' : v).trim();
+    const fmt = (n) => Number(n || 0).toLocaleString('en-US');
+    const _fireRaw = Swal.fire;
+    const fire = (o) => _fireRaw.call(Swal, Object.assign({ buttonsStyling: false, reverseButtons: true, focusConfirm: false, showClass: { popup: '' }, hideClass: { popup: '' } }, o));
+ 
+    // ---------- สไตล์ ----------
+    const css = document.createElement('style'); css.id = 'dpu-css';
+    css.textContent = `
+.dpu-pop.swal2-popup{padding:0!important;border-radius:30px!important;width:min(460px,94vw)!important;box-shadow:0 30px 70px rgba(15,23,42,.45)!important;font-family:inherit;color:#0f172a;display:flex!important;flex-direction:column;overflow:hidden}
+.dpu-pop .swal2-html-container{margin:0!important;padding:28px 26px 4px!important;text-align:center!important;overflow-y:auto;overflow-x:hidden;max-height:calc(100vh - 200px);font-size:14px;color:#0f172a}
+.dpu-pop .swal2-actions{margin:0!important;padding:16px 26px 22px!important;width:100%!important;box-sizing:border-box;gap:10px;flex-wrap:nowrap}
+.dpu-pop .swal2-actions button{flex:1 1 0;min-height:50px;margin:0!important;border-radius:14px!important;font:inherit;font-size:15px!important;font-weight:700!important;border:0;cursor:pointer;box-shadow:none!important}
+.dpu-pop .swal2-actions button:focus-visible{outline:2px solid #2563eb;outline-offset:2px}
+.dpu-pop .swal2-actions .dpu-p{background:linear-gradient(135deg,#2563eb,#0ea5e9);color:#fff;box-shadow:0 8px 18px rgba(14,165,233,.4)!important}
+.dpu-pop .swal2-actions .dpu-g{background:linear-gradient(135deg,#059669,#10b981);color:#fff;box-shadow:0 8px 18px rgba(16,185,129,.4)!important}
+.dpu-pop .swal2-actions .dpu-c{background:#e2e8f0;color:#334155;font-weight:600!important}
+.dpu-ic{width:84px;height:84px;margin:0 auto;border-radius:50%;display:flex;align-items:center;justify-content:center;position:relative}
+.dpu-h{font-size:22px;font-weight:700;margin-top:18px;line-height:1.25}.dpu-s{font-size:14px;color:#475569;margin-top:4px;line-height:1.5}
+@keyframes dpuspin{to{transform:rotate(360deg)}}.dpu-sp{animation:dpuspin 1s linear infinite}
+@keyframes dpuslide{0%{margin-left:-40%}100%{margin-left:100%}}
+.dpu-bar{margin:22px 0 24px;height:8px;border-radius:99px;background:#e2e8f0;overflow:hidden}.dpu-bar i{display:block;height:100%;width:40%;border-radius:99px;background:linear-gradient(90deg,#0ea5e9,#2563eb);animation:dpuslide 1.2s ease-in-out infinite}
+.dpu-file{margin-top:16px;display:flex;gap:12px;align-items:center;text-align:left;border:2px solid #e2e8f0;border-radius:16px;padding:10px 14px}
+.dpu-file .fi{width:42px;height:42px;border-radius:12px;background:#dcfce7;display:flex;align-items:center;justify-content:center;flex:none}
+.dpu-file b{font-size:14px;display:block;overflow-wrap:anywhere}.dpu-file small{font-size:12px;color:#64748b}
+.dpu-day{display:inline-flex;gap:8px;align-items:center;margin-top:14px;background:#eff6ff;color:#1d4ed8;border-radius:99px;padding:6px 16px;font-weight:600;font-size:14px}
+.dpu-rg{font-size:12px;color:#64748b;margin-top:6px}
+.dpu-st{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}
+.dpu-st div{background:#f1f5f9;border-radius:16px;padding:12px 6px}.dpu-st small{display:block;font-size:11.5px;color:#64748b}.dpu-st b{font-size:26px;letter-spacing:-.5px;line-height:1.2}.dpu-st .g b{color:#047857}
+.dpu-pk{font-size:12.5px;color:#0d9488;margin-top:8px}
+.dpu-nf{margin-top:14px;text-align:left;border:1px solid #fecdd3;background:#fff7f8;border-radius:16px;padding:10px 14px}
+.dpu-nf>b{font-size:13px;color:#9f1239;display:flex;gap:8px;align-items:center}
+.dpu-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;max-height:92px;overflow-y:auto}.dpu-chips span{font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px;background:#ffe4e6;color:#9f1239}
+.dpu-sv{margin-top:14px;text-align:left;display:flex;gap:10px;align-items:flex-start;border-radius:14px;padding:10px 14px;font-size:13px;background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;line-height:1.45}
+.dpu-sv b{display:block;font-size:13.5px}.dpu-sv small{display:block;font-size:12px;opacity:.9;margin-top:1px}
+.dpu-sv.ok{background:#ecfdf5;border-color:#a7f3d0;color:#065f46}.dpu-sv.bad{background:#fffbeb;border-color:#fde68a;color:#92400e}
+.dpu-tip{margin-top:16px;text-align:left;background:#f8fafc;border-radius:14px;padding:10px 14px;font-size:13px;color:#475569;line-height:1.6}
+.dpu-note{margin-top:14px;text-align:left;border-radius:14px;padding:10px 14px;font-size:13px;background:#fff1f2;border:1px solid #fecdd3;color:#9f1239;word-break:break-word}
+`;
+    document.head.appendChild(css);
+ 
+    const svg = (d, c, w, s) => '<svg width="' + (s || 22) + '" height="' + (s || 22) + '" viewBox="0 0 24 24" fill="none" stroke="' + c + '" stroke-width="' + (w || 2.3) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none"><path d="' + d + '"/></svg>';
+    const D = { ok: 'M5 12.5l4.5 4.5L19 7.5', bang: 'M12 5v9 M12 18.6v.01', sheet: 'M6 3h9l4 4v14H6z M14 3v5h5 M9 13h7 M9 17h7', cal: 'M4 6h16v14H4z M4 10h16 M8 3v4 M16 3v4', x: 'M6 6l12 12 M18 6L6 18', up: 'M12 16V5 M7.5 9.5L12 5l4.5 4.5 M5 19h14' };
+    const spinner = (c1, c2, inner) => '<div class="dpu-ic"><svg class="dpu-sp" width="92" height="92" viewBox="0 0 84 84" fill="none" aria-hidden="true" style="position:absolute;left:-4px;top:-4px"><circle cx="42" cy="42" r="36" stroke="' + c1 + '" stroke-width="6"/><path d="M42 6a36 36 0 0 1 36 36" stroke="' + c2 + '" stroke-width="6" stroke-linecap="round"/></svg><div style="width:84px;height:84px;border-radius:50%;background:#eff6ff;display:flex;align-items:center;justify-content:center">' + inner + '</div></div>';
+    const ddmm = (ymd) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(str(ymd)); return m ? m[3] + '/' + m[2] + '/' + m[1] : str(ymd); };
+    const kb = (n) => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+ 
+    // ---------- สถานะรอบอัปโหลด ----------
+    let CTX = null, SAVE = null, ttl = null;
+    function endCtx() { CTX = null; clearTimeout(ttl); }
+    function saveHtml() {
+        if (!SAVE) return '';
+        if (SAVE.state === 'ok') return '<div class="dpu-sv ok" id="dpu-sv">' + svg(D.ok, '#059669', 2.6, 18) + '<span><b>' + esc(t('saved')) + '</b><small>' + esc(t('savedSub')) + '</small></span></div>';
+        if (SAVE.state === 'fail') return '<div class="dpu-sv bad" id="dpu-sv">' + svg(D.bang, '#b45309', 2.6, 18) + '<span><b>' + esc(t('sfail')) + '</b><small>' + esc(t('sfailSub')) + '</small></span></div>';
+        return '<div class="dpu-sv" id="dpu-sv"><svg class="dpu-sp" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex:none;margin-top:1px"><circle cx="12" cy="12" r="9" stroke="#bfdbfe" stroke-width="3"/><path d="M12 3a9 9 0 0 1 9 9" stroke="#2563eb" stroke-width="3" stroke-linecap="round"/></svg><span><b>' + esc(t('saving')) + '</b></span></div>';
+    }
+    function refreshSave() { const el = document.getElementById('dpu-sv'); if (el && SAVE) el.outerHTML = saveHtml(); }
+ 
+    // ---------- 1) กำลังอ่านไฟล์ ----------
+    function readingPopup() {
+        const f = CTX && CTX.file;
+        fire({
+            customClass: { popup: 'dpu-pop' }, showConfirmButton: false, allowOutsideClick: false, allowEscapeKey: false,
+            html: spinner('#dbeafe', '#2563eb', svg(D.sheet, '#2563eb', 2.2, 36))
+                + '<div class="dpu-h">' + esc(t('rTitle')) + '</div><div class="dpu-s">' + esc(t('rSub')) + '</div>'
+                + (f ? '<div class="dpu-file"><div class="fi">' + svg(D.sheet, '#15803d', 2.2, 22) + '</div><div style="min-width:0"><b>' + esc(f.name) + '</b><small>' + esc(kb(f.size)) + '</small></div></div>' : '')
+                + '<div class="dpu-bar"><i></i></div>'
+        });
+    }
+ 
+    // ---------- 2) อัปโหลดสำเร็จ ----------
+    function successPopup(src) {
+        const n = parseInt((/บันทึกสำเร็จ:\s*<b>(\d+)<\/b>/.exec(src) || [])[1], 10) || 0;
+        const nf = []; const re = /badge bg-danger me-1">([^<]*)</g; let m; while ((m = re.exec(src))) nf.push(m[1]);
+        const nfN = parseInt((/ไม่มีในระบบ:\s*<b>(\d+)<\/b>/.exec(src) || [])[1], 10) || nf.length;
+        let items = []; try { items = (db.deliveryPlans || []).slice(-n).filter(p => String(p.id).indexOf('del-xls-') === 0); } catch (e) { }
+        const dates = Array.from(new Set(items.map(p => str(p.date)))).sort();
+        const trips = new Set(items.map(p => [str(p.date), str(p.time).replace(/^'+/, ''), str(p.customer), p.jobType].join('|')));
+        let pcs = 0, pk = new Set(); items.forEach(p => { if (p.jobType === 'Pickup') pk.add([str(p.date), str(p.time), str(p.customer)].join('|')); else pcs += parseInt(p.quantity, 10) || 0; });
+        const first = str(((/<b>(\d{2}\/\d{2}\/\d{4})<\/b>/.exec(src)) || [])[1]) || ddmm(dates[0]);
+        const rg = dates.length > 1 ? '<div class="dpu-rg">' + esc(t('range', { a: ddmm(dates[0]).slice(0, 5), b: ddmm(dates[dates.length - 1]).slice(0, 5), n: dates.length, c: first.slice(0, 5) })) + '</div>' : '';
+        const nfBox = nfN > 0 ? '<div class="dpu-nf"><b>' + svg(D.x, '#e11d48', 2.6, 16) + esc(t('nfT', { n: nfN })) + '</b><div class="dpu-chips">' + nf.slice(0, 30).map(x => '<span>' + esc(x) + '</span>').join('') + (nf.length > 30 ? '<span style="background:#f1f5f9;color:#475569">' + esc(t('nfMore', { n: nf.length - 30 })) + '</span>' : '') + '</div></div>' : '';
+        endCtx();
+        fire({
+            customClass: { popup: 'dpu-pop', confirmButton: 'dpu-g' }, confirmButtonText: esc(t('ok')),
+            html: '<div class="dpu-ic" style="background:linear-gradient(135deg,#10b981,#34d399);box-shadow:0 0 0 9px #d1fae5">' + svg(D.ok, '#fff', 3, 44) + '</div>'
+                + '<div class="dpu-h">' + esc(t('okT')) + '</div><div class="dpu-s">' + esc(t('okS')) + '</div>'
+                + '<div class="dpu-day">' + svg(D.cal, '#1d4ed8', 2.2, 18) + esc(t('dayOf')) + ' ' + esc(first) + '</div>' + rg
+                + '<div class="dpu-st"><div><small>' + esc(t('sItems')) + '</small><b>' + fmt(n) + '</b></div><div><small>' + esc(t('sTrips')) + '</small><b>' + fmt(trips.size) + '</b></div><div class="g"><small>' + esc(t('sPcs')) + '</small><b>' + fmt(pcs) + '</b></div></div>'
+                + (pk.size ? '<div class="dpu-pk">♻️ ' + esc(t('pick', { n: pk.size })) + '</div>' : '')
+                + nfBox + saveHtml()
+        });
+    }
+ 
+    // ---------- 3) ไม่พบสินค้า / ไม่พบข้อมูล ----------
+    function allMissingPopup(src) {
+        const nf = []; const re = /badge bg-danger me-1">([^<]*)</g; let m; while ((m = re.exec(src))) nf.push(m[1]);
+        endCtx();
+        fire({
+            customClass: { popup: 'dpu-pop', confirmButton: 'dpu-p', cancelButton: 'dpu-c' }, showCancelButton: true, confirmButtonText: svg(D.up, '#fff', 2.4, 16).replace('style="flex:none"', 'style="flex:none;transform:rotate(180deg)"') + ' ' + esc(t('tpl')), cancelButtonText: esc(t('close')),
+            html: '<div class="dpu-ic" style="background:linear-gradient(135deg,#f43f5e,#fb7185);box-shadow:0 0 0 9px #ffe4e6">' + svg(D.x, '#fff', 3, 40) + '</div>'
+                + '<div class="dpu-h">' + esc(t('aT')) + '</div><div class="dpu-s">' + esc(t('aS')) + '</div>'
+                + '<div class="dpu-nf"><div class="dpu-chips" style="margin-top:0">' + nf.slice(0, 40).map(x => '<span>' + esc(x) + '</span>').join('') + '</div></div>'
+                + '<div class="dpu-tip">' + esc(t('aTip')) + '</div>'
+        }).then(r => { if (r && r.isConfirmed && typeof window.downloadDeliveryTemplate === 'function') window.downloadDeliveryTemplate(); });
+    }
+    function emptyPopup() {
+        endCtx();
+        fire({
+            customClass: { popup: 'dpu-pop', confirmButton: 'dpu-p', cancelButton: 'dpu-c' }, showCancelButton: true, confirmButtonText: esc(t('tpl')), cancelButtonText: esc(t('close')),
+            html: '<div class="dpu-ic" style="background:linear-gradient(135deg,#f59e0b,#fbbf24);box-shadow:0 0 0 9px #fef3c7">' + svg(D.bang, '#fff', 2.8, 42) + '</div>'
+                + '<div class="dpu-h">' + esc(t('eT')) + '</div><div class="dpu-s">' + esc(t('eS')) + '</div>'
+                + '<div class="dpu-tip">• ' + esc(t('eTip1')) + '<br>• ' + esc(t('eTip2')) + '</div>'
+        }).then(r => { if (r && r.isConfirmed && typeof window.downloadDeliveryTemplate === 'function') window.downloadDeliveryTemplate(); });
+    }
+ 
+    // ---------- 4) ผิดพลาด ----------
+    function failPopup(detail) {
+        endCtx();
+        fire({
+            customClass: { popup: 'dpu-pop', confirmButton: 'dpu-p' }, confirmButtonText: esc(t('close')),
+            html: '<div class="dpu-ic" style="background:linear-gradient(135deg,#f59e0b,#fbbf24);box-shadow:0 0 0 9px #fef3c7">' + svg(D.bang, '#fff', 2.8, 42) + '</div>'
+                + '<div class="dpu-h">' + esc(t('fT')) + '</div>'
+                + (str(detail) ? '<div class="dpu-note"><b>' + esc(t('detail')) + ':</b> ' + esc(str(detail).slice(0, 240)) + '</div>' : '')
+        });
+    }
+ 
+    // ---------- ครอบ Swal.fire: ดักเฉพาะรอบที่เลือกไฟล์แผนจัดส่ง ----------
+    const _chain = Swal.fire;
+    Swal.fire = function () {
+        const a = arguments, o = a[0];
+        if (CTX) {
+            try {
+                if (o && typeof o === 'object') {
+                    if (o.title === 'กำลังอ่านไฟล์ Excel...') { readingPopup(); return Promise.resolve({ isConfirmed: false, isDismissed: true }); }
+                    if (o.title === 'อัปโหลดแผนจัดส่งสำเร็จ!') { const src = String(o.html || ''); successPopup(src); return Promise.resolve({ isConfirmed: true, isDismissed: false }); }
+                    if (o.title === 'ไม่พบสินค้าใดๆ ในระบบเลย!') { allMissingPopup(String(o.html || '')); return Promise.resolve({ isConfirmed: false, isDismissed: true }); }
+                } else if (typeof o === 'string') {
+                    if (o === 'ไม่พบข้อมูล!') { emptyPopup(); return Promise.resolve({ isConfirmed: false, isDismissed: true }); }
+                    if (o === 'เกิดข้อผิดพลาด' && a[2] === 'error' && /Excel|อ่านข้อมูล/.test(String(a[1]))) { failPopup(a[1]); return Promise.resolve({ isConfirmed: false, isDismissed: true }); }
+                }
+            } catch (e) { console.warn('DP-UPLOAD-POPUPS', e); }
+        }
+        return _chain.apply(this, a);
+    };
+ 
+    // ---------- ติดตามการบันทึกลง Google Sheet (ครอบ callAppsScript) ----------
+    function hookCall() {
+        let base; try { base = callAppsScript; } catch (e) { return false; }
+        if (typeof base !== 'function' || base.__dpu) return true;
+        const w = async function (action, payload) {
+            const mine = action === 'addBatchDeliveryPlan' && CTX && Array.isArray(payload) && payload.length && String(payload[0].id).indexOf('del-xls-') === 0;
+            if (!mine) return base.apply(this, arguments);
+            const rec = SAVE = { state: 'saving' };
+            try { const r = await base.apply(this, arguments); rec.state = 'ok'; if (SAVE === rec) refreshSave(); return r; }
+            catch (e) { rec.state = 'fail'; if (SAVE === rec) refreshSave(); throw e; }
+        };
+        w.__dpu = true;
+        try { callAppsScript = w; } catch (e) { return false; }
+        return true;
+    }
+    hookCall();
+ 
+    // ---------- ครอบฟังก์ชันอัปโหลดเดิม ----------
+    (function () {
+        let legacy = window.uploadDeliveryFile;
+        const wrapper = function () {
+            if (typeof legacy !== 'function') return;
+            const ce = document.createElement; let patched = false;
+            try {
+                document.createElement = function (tag) {
+                    const el = ce.apply(this, arguments);
+                    try {
+                        if (String(tag).toLowerCase() === 'input' && !patched) {
+                            patched = true;
+                            el.addEventListener('change', () => {
+                                const f = el.files && el.files[0]; if (!f) return;
+                                CTX = { file: { name: f.name, size: f.size } }; SAVE = null; hookCall();
+                                clearTimeout(ttl); ttl = setTimeout(endCtx, 300000);
+                            });
+                        }
+                    } catch (e) { }
+                    return el;
+                };
+                return legacy.apply(this, arguments);
+            } finally { document.createElement = ce; }
+        };
+        Object.defineProperty(window, 'uploadDeliveryFile', { configurable: true, enumerable: true, get() { return wrapper; }, set(v) { legacy = v; } });
+    })();
+})();
+// ===== จบ DP-UPLOAD-POPUPS =====
+(function () {
+    if (window.__lgxuPop) return; window.__lgxuPop = true;
+    if (typeof Swal === 'undefined' || typeof Swal.fire !== 'function') { console.warn('LG-UPLOAD-POPUPS: ไม่พบ SweetAlert2'); return; }
+ 
+    const isEn = () => { try { return currentLanguage === 'en'; } catch (e) { return false; } };
+    const I = {
+        th: {
+            cTitle: 'อัปโหลดแพลน LG', cSub: 'ตรวจรายการก่อนเพิ่มเข้าแพลน', planDate: 'วันที่แพลน', today: 'วันนี้', past: 'ย้อนหลัง', future: 'ล่วงหน้า', exist: 'แพลนวันนี้มีอยู่แล้ว {n} รายการ — รายการใหม่จะต่อท้ายลำดับเดิม', existNone: 'วันนี้ยังไม่มีแพลน — รายการใหม่เริ่มที่ลำดับ 1',
+            wrongDay: 'วันที่แพลนไม่ใช่วันนี้ — ตรวจสอบวันที่ให้ถูกก่อนอัปโหลด', stNew: 'รายการใหม่', stDup: 'ข้าม (ซ้ำ)', stQty: 'จำนวนสั่งรวม',
+            prev: 'ตัวอย่างรายการที่จะเพิ่ม', more: 'และอีก {n} รายการ', dupNote: 'ข้าม {n} รายการ — WO + Part No ซ้ำกับที่มีในแพลนวันนี้', cols: 'WO', pn: 'Part No', pcs: 'ชิ้น',
+            go: 'อัปโหลด {n} รายการ', cancel: 'ยกเลิก', close: 'ปิด', ok: 'ตกลง',
+            pTitle: 'กำลังอัปโหลดแพลน…', pSub: 'กรุณารอสักครู่ อย่าเพิ่งปิดหน้านี้', s1: 'ตรวจรายการแล้ว', s2: 'ส่งขึ้น Google Sheet', s3: 'อัปเดตตารางแพลน',
+            okT: 'อัปโหลดแพลนสำเร็จ', okS: 'เพิ่ม {n} รายการเข้าแพลนวันที่ {d} แล้ว', okSeq: 'ต่อท้ายลำดับเดิมเรียบร้อย',
+            nT: 'ไม่มีรายการใหม่', nS: 'รายการทั้งหมดในไฟล์ ({n}) มีอยู่ในแพลนวันที่ {d} แล้ว', nTip: 'ระบบเช็คจาก WO + Part No — ถ้าต้องการเพิ่มของใหม่ ให้แก้ไฟล์หรือเปลี่ยนวันที่แพลนก่อน',
+            eT: 'ไม่พบข้อมูลในไฟล์', eS: 'ไม่มีรายการที่อ่านได้จากไฟล์นี้', eTip1: 'ใช้ไฟล์ตามเทมเพลต และกรอกข้อมูลตั้งแต่แถวที่ 2', eTip2: 'คอลัมน์ A (WO) ต้องไม่ว่าง', tpl: 'โหลดเทมเพลต',
+            fT: 'อัปโหลดไม่สำเร็จ', fS: 'ยังไม่ยืนยันว่าบันทึกสำเร็จ ตรวจดูตารางแพลนก่อน ถ้ารายการยังไม่ขึ้นค่อยอัปโหลดใหม่', rT: 'อ่านไฟล์ไม่ได้', rS: 'ไฟล์อาจเสียหรือถูกเข้ารหัส ลองเปิดแล้วบันทึกใหม่เป็น .xlsx', detail: 'รายละเอียด', file: 'ไฟล์'
+        },
+        en: {
+            cTitle: 'Upload LG plan', cSub: 'Review the rows before adding them to the plan', planDate: 'Plan date', today: 'Today', past: 'Past', future: 'Future', exist: 'This day already has {n} rows — new rows go to the end', existNone: 'No plan for this day yet — new rows start at no. 1',
+            wrongDay: 'The plan date is not today — check it before uploading', stNew: 'New rows', stDup: 'Skipped (dup)', stQty: 'Total order qty',
+            prev: 'Rows to be added', more: 'and {n} more', dupNote: '{n} skipped — same WO + Part No already in this day\'s plan', cols: 'WO', pn: 'Part No', pcs: 'pcs',
+            go: 'Upload {n} rows', cancel: 'Cancel', close: 'Close', ok: 'OK',
+            pTitle: 'Uploading the plan…', pSub: 'Please wait, do not close this page', s1: 'Rows checked', s2: 'Sending to Google Sheet', s3: 'Updating the plan table',
+            okT: 'Plan uploaded', okS: '{n} rows added to the plan of {d}', okSeq: 'Added after the existing order',
+            nT: 'No new rows', nS: 'All rows in the file ({n}) are already in the plan of {d}', nTip: 'Checked by WO + Part No — to add new ones, edit the file or change the plan date first',
+            eT: 'No data in the file', eS: 'No rows could be read from this file', eTip1: 'Use the template and start data on row 2', eTip2: 'Column A (WO) must not be empty', tpl: 'Download template',
+            fT: 'Upload failed', fS: 'Not confirmed as saved. Check the plan table first; upload again only if the rows are missing', rT: 'Cannot read the file', rS: 'The file may be damaged or encrypted. Open it and save again as .xlsx', detail: 'Details', file: 'File'
+        }
+    };
+    const t = (k, v) => { let s = (I[isEn() ? 'en' : 'th'][k] != null ? I[isEn() ? 'en' : 'th'][k] : I.th[k]); Object.keys(v || {}).forEach(n => { s = s.split('{' + n + '}').join(v[n]); }); return s; };
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const str = (v) => String(v == null ? '' : v).trim();
+    const fmt = (n) => Number(n || 0).toLocaleString('en-US');
+    const _fireRaw = Swal.fire;
+    const fire = (o) => _fireRaw.call(Swal, Object.assign({ buttonsStyling: false, reverseButtons: true, focusConfirm: false, showClass: { popup: '' }, hideClass: { popup: '' } }, o));
+ 
+    // ---------- สไตล์ ----------
+    const css = document.createElement('style'); css.id = 'lgxu-css';
+    css.textContent = `
+.lgxu-pop.swal2-popup{padding:0!important;border-radius:28px!important;overflow:hidden;width:min(480px,94vw)!important;text-align:left;font-family:inherit;color:#0f172a;box-shadow:0 30px 70px rgba(15,23,42,.45)!important;display:flex!important;flex-direction:column;--a:#c8102e;--b:#ef4444;--r:#fee2e2;--s:rgba(200,16,46,.35)}
+.lgxu-pop .swal2-html-container{margin:0!important;padding:0!important;text-align:left!important;overflow-y:auto;overflow-x:hidden;max-height:calc(100vh - 220px);flex:1 1 auto;font-size:14px;color:#0f172a}
+.lgxu-pop .swal2-actions{margin:0!important;padding:16px 24px 20px!important;justify-content:flex-end!important;width:100%!important;box-sizing:border-box;gap:10px;flex:none}
+.lgxu-hd{padding:20px 24px 16px;display:flex;gap:14px;align-items:center;color:#fff;background:linear-gradient(135deg,var(--a),var(--b))}
+.lgxu-hd .ic{width:52px;height:52px;border-radius:17px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;flex:none}
+.lgxu-hd h2{margin:0;font-size:20px;letter-spacing:-.3px;color:#fff;font-weight:700;line-height:1.25}.lgxu-hd small{opacity:.9;font-size:12.5px;display:block;margin-top:2px;font-weight:400}
+.lgxu-b{padding:18px 24px 4px}
+.lgxu-file{display:flex;gap:12px;align-items:center;border:2px solid #e2e8f0;border-radius:16px;padding:9px 14px}
+.lgxu-file .fi{width:40px;height:40px;border-radius:12px;background:#dcfce7;display:flex;align-items:center;justify-content:center;flex:none}
+.lgxu-file b{font-size:13.5px;display:block;overflow-wrap:anywhere}.lgxu-file small{font-size:12px;color:#64748b}
+.lgxu-day{margin-top:12px;background:#f1f5f9;border-radius:16px;padding:12px 14px}
+.lgxu-day .r{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.lgxu-day .r small{font-size:12px;color:#64748b}.lgxu-day .r b{font-size:22px;letter-spacing:-.5px}
+.lgxu-tag{font-size:11.5px;font-weight:700;padding:3px 11px;border-radius:99px;background:#dcfce7;color:#047857}.lgxu-tag.y{background:#fef3c7;color:#92400e}
+.lgxu-day .n{font-size:12.5px;color:#475569;margin-top:6px}
+.lgxu-warn{margin-top:10px;display:flex;gap:8px;align-items:flex-start;border-radius:12px;padding:8px 12px;font-size:12.5px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;line-height:1.45}
+.lgxu-st{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.lgxu-st div{background:#f8fafc;border-radius:14px;padding:10px 6px;text-align:center}.lgxu-st small{display:block;font-size:11px;color:#64748b}.lgxu-st b{font-size:22px;letter-spacing:-.5px;line-height:1.25}.lgxu-st .g b{color:#047857}.lgxu-st .y b{color:#b45309}
+.lgxu-sec{margin:14px 0 6px;font-size:12.5px;color:#64748b;font-weight:600}
+.lgxu-tb{border:1px solid #e8edf5;border-radius:14px;overflow:hidden}
+.lgxu-tb .row{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.4fr) auto;gap:8px;padding:8px 12px;border-bottom:1px solid #eef1f7;font-size:12.5px;align-items:center}
+.lgxu-tb .row:last-child{border:0}.lgxu-tb .row b{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lgxu-tb .row span{color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lgxu-tb .row em{font-style:normal;font-weight:700;color:#0f172a;white-space:nowrap}
+.lgxu-tb .row.h{background:#f8fafc;color:#94a3b8;font-size:11.5px;font-weight:600}.lgxu-tb .row.m{background:#f8fafc;color:#64748b;justify-content:center;grid-template-columns:1fr;text-align:center}
+.lgxu-dup{margin-top:10px;display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:8px 12px;line-height:1.45}
+.lgxu-bt{border:0;border-radius:14px;padding:12px 20px;font:inherit;font-size:14.5px;font-weight:600;display:inline-flex;gap:8px;align-items:center;justify-content:center;white-space:nowrap;cursor:pointer;margin:0}
+.lgxu-bt:focus-visible{outline:2px solid #2563eb;outline-offset:2px}
+.lgxu-c{background:#f1f5f9;color:#475569}.lgxu-p{background:linear-gradient(135deg,var(--a),var(--b));color:#fff;box-shadow:0 8px 18px var(--s)}.lgxu-g{background:linear-gradient(135deg,#059669,#10b981);color:#fff;box-shadow:0 8px 18px rgba(16,185,129,.4)}
+.lgxu-c2{padding:28px 26px 4px;text-align:center}
+.lgxu-ic{width:84px;height:84px;margin:0 auto;border-radius:50%;display:flex;align-items:center;justify-content:center;position:relative}
+.lgxu-h{font-size:22px;font-weight:700;margin-top:18px;line-height:1.25}.lgxu-s{font-size:14px;color:#475569;margin-top:4px;line-height:1.5}
+@keyframes lgxuspin{to{transform:rotate(360deg)}}.lgxu-sp{animation:lgxuspin 1s linear infinite}
+.lgxu-steps{margin-top:20px;text-align:left;display:flex;flex-direction:column;gap:10px}
+.lgxu-stp{display:flex;align-items:center;gap:12px;font-size:14px;color:#64748b}
+.lgxu-stp i{width:26px;height:26px;border-radius:50%;border:2px solid #cbd5e1;flex:none;box-sizing:border-box;display:flex;align-items:center;justify-content:center}
+.lgxu-stp.act{color:#0f172a;font-weight:700;background:#fff1f2;border-radius:12px;padding:6px 8px;margin:0 -8px}.lgxu-stp.act i{border:3px solid #fecdd3;border-top-color:#c8102e;animation:lgxuspin 1s linear infinite}
+.lgxu-stp.done{color:#047857;font-weight:600}.lgxu-stp.done i{background:#10b981;border-color:#10b981}.lgxu-stp.done i::after{content:'';width:6px;height:11px;border:solid #fff;border-width:0 3px 3px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.lgxu-bar{margin:20px 0 24px;height:8px;border-radius:99px;background:#e2e8f0;overflow:hidden}.lgxu-bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#ef4444,#c8102e);transition:width .5s}
+.lgxu-sum{margin-top:16px;background:#f1f5f9;border-radius:16px;padding:12px 16px;text-align:center;font-size:13px;color:#475569}.lgxu-sum b{color:#0f172a}
+.lgxu-tip{margin-top:16px;text-align:left;background:#f8fafc;border-radius:14px;padding:10px 14px;font-size:13px;color:#475569;line-height:1.6}
+.lgxu-note{margin-top:14px;text-align:left;border-radius:14px;padding:10px 14px;font-size:13px;background:#fff1f2;border:1px solid #fecdd3;color:#9f1239;word-break:break-word}
+.lgxu-pop.lgxu-res .swal2-actions{padding:16px 26px 22px!important}.lgxu-pop.lgxu-res .swal2-actions button{flex:1 1 0}
+@media (max-width:520px){.lgxu-hd{padding:16px 18px 14px}.lgxu-b{padding:14px 18px 2px}.lgxu-pop .swal2-actions{padding:14px 18px 18px!important}}
+`;
+    document.head.appendChild(css);
+ 
+    const svg = (d, c, w, s) => '<svg width="' + (s || 22) + '" height="' + (s || 22) + '" viewBox="0 0 24 24" fill="none" stroke="' + c + '" stroke-width="' + (w || 2.3) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none"><path d="' + d + '"/></svg>';
+    const D = { up: 'M12 16V5 M7.5 9.5L12 5l4.5 4.5 M5 19h14', ok: 'M5 12.5l4.5 4.5L19 7.5', bang: 'M12 5v9 M12 18.6v.01', sheet: 'M6 3h9l4 4v14H6z M14 3v5h5 M9 13h7 M9 17h7', cal: 'M4 6h16v14H4z M4 10h16 M8 3v4 M16 3v4', info: 'M12 8v.01 M12 11v5 M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z', x: 'M6 6l12 12 M18 6L6 18' };
+    const kb = (n) => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+    const ddmmyy = (ymd) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(str(ymd)); return m ? m[3] + '/' + m[2] + '/' + m[1] : str(ymd); };
+    const todayYmd = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+ 
+    // ---------- อ่านไฟล์ซ้ำเพื่อทำตัวอย่าง (อ่านอย่างเดียว ไม่แก้ข้อมูล — ใช้คอลัมน์เดียวกับฟังก์ชันเดิม) ----------
+    function previewRows(file) {
+        return new Promise((resolve) => {
+            try {
+                const rd = new FileReader();
+                rd.onload = (e) => {
+                    try {
+                        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
+                        const js = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+                        resolve(js.slice(1).filter(r => r.length > 0 && r[0]).map(r => ({ WO: str(r[0]), partNo: str(r[1]), partName: str(r[4]), qty: parseFloat(r[5]) || 0 })));
+                    } catch (er) { resolve(null); }
+                };
+                rd.onerror = () => resolve(null);
+                rd.readAsArrayBuffer(file);
+            } catch (e) { resolve(null); }
+        });
+    }
+ 
+    // ---------- สถานะรอบอัปโหลด ----------
+    let CTX = null, ttl = null;
+    const endCtx = () => { CTX = null; clearTimeout(ttl); };
+    const planDateNow = () => { try { return getLGSelectedDate(); } catch (e) { return ''; } };
+    const dayCount = (d) => { try { return getLGPlanForDate(d).length; } catch (e) { return -1; } };
+ 
+    // ---------- 1) หน้าต่างตรวจไฟล์ก่อนอัปโหลด ----------
+    async function confirmPopup(o) {
+        const n = parseInt((/(\d+)/.exec(String(o.title)) || [])[1], 10) || 0;
+        const skipped = parseInt((/ข้าม\s*(\d+)/.exec(String(o.html)) || [])[1], 10) || 0;
+        const d = planDateNow(), dText = ddmmyy(d), f = CTX && CTX.file;
+        const all = await (CTX && CTX.rowsP || Promise.resolve(null));
+        let list = null, dupN = skipped;
+        if (all) {
+            try {
+                const keys = new Set(getLGPlanForDate(d).map(p => str(p.WO) + '|' + str(p.partNo)));
+                const nw = all.filter(r => !keys.has(r.WO + '|' + r.partNo));
+                if (nw.length === n) list = nw;   // ตรงกับที่ฟังก์ชันเดิมนับ → ใช้แสดงตัวอย่าง
+            } catch (e) { }
+        }
+        const exist = dayCount(d), td = todayYmd();
+        const tag = d === td ? '<span class="lgxu-tag">' + esc(t('today')) + '</span>' : '<span class="lgxu-tag y">' + esc(d < td ? t('past') : t('future')) + '</span>';
+        const qty = list ? list.reduce((a, r) => a + r.qty, 0) : null;
+        const rows = list ? list.slice(0, 5).map(r => '<div class="row"><b>' + esc(r.WO) + '</b><span>' + esc(r.partNo) + (r.partName ? ' · ' + esc(r.partName) : '') + '</span><em>' + fmt(r.qty) + '</em></div>').join('') : '';
+        return fire({
+            customClass: { popup: 'lgxu-pop', confirmButton: 'lgxu-bt lgxu-p', cancelButton: 'lgxu-bt lgxu-c' }, showCancelButton: true,
+            confirmButtonText: svg(D.up, '#fff', 2.4, 16) + ' ' + esc(t('go', { n: fmt(n) })), cancelButtonText: esc(t('cancel')),
+            html: '<div class="lgxu-hd"><div class="ic">' + svg(D.sheet, '#fff', 2.1, 28) + '</div><div><h2>' + esc(t('cTitle')) + '</h2><small>' + esc(t('cSub')) + '</small></div></div>'
+                + '<div class="lgxu-b">'
+                + (f ? '<div class="lgxu-file"><div class="fi">' + svg(D.sheet, '#15803d', 2.2, 22) + '</div><div style="min-width:0"><b>' + esc(f.name) + '</b><small>' + esc(kb(f.size)) + '</small></div></div>' : '')
+                + '<div class="lgxu-day"><div class="r"><div><small>' + esc(t('planDate')) + '</small><br><b>' + esc(dText) + '</b></div>' + tag + '</div>'
+                + (exist >= 0 ? '<div class="n">' + esc(exist > 0 ? t('exist', { n: fmt(exist) }) : t('existNone')) + '</div>' : '')
+                + (d !== td ? '<div class="lgxu-warn">' + svg(D.bang, '#b45309', 2.6, 16) + '<span>' + esc(t('wrongDay')) + '</span></div>' : '') + '</div>'
+                + '<div class="lgxu-st"><div class="g"><small>' + esc(t('stNew')) + '</small><b>' + fmt(n) + '</b></div><div class="' + (dupN ? 'y' : '') + '"><small>' + esc(t('stDup')) + '</small><b>' + fmt(dupN) + '</b></div><div><small>' + esc(t('stQty')) + '</small><b>' + (qty == null ? '–' : fmt(qty)) + '</b></div></div>'
+                + (list ? '<div class="lgxu-sec">' + esc(t('prev')) + '</div><div class="lgxu-tb"><div class="row h"><span>' + esc(t('cols')) + '</span><span>' + esc(t('pn')) + '</span><span>' + esc(t('pcs')) + '</span></div>' + rows + (list.length > 5 ? '<div class="row m">' + esc(t('more', { n: fmt(list.length - 5) })) + '</div>' : '') + '</div>' : '')
+                + (dupN ? '<div class="lgxu-dup">' + svg(D.info, '#b45309', 2.2, 16) + '<span>' + esc(t('dupNote', { n: fmt(dupN) })) + '</span></div>' : '')
+                + '</div>'
+        });
+    }
+ 
+    // ---------- 2) กำลังอัปโหลด ----------
+    function progressPopup() {
+        fire({
+            customClass: { popup: 'lgxu-pop lgxu-res' }, showConfirmButton: false, allowOutsideClick: false, allowEscapeKey: false,
+            html: '<div class="lgxu-c2"><div class="lgxu-ic"><svg class="lgxu-sp" width="92" height="92" viewBox="0 0 84 84" fill="none" aria-hidden="true" style="position:absolute;left:-4px;top:-4px"><circle cx="42" cy="42" r="36" stroke="#fee2e2" stroke-width="6"/><path d="M42 6a36 36 0 0 1 36 36" stroke="#c8102e" stroke-width="6" stroke-linecap="round"/></svg><div style="width:84px;height:84px;border-radius:50%;background:#fff1f2;display:flex;align-items:center;justify-content:center">' + svg(D.up, '#c8102e', 2.3, 36) + '</div></div>'
+                + '<div class="lgxu-h">' + esc(t('pTitle')) + '</div><div class="lgxu-s">' + esc(t('pSub')) + '</div>'
+                + '<div class="lgxu-steps"><div class="lgxu-stp done"><i></i>' + esc(t('s1')) + '</div><div class="lgxu-stp act"><i></i>' + esc(t('s2')) + '</div><div class="lgxu-stp"><i></i>' + esc(t('s3')) + '</div></div>'
+                + '<div class="lgxu-bar"><i style="width:55%"></i></div></div>'
+        });
+    }
+ 
+    // ---------- 3) สำเร็จ ----------
+    function successPopup(n) {
+        const d = CTX ? CTX.date : planDateNow(); endCtx();
+        fire({
+            customClass: { popup: 'lgxu-pop lgxu-res', confirmButton: 'lgxu-bt lgxu-g' }, confirmButtonText: esc(t('ok')),
+            html: '<div class="lgxu-c2"><div class="lgxu-ic" style="background:linear-gradient(135deg,#10b981,#34d399);box-shadow:0 0 0 9px #d1fae5">' + svg(D.ok, '#fff', 3, 44) + '</div>'
+                + '<div class="lgxu-h">' + esc(t('okT')) + '</div><div class="lgxu-s">' + esc(t('okS', { n: fmt(n), d: ddmmyy(d) })) + '</div>'
+                + '<div class="lgxu-sum">' + svg(D.ok, '#059669', 2.6, 14) + ' ' + esc(t('okSeq')) + '</div></div>'
+        });
+    }
+ 
+    // ---------- 4) ไม่มีรายการใหม่ / ไม่พบข้อมูล ----------
+    async function noNewPopup() {
+        const d = planDateNow(); let all = null;
+        try { const r = await (CTX && CTX.rowsP); all = r ? r.length : null; } catch (e) { }
+        endCtx();
+        fire({
+            customClass: { popup: 'lgxu-pop lgxu-res', confirmButton: 'lgxu-bt lgxu-p' }, confirmButtonText: esc(t('close')),
+            html: '<div class="lgxu-c2"><div class="lgxu-ic" style="background:linear-gradient(135deg,#3b82f6,#60a5fa);box-shadow:0 0 0 9px #dbeafe">' + svg(D.info, '#fff', 2.6, 42) + '</div>'
+                + '<div class="lgxu-h">' + esc(t('nT')) + '</div><div class="lgxu-s">' + esc(t('nS', { n: all != null ? fmt(all) : '–', d: ddmmyy(d) })) + '</div><div class="lgxu-tip">' + esc(t('nTip')) + '</div></div>'
+        });
+    }
+    function emptyPopup() {
+        endCtx();
+        fire({
+            customClass: { popup: 'lgxu-pop lgxu-res', confirmButton: 'lgxu-bt lgxu-p', cancelButton: 'lgxu-bt lgxu-c' }, showCancelButton: true, confirmButtonText: esc(t('tpl')), cancelButtonText: esc(t('close')),
+            html: '<div class="lgxu-c2"><div class="lgxu-ic" style="background:linear-gradient(135deg,#f59e0b,#fbbf24);box-shadow:0 0 0 9px #fef3c7">' + svg(D.bang, '#fff', 2.8, 42) + '</div>'
+                + '<div class="lgxu-h">' + esc(t('eT')) + '</div><div class="lgxu-s">' + esc(t('eS')) + '</div><div class="lgxu-tip">• ' + esc(t('eTip1')) + '<br>• ' + esc(t('eTip2')) + '</div></div>'
+        }).then(r => { if (r && r.isConfirmed && typeof window.downloadLGPlanTemplate === 'function') window.downloadLGPlanTemplate(); });
+    }
+ 
+    // ---------- 5) ผิดพลาด ----------
+    function failPopup(detail, afterConfirm) {
+        endCtx();
+        fire({
+            customClass: { popup: 'lgxu-pop lgxu-res', confirmButton: 'lgxu-bt lgxu-p' }, confirmButtonText: esc(t('close')),
+            html: '<div class="lgxu-c2"><div class="lgxu-ic" style="background:linear-gradient(135deg,#f59e0b,#fbbf24);box-shadow:0 0 0 9px #fef3c7">' + svg(D.bang, '#fff', 2.8, 42) + '</div>'
+                + '<div class="lgxu-h">' + esc(t(afterConfirm ? 'fT' : 'rT')) + '</div><div class="lgxu-s">' + t(afterConfirm ? 'fS' : 'rS') + '</div>'
+                + (str(detail) ? '<div class="lgxu-note"><b>' + esc(t('detail')) + ':</b> ' + esc(str(detail).slice(0, 240)) + '</div>' : '') + '</div>'
+        });
+    }
+ 
+    // ---------- ครอบ Swal.fire: ดักเฉพาะรอบที่เลือกไฟล์แพลน LG ----------
+    const _chain = Swal.fire;
+    Swal.fire = function () {
+        const a = arguments, o = a[0];
+        if (CTX) {
+            try {
+                if (o && typeof o === 'object') {
+                    if (o.icon === 'question' && /^(เพิ่ม\s*\d+\s*รายการ|Add\s*\d+)/i.test(String(o.title)) && !CTX.confirmed) {
+                        return Promise.resolve(confirmPopup(o)).then((r) => {
+                            if (r && r.isConfirmed) { CTX.confirmed = true; CTX.n = parseInt((/(\d+)/.exec(String(o.title)) || [])[1], 10) || 0; CTX.date = planDateNow(); }
+                            else endCtx();
+                            return r;
+                        });
+                    }
+                    if (CTX.confirmed && o.title === 'กำลังอัปโหลด...') { progressPopup(); return Promise.resolve({ isConfirmed: false, isDismissed: true }); }
+                } else if (typeof o === 'string') {
+                    if (o === 'ไม่พบข้อมูล' && a[2] === 'warning') { emptyPopup(); return Promise.resolve({ isConfirmed: false, isDismissed: true }); }
+                    if (o === 'ไม่มีรายการใหม่' && a[2] === 'info') { noNewPopup(); return Promise.resolve({ isConfirmed: false, isDismissed: true }); }
+                    if (CTX.confirmed && o === 'สำเร็จ!' && a[2] === 'success') { successPopup(CTX.n); return Promise.resolve({ isConfirmed: true, isDismissed: false }); }
+                    if (o === 'เกิดข้อผิดพลาด' && a[2] === 'error' && /ไม่สามารถอ่านไฟล์ได้/.test(String(a[1]))) { failPopup(String(a[1]).replace(/^.*ไม่สามารถอ่านไฟล์ได้:\s*/, ''), !!CTX.confirmed); return Promise.resolve({ isConfirmed: false, isDismissed: true }); }
+                }
+            } catch (e) { console.warn('LG-UPLOAD-POPUPS', e); }
+        }
+        return _chain.apply(this, a);
+    };
+ 
+    // ---------- ครอบฟังก์ชันอัปโหลดเดิม (ต่อท้ายตัวเช็คสิทธิ์ที่มีอยู่ ไม่ทับ) ----------
+    (function () {
+        const NAME = 'handleLGPlanFileUpload';
+        const prev = Object.getOwnPropertyDescriptor(window, NAME);
+        let plain = prev && 'value' in prev ? prev.value : undefined;
+        const getPrev = () => (prev && prev.get) ? prev.get.call(window) : plain;
+        const wrapper = function (ev) {
+            const f = getPrev();
+            if (typeof f !== 'function') return;
+            try {
+                const file = ev && ev.target && ev.target.files && ev.target.files[0];
+                const okPerm = !(typeof window.lgPlanAllowed === 'function' && !window.lgPlanAllowed('upload'));   // ไม่มีสิทธิ์ → ปล่อยให้ตัวเช็คสิทธิ์เดิมจัดการ
+                if (file && okPerm) {
+                    CTX = { file: { name: file.name, size: file.size }, confirmed: false, date: '', n: 0, all: null, rowsP: null };
+                    CTX.rowsP = previewRows(file); CTX.rowsP.then((r) => { if (CTX) CTX.all = r ? r.length : null; });
+                    clearTimeout(ttl); ttl = setTimeout(endCtx, 600000);
+                }
+            } catch (e) { }
+            return f.apply(this, arguments);
+        };
+        Object.defineProperty(window, NAME, {
+            configurable: true, enumerable: true,
+            get() { return typeof getPrev() === 'function' ? wrapper : undefined; },
+            set(v) { if (prev && prev.set) prev.set.call(window, v); else plain = v; }
+        });
+    })();
+})();
+// ===== จบ LG-UPLOAD-POPUPS =====
+// ===== LG-REDESIGN: ออกแบบหน้า "อัปโหลดแพลน LG" ใหม่ทั้งชุด (หน้าหลัก + หน้าต่างทั้งหมด) =====
+// ไม่แก้ฟังก์ชันเดิม / ไม่ย้ายปุ่ม ทุก id และ onclick เดิมยังอยู่ ลบบล็อกนี้ทิ้งหน้าจะกลับเป็นแบบเดิม
+(function () {
+    if (window.__lgx) return; window.__lgx = true;
+    const PANE = 'pills-lg-matching';
+    let VARIANT = window.__LGX_VARIANT || 'b';
+    const $ = (id) => document.getElementById(id);
+    const isEn = () => { try { return currentLanguage === 'en'; } catch (e) { return false; } };
+    const T = {
+        th: { total: 'WO ในแพลน', done: 'ผลิต/สแกนครบ', pcs: 'ชิ้นที่สแกนแล้ว', left: 'เหลืออีก', printed: 'ปริ้นแท็กแล้ว', of: 'จาก', shown: 'ตามไลน์ที่เลือก', all: 'ทั้งหมด', todo: 'ยังไม่ครบ', fin: 'ครบแล้ว', q: 'ค้นหา WO / Part No / Model', manual: 'เพิ่มแพลน LG ด้วยมือ', ready: 'พร้อมสแกน', idle: 'คลิกช่องสแกนก่อน', rows: 'รายการ', noRes: 'ไม่พบรายการที่ตรงกับตัวกรอง', wo: 'WO' },
+        en: { total: 'WOs in plan', done: 'Completed', pcs: 'Pcs scanned', left: 'left', printed: 'Tags printed', of: 'of', shown: 'for selected lines', all: 'All', todo: 'Open', fin: 'Done', q: 'Search WO / Part No / Model', manual: 'Add LG plan manually', ready: 'Ready to scan', idle: 'Click the scan box first', rows: 'rows', noRes: 'No rows match the filter', wo: 'WO' }
+    };
+    const t = (k) => (T[isEn() ? 'en' : 'th'][k]);
+    const fmt = (n) => Number(n || 0).toLocaleString('en-US');
+ 
+    // ---------- สไตล์ ----------
+    const COMMON = `
+html.lgx #${PANE}.active{display:flex!important;flex-direction:column;gap:14px;font-family:inherit}
+html.lgx #${PANE}>*{min-width:0;max-width:100%}
+html.lgx #${PANE}>.card{margin:0!important;border-radius:var(--r)!important;border:1px solid var(--ln)!important;background:var(--card)!important;color:var(--ink);box-shadow:0 1px 2px rgba(15,23,42,.05),0 10px 28px rgba(15,23,42,.06)!important}
+html.lgx #${PANE}>.card .card-header{background:transparent!important;padding:18px 22px 4px!important}
+html.lgx #${PANE}>.card .card-body{padding:10px 22px 20px!important;background:transparent!important}
+html.lgx #${PANE}>.card h5{display:flex;align-items:center;gap:10px;font-size:1.08rem!important;font-weight:800!important;letter-spacing:-.01em;color:var(--ink)!important}
+html.lgx #${PANE}>.card h5 .text-muted{color:var(--mut)!important;font-weight:500}
+html.lgx #${PANE}>.card h5 i{width:34px;height:34px;border-radius:11px;background:var(--acs);color:var(--ac);display:inline-flex;align-items:center;justify-content:center;font-size:1rem;margin:0!important}
+html.lgx .lgx-ctrl{order:1}html.lgx #lgx-kpi{order:2}html.lgx .lgx-scan{order:3}html.lgx .lgx-man{order:4}html.lgx .lgx-tbl-card{order:5}
+ 
+/* ---- ชุดควบคุม ---- */
+html.lgx .lgx-ctrl .card-body{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+html.lgx .lgx-ctrl .alert{order:0;flex:0 0 100%;background:transparent!important;border:0!important;padding:0 0 2px!important;margin:0!important;color:var(--mut)!important;font-size:.82rem!important;line-height:1.5}
+html.lgx .lgx-ctrl .alert i{color:var(--ac)}
+html.lgx .lgx-ctrl .card-body>.d-flex{order:1;flex:0 0 100%;margin:0!important;padding:8px 12px;border-radius:14px;background:var(--bg2);border:1px solid var(--ln);flex-wrap:wrap;gap:10px!important}
+html.lgx .lgx-ctrl .card-body>.d-flex>label{margin:0!important;font-size:.72rem;font-weight:800!important;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
+html.lgx .lgx-ctrl .card-body>.d-flex>label i{color:var(--ac)}
+html.lgx .lgx-ctrl #lgm-linelbl{font-size:.72rem;font-weight:800!important;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);margin:0!important}
+html.lgx .lgx-ctrl .card-body>.d-flex>.small{margin-left:auto;font-size:.75rem;color:var(--mut)!important}
+html.lgx #lg-plan-date{height:40px;border-radius:11px;border:1.5px solid var(--ln);background:var(--card);color:var(--ink);font-weight:800}
+html.lgx #lgm-linewrap{display:inline-flex;align-items:center;gap:8px}
+html.lgx #lgm-linewrap #lgm-linelbl{margin:0!important}
+html.lgx #lgm-linebtn{height:40px;border-radius:11px;background:var(--card);color:var(--ink);border:1.5px solid var(--ln)}
+html.lgx #lgm-linebtn.on{background:var(--acs);color:var(--ac);border-color:var(--ac)}
+html.lgx #lgu-strip{order:2;flex:0 0 100%;margin:0!important;padding:8px 12px;border-radius:14px;background:var(--bg2);border:1px dashed var(--ln)}
+html.lgx #lgu-strip .lb{color:var(--mut)}
+html.lgx #lgu-set-btn,html.lgx #lgu-prog-btn{border-radius:99px;border:1.5px solid var(--ln);background:var(--card);color:var(--ac);font-weight:800;padding:3px 12px}
+html.lgx .lgx-ctrl .card-body>.btn{order:5;margin:0!important;height:44px;padding:0 18px!important;border-radius:13px!important;display:inline-flex;align-items:center;gap:8px;font-weight:800!important;font-size:.92rem;border:1.5px solid var(--ln);background:var(--card);color:var(--ink);transition:transform .12s,box-shadow .12s,background .12s}
+html.lgx .lgx-ctrl .card-body>.btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(15,23,42,.12)}
+html.lgx .lgx-ctrl .card-body>label.btn-danger{order:3;background:var(--ac)!important;border-color:var(--ac)!important;color:#fff!important;box-shadow:0 8px 18px var(--acsh);padding:0 22px!important;cursor:pointer}
+html.lgx .lgx-ctrl .card-body>button[onclick*="downloadLGPlanTemplate"]{order:4}
+html.lgx .lgx-ctrl .card-body>button[onclick*="printLGPlanSheet"]{order:6}
+html.lgx .lgx-ctrl .card-body>button[onclick*="printLGTags"]{order:7;background:var(--ink)!important;color:var(--card)!important;border-color:var(--ink)!important}
+html.lgx #lg-tagcheck-btn{order:8;margin-left:auto!important;color:var(--ac)!important;border-color:var(--ac)!important;background:var(--acs)!important}
+html.lgx #lg-return-btn{order:9}
+ 
+/* ---- KPI ---- */
+#lgx-kpi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+#lgx-kpi .k{position:relative;background:var(--card);border:1px solid var(--ln);border-radius:var(--r);padding:14px 16px;box-shadow:0 1px 2px rgba(15,23,42,.05),0 8px 22px rgba(15,23,42,.05);overflow:hidden;min-width:0}
+#lgx-kpi .k small{display:block;font-size:.72rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--mut)}
+#lgx-kpi .k b{display:block;font-size:1.9rem;font-weight:800;letter-spacing:-.03em;line-height:1.15;margin-top:2px;color:var(--ink)}
+#lgx-kpi .k b em{font-style:normal;font-size:1rem;font-weight:700;color:var(--mut);margin-left:4px}
+#lgx-kpi .k span{display:block;font-size:.78rem;color:var(--mut);margin-top:2px}
+#lgx-kpi .k .bar{height:7px;border-radius:99px;background:var(--bg2);margin-top:9px;overflow:hidden}
+#lgx-kpi .k .bar i{display:block;height:100%;border-radius:99px;background:var(--c,var(--ac));transition:width .4s}
+#lgx-kpi .k::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:4px;border-radius:0 4px 4px 0;background:var(--c,var(--ac))}
+#lgx-kpi .k.g{--c:#16a34a}#lgx-kpi .k.b{--c:#2563eb}#lgx-kpi .k.y{--c:#f59e0b}
+ 
+/* ---- การ์ดสแกน ---- */
+html.lgx .lgx-scan .card-header{display:flex;align-items:center;justify-content:space-between;gap:10px}
+html.lgx .lgx-scan h5{color:var(--ink)!important}
+html.lgx .lgx-scan h5 i{background:#dbeafe;color:#2563eb}
+html.lgx .lgx-live{font-size:.72rem;font-weight:800;border-radius:99px;padding:4px 12px;background:var(--bg2);color:var(--mut);display:inline-flex;align-items:center;gap:7px;border:1px solid var(--ln)}
+html.lgx .lgx-live::before{content:"";width:8px;height:8px;border-radius:50%;background:#94a3b8}
+html.lgx .lgx-scan:focus-within .lgx-live{background:#dcfce7;color:#166534;border-color:#86efac}
+html.lgx .lgx-scan:focus-within .lgx-live::before{background:#16a34a;animation:lgxp 1.2s infinite}
+@keyframes lgxp{0%{box-shadow:0 0 0 0 rgba(22,163,74,.55)}100%{box-shadow:0 0 0 9px rgba(22,163,74,0)}}
+html.lgx #lg-scan-input{height:58px;border-radius:15px;border:2px dashed var(--ln);background:var(--bg2);color:var(--ink);font-size:1.05rem}
+html.lgx #lg-scan-input:focus{border:2px solid #2563eb;border-style:solid;background:var(--card);box-shadow:0 0 0 5px rgba(37,99,235,.14)}
+html.lgx #lg-camera-toggle-btn{height:58px;border-radius:15px;padding:0 22px;background:#2563eb;border-color:#2563eb;display:inline-flex;align-items:center;gap:8px}
+ 
+/* ---- ฟอร์มเพิ่มมือ (พับได้) ---- */
+html.lgx .lgx-man .card-header{cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none}
+html.lgx .lgx-man .card-header .lgx-chev{width:30px;height:30px;border-radius:10px;border:1px solid var(--ln);display:inline-flex;align-items:center;justify-content:center;color:var(--mut);transition:transform .2s;font-style:normal}
+html.lgx .lgx-man:not(.lgx-open) .card-body{display:none}
+html.lgx .lgx-man:not(.lgx-open) .card-header{padding-bottom:18px!important}
+html.lgx .lgx-man.lgx-open .lgx-chev{transform:rotate(180deg)}
+html.lgx #lg-manual-form .form-label{color:var(--mut)!important;font-size:.72rem!important;font-weight:800!important;text-transform:uppercase;letter-spacing:.04em}
+html.lgx #pills-lg-matching #lg-manual-form .form-control{height:42px;background:var(--card)!important;border:1.5px solid var(--ln)!important;border-radius:11px!important;color:var(--ink)!important;box-shadow:none!important}
+html.lgx #pills-lg-matching #lg-manual-form .form-control:focus{border-color:var(--ac)!important;box-shadow:0 0 0 4px var(--acs)!important}
+html.lgx #lg-mp-btn{height:42px;border-radius:12px;background:var(--ac);border-color:var(--ac);box-shadow:0 8px 18px var(--acsh)}
+ 
+/* ---- การ์ดตาราง ---- */
+html.lgx .lgx-tbl-card .card-header{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+html.lgx .lgx-tbl-card .card-header h5{margin-right:auto}
+html.lgx .lgx-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+html.lgx .lgx-q{height:38px;border-radius:11px;border:1.5px solid var(--ln);background:var(--bg2);color:var(--ink);padding:0 12px;width:260px;font-size:.88rem}
+html.lgx .lgx-q:focus{outline:0;border-color:var(--ac);background:var(--card);box-shadow:0 0 0 4px var(--acs)}
+html.lgx .lgx-seg{display:inline-flex;background:var(--bg2);border:1px solid var(--ln);border-radius:11px;padding:3px}
+html.lgx .lgx-seg button{border:0;background:transparent;border-radius:8px;padding:5px 12px;font-weight:800;font-size:.8rem;color:var(--mut)}
+html.lgx .lgx-seg button.on{background:var(--card);color:var(--ac);box-shadow:0 1px 4px rgba(15,23,42,.15)}
+html.lgx .lgx-tbl-card .card-header>.btn{height:38px;border-radius:11px;border:1.5px solid var(--ln);background:var(--card);color:var(--ink);font-weight:700}
+html.lgx .lgx-tbl-card .table{--bs-table-bg:transparent;--bs-table-hover-bg:var(--hov);--bs-table-color:var(--ink);color:var(--ink);margin:0}
+html.lgx .lgx-tbl-card .table thead th{background:var(--bg2)!important;color:var(--mut)!important;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;font-weight:800;border-bottom:1px solid var(--ln)!important;padding:11px 12px;white-space:nowrap}
+html.lgx .lgx-tbl-card .table tbody td{padding:11px 12px;border-bottom:1px solid var(--ln)!important;font-size:.9rem;vertical-align:middle;background:transparent;color:var(--ink)}
+html.lgx .lgx-tbl-card .table tbody td:first-child{font-weight:800;box-shadow:inset 4px 0 0 var(--rc,transparent)}
+html.lgx .lgx-tbl-card tr.lgx-none{--rc:#cbd5e1}html.lgx .lgx-tbl-card tr.lgx-part{--rc:#f59e0b}html.lgx .lgx-tbl-card tr.lgx-done{--rc:#16a34a}
+html.lgx .lgx-tbl-card tr.lgx-done td{background:var(--okbg)!important}
+html.lgx .lgx-tbl-card tr.lgx-hide{display:none}
+html.lgx .lgx-tbl-card td .badge{border-radius:99px;padding:5px 11px;font-weight:800;font-size:.74rem;letter-spacing:.01em}
+html.lgx .lgx-tbl-card td .badge.bg-success{background:#dcfce7!important;color:#166534!important}
+html.lgx .lgx-tbl-card td .badge.bg-warning{background:#fef3c7!important;color:#92400e!important}
+html.lgx .lgx-tbl-card td .badge.bg-light{background:var(--bg2)!important;color:var(--mut)!important;border:1px solid var(--ln)!important}
+html.lgx .lgx-tbl-card td .badge.lgx-ln{background:hsl(var(--h) 85% 93%)!important;color:hsl(var(--h) 65% 26%)!important;border:1px solid hsl(var(--h) 60% 80%)!important;min-width:44px;display:inline-block;text-align:center}
+html.lgx .lgx-tbl-card .progress{height:16px!important;border-radius:99px;background:var(--bg2);overflow:hidden}
+html.lgx .lgx-tbl-card .progress-bar{font-size:.66rem;font-weight:800;line-height:16px}
+html.lgx .lgx-tbl-card .progress-bar.bg-success{background:linear-gradient(90deg,#16a34a,#22c55e)!important}
+html.lgx .lgx-tbl-card .progress-bar.bg-primary{background:linear-gradient(90deg,#2563eb,#60a5fa)!important}
+html.lgx .lgx-tbl-card td:last-child .btn{width:30px;height:30px;padding:0!important;border-radius:9px!important;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--ln);background:var(--card);color:var(--mut);margin:0 1px;font-size:.78rem}
+html.lgx .lgx-tbl-card td:last-child .btn:hover:not(:disabled){background:var(--acs);color:var(--ac);border-color:var(--ac)}
+html.lgx .lgx-tbl-card td:last-child .btn.lgep-cancel{color:#dc2626}
+html.lgx #lgm-scroll-note{color:var(--mut)!important;font-size:.76rem}
+html.lgx .lgx-empty td{padding:34px 12px!important}
+ 
+/* ---- หน้าต่าง: เลือกล็อต / เช็คแท็ก / UHT / ติ๊ก WO / คืนแท็ก ---- */
+html.lgx .swal2-popup:has(#lg-pick-all),html.lgx .swal2-popup:has(#lgtc-date){padding:0!important;border-radius:22px!important;overflow:hidden;text-align:left;box-shadow:0 30px 70px rgba(15,23,42,.45)!important}
+html.lgx .swal2-popup:has(#lg-pick-all) .swal2-title,html.lgx .swal2-popup:has(#lgtc-date) .swal2-title{margin:0!important;padding:18px 24px!important;background:var(--hd);color:#fff!important;font-size:1.15rem!important;font-weight:800!important;text-align:left;justify-content:flex-start;width:100%;box-sizing:border-box}
+html.lgx .swal2-popup:has(#lg-pick-all) .swal2-html-container,html.lgx .swal2-popup:has(#lgtc-date) .swal2-html-container{margin:0!important;padding:16px 24px 6px!important;text-align:left!important}
+html.lgx .swal2-popup:has(#lg-pick-all) .swal2-close,html.lgx .swal2-popup:has(#lgtc-date) .swal2-close{color:#fff!important;top:10px;right:12px;z-index:3}
+html.lgx .swal2-popup:has(#lg-pick-all) .swal2-actions,html.lgx .swal2-popup:has(#lgtc-date) .swal2-actions{margin:0!important;padding:12px 24px 20px!important;justify-content:flex-end;width:100%;box-sizing:border-box;gap:10px}
+html.lgx .swal2-popup:has(#lg-pick-all) .swal2-confirm{background:var(--ac)!important;border-radius:12px!important;padding:11px 24px!important;font-weight:800!important;box-shadow:0 8px 18px var(--acsh)!important}
+html.lgx .swal2-popup:has(#lg-pick-all) .swal2-cancel{background:#f1f5f9!important;color:#475569!important;border-radius:12px!important;padding:11px 20px!important;font-weight:700!important}
+html.lgx .swal2-popup:has(#lg-pick-all) .swal2-html-container>.text-start:first-child{background:#f1f5f9;border-radius:12px;padding:8px 12px}
+html.lgx .swal2-popup:has(#lg-pick-all) .swal2-html-container>.text-start:nth-child(2){display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+html.lgx .swal2-popup:has(#lg-pick-all) .swal2-html-container>.text-start:nth-child(2) label{margin:0!important;border:1.5px solid #e2e8f0;border-radius:11px;padding:7px 14px;font-weight:700;cursor:pointer}
+html.lgx .swal2-popup:has(#lg-pick-all) .swal2-html-container>.text-start:nth-child(2) label:has(input:checked){border-color:var(--ac);background:var(--acs);color:var(--ac)}
+html.lgx .swal2-popup:has(#lg-pick-all) .swal2-html-container>.text-start:nth-child(2) input{accent-color:var(--ac)}
+html.lgx .swal2-popup:has(#lg-pick-all) #lg-pick-all,html.lgx .swal2-popup:has(#lg-pick-all) #lg-pick-new,html.lgx .swal2-popup:has(#lg-pick-all) #lg-pick-none{border-radius:99px;font-weight:700;padding:4px 14px}
+html.lgx #lgp-lines{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0;text-align:left}
+html.lgx #lgp-lines>span{font-size:.78rem;font-weight:800;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+html.lgx #lgp-lines label{margin:0!important;border:1.5px solid #e2e8f0;border-radius:99px;padding:5px 14px 5px 10px;font-weight:700;display:inline-flex;gap:7px;align-items:center;cursor:pointer}
+html.lgx #lgp-lines label:has(input:checked){background:var(--acs);border-color:var(--ac);color:var(--ac)}
+html.lgx #lgp-lines input{accent-color:var(--ac)}
+html.lgx .swal2-popup:has(#lg-pick-all) .border.rounded,html.lgx .swal2-popup:has(#lgtc-date) .border.rounded{border:1px solid #e6e9f0!important;border-radius:14px!important}
+html.lgx .swal2-popup:has(#lg-pick-all) thead th,html.lgx .swal2-popup:has(#lgtc-date) thead th{background:#f8fafc!important;color:#64748b;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;font-weight:800;padding:9px 8px;border-bottom:1px solid #e6e9f0}
+html.lgx .swal2-popup:has(#lg-pick-all) td .badge,html.lgx .swal2-popup:has(#lgtc-date) td .badge{border-radius:99px;padding:4px 10px;font-weight:800}
+html.lgx .swal2-popup:has(#lg-pick-all) td .badge.bg-secondary{background:#e2e8f0!important;color:#475569!important}
+html.lgx .swal2-popup:has(#lg-pick-all) .lg-pick{accent-color:var(--ac);width:17px;height:17px}
+html.lgx .swal2-popup:has(#lgtc-date) #lgtc-date{border-radius:11px;border:1.5px solid #e2e8f0;height:38px}
+html.lgx .swal2-popup:has(#lgtc-date) #lgtc-q{border-radius:11px;height:38px;border:1.5px solid #e2e8f0}
+html.lgx .swal2-popup:has(#lgtc-date) #lgtc-mode{background:#f1f5f9;border-radius:11px;padding:3px;gap:2px}
+html.lgx .swal2-popup:has(#lgtc-date) #lgtc-mode .btn{border:0!important;border-radius:8px!important;font-weight:800;color:#64748b!important;background:transparent!important}
+html.lgx .swal2-popup:has(#lgtc-date) #lgtc-mode .btn.active{background:#fff!important;color:var(--ac)!important;box-shadow:0 1px 4px rgba(15,23,42,.18)}
+html.lgx .swal2-popup:has(#lgtc-date) .lgtc-chip{border-radius:99px!important;padding:6px 16px!important;font-size:.82rem!important}
+html.lgx .swal2-popup:has(#lgtc-date) tr.table-warning>*{background:#fffbeb!important}
+html.lgx .swal2-popup:has(#lgtc-date) .lgtc-help{border-radius:14px!important;background:#f8fafc!important;border:1px solid #e6e9f0!important}
+ 
+/* หน้าต่างเดิมที่ออกแบบไว้แล้ว: ให้สีหัวเป็นชุดเดียวกัน */
+html.lgx .lgu-hd{background:var(--hd)!important}
+html.lgx .lgu-pop .swal2-confirm{background:var(--ac)!important;border-radius:12px!important;font-weight:800!important;box-shadow:0 8px 18px var(--acsh)!important}
+html.lgx .lgu-pop .swal2-cancel{background:#f1f5f9!important;color:#475569!important;border-radius:12px!important;font-weight:700!important}
+html.lgx #lgret-ov .lr-hd{background:var(--hd)!important}
+html.lgx #lgret-ov .lr-tab.on{color:var(--ac)!important;border-color:var(--ac)!important}
+html.lgx #lgret-ov .lr-btn.r{background:var(--ac)!important}
+html.lgx #lgret-ov .lr-in{border-color:var(--ac)!important}
+`;
+    const VARS = {
+        b: `html.lgx-b{--ac:#c8102e;--acs:#fff1f3;--acsh:rgba(200,16,46,.3);--ink:#111827;--mut:#6b7280;--ln:#e5e7eb;--card:#fff;--bg2:#f5f6f8;--hov:#fafafa;--okbg:#f1faf4;--r:22px;--hd:linear-gradient(135deg,#7f0a1f,#c8102e)}
+html.lgx-b .lgx-scan{order:1}html.lgx-b #lgx-kpi{order:2}html.lgx-b .lgx-ctrl{order:3}html.lgx-b .lgx-man{order:4}
+html.lgx-b #${PANE}>.lgx-scan{background:linear-gradient(135deg,#0f172a,#1e293b)!important;border:0!important;box-shadow:0 18px 40px rgba(15,23,42,.35)!important}
+html.lgx-b #${PANE}>.lgx-scan h5{color:#fff!important;font-size:1.25rem!important}
+html.lgx-b #${PANE}>.lgx-scan h5 i{background:rgba(255,255,255,.14);color:#fff;width:42px;height:42px;font-size:1.25rem}
+html.lgx-b .lgx-scan .card-body{padding-bottom:26px!important}
+html.lgx-b .lgx-live{background:rgba(255,255,255,.1);color:#cbd5e1;border-color:rgba(255,255,255,.18)}
+html.lgx-b .lgx-scan:focus-within .lgx-live{background:rgba(34,197,94,.18);color:#86efac;border-color:rgba(34,197,94,.5)}
+html.lgx-b #lg-scan-input{height:78px;font-size:1.35rem;border-radius:20px;background:rgba(255,255,255,.07);border:2px dashed rgba(255,255,255,.3);color:#fff}
+html.lgx-b #lg-scan-input::placeholder{color:#94a3b8;font-weight:600}
+html.lgx-b #lg-scan-input:focus{background:rgba(255,255,255,.12);border:2px solid #38bdf8;box-shadow:0 0 0 6px rgba(56,189,248,.22);color:#fff}
+html.lgx-b #lg-camera-toggle-btn{height:78px;border-radius:20px;background:#38bdf8;border-color:#38bdf8;color:#0f172a;padding:0 28px;font-size:1rem}
+html.lgx-b #lg-scan-feedback{color:#fff}
+html.lgx-b #lgx-kpi .k{border-radius:var(--r)}
+html.lgx-b .lgx-ctrl .card-header{padding-top:16px!important}`
+    };
+    function injectCss() {
+        let s = $('lgx-css'); if (!s) { s = document.createElement('style'); s.id = 'lgx-css'; document.head.appendChild(s); }
+        s.textContent = COMMON + VARS.b;
+    }
+ 
+    // ---------- DOM: แท็กการ์ด + แถบ KPI + เครื่องมือตาราง + พับฟอร์ม ----------
+    let q = '', flt = 'all';
+    function tagCards() {
+        const pane = $(PANE); if (!pane) return null;
+        const cards = [...pane.children].filter(e => e.classList && e.classList.contains('card'));
+        cards.forEach(c => {
+            if (c.querySelector('#lg-plan-date')) c.classList.add('lgx-ctrl');
+            else if (c.querySelector('#lg-scan-input')) c.classList.add('lgx-scan');
+            else if (c.querySelector('#lg-manual-form')) c.classList.add('lgx-man');
+            else if (c.querySelector('#lg-match-tbody')) c.classList.add('lgx-tbl-card');
+        });
+        return pane;
+    }
+    function build() {
+        const pane = tagCards(); if (!pane) return;
+        const ctrl = pane.querySelector('.lgx-ctrl');
+        if (!$('lgx-kpi') && ctrl) { const k = document.createElement('div'); k.id = 'lgx-kpi'; ctrl.insertAdjacentElement('afterend', k); }
+        // live chip ในการ์ดสแกน
+        const sh = pane.querySelector('.lgx-scan .card-header');
+        if (sh && !sh.querySelector('.lgx-live')) { const l = document.createElement('span'); l.className = 'lgx-live'; sh.appendChild(l); }
+        // ฟอร์มพับได้
+        const mh = pane.querySelector('.lgx-man .card-header');
+        if (mh && !mh.querySelector('.lgx-chev')) {
+            const ch = document.createElement('i'); ch.className = 'bi bi-chevron-down lgx-chev'; mh.appendChild(ch);
+            let open = false; try { open = sessionStorage.getItem('lgx-man') === '1'; } catch (e) { }
+            pane.querySelector('.lgx-man').classList.toggle('lgx-open', open);
+            mh.addEventListener('click', () => {
+                const c = pane.querySelector('.lgx-man'); c.classList.toggle('lgx-open');
+                try { sessionStorage.setItem('lgx-man', c.classList.contains('lgx-open') ? '1' : '0'); } catch (e) { }
+            });
+        }
+        // เครื่องมือตาราง
+        const th = pane.querySelector('.lgx-tbl-card .card-header');
+        if (th && !th.querySelector('.lgx-tools')) {
+            const w = document.createElement('div'); w.className = 'lgx-tools';
+            w.innerHTML = '<input type="search" class="lgx-q" autocomplete="off"><div class="lgx-seg"><button type="button" data-f="all"></button><button type="button" data-f="todo"></button><button type="button" data-f="fin"></button></div>';
+            const rb = th.querySelector('.btn'); th.insertBefore(w, rb || null);
+            w.querySelector('.lgx-q').addEventListener('input', e => { q = e.target.value.trim().toLowerCase(); decorate(); });
+            w.querySelectorAll('.lgx-seg button').forEach(b => b.addEventListener('click', () => { flt = b.dataset.f; decorate(); }));
+        }
+    }
+    const hue = (s) => { let h = 0; s = String(s); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360; return h; };
+    function labels() {
+        const pane = $(PANE); if (!pane) return;
+        const l = pane.querySelector('.lgx-live'); if (l) l.textContent = t('ready');
+        const qi = pane.querySelector('.lgx-q'); if (qi) { qi.placeholder = t('q'); }
+        pane.querySelectorAll('.lgx-seg button').forEach(b => { b.textContent = t(b.dataset.f); b.classList.toggle('on', b.dataset.f === flt); });
+        const mh = pane.querySelector('.lgx-man h5'); // ชื่อหัวฟอร์มเดิมคงไว้
+    }
+    function decorate() {
+        const tb = $('lg-match-tbody'); if (!tb) return;
+        let n = 0, done = 0, scanned = 0, order = 0, printed = 0, vis = 0;
+        [...tb.rows].forEach(tr => {
+            const td = tr.cells;
+            if (td.length < 10) { tr.classList.add('lgx-empty'); return; }
+            tr.classList.remove('lgx-empty');
+            n++;
+            const m = (td[6].textContent || '').match(/(\d[\d,]*)\s*\/\s*(\d[\d,]*)/);
+            const sc = m ? +m[1].replace(/,/g, '') : 0, od = m ? +m[2].replace(/,/g, '') : 0;
+            const fin = !!tr.querySelector('.badge.bg-success'); scanned += sc; order += od;
+            if (fin) done++;
+            if (!/^\s*-?\s*$/.test(td[9].textContent)) printed++;
+            tr.classList.remove('lgx-done', 'lgx-part', 'lgx-none');
+            tr.classList.add(fin ? 'lgx-done' : (sc > 0 ? 'lgx-part' : 'lgx-none'));
+            const b = td[2].querySelector('.badge'); if (b) { b.classList.add('lgx-ln'); b.style.setProperty('--h', hue(b.textContent.trim())); }
+            const hay = (td[0].textContent + ' ' + td[1].textContent + ' ' + td[3].textContent + ' ' + td[4].textContent + ' ' + td[2].textContent).toLowerCase();
+            const hide = (q && hay.indexOf(q) < 0) || (flt === 'todo' && fin) || (flt === 'fin' && !fin);
+            tr.classList.toggle('lgx-hide', hide); if (!hide) vis++;
+        });
+        const sig = [n, done, scanned, order, printed, vis, isEn(), flt, q].join('|');
+        const k = $('lgx-kpi'); if (!k) return;
+        if (k.__sig !== sig) {
+            k.__sig = sig;
+            const pct = order ? Math.round(scanned * 100 / order) : 0, wp = n ? Math.round(done * 100 / n) : 0, pp = n ? Math.round(printed * 100 / n) : 0;
+            k.innerHTML =
+                `<div class="k"><small>${t('total')}</small><b>${fmt(n)}<em>${t('rows')}</em></b><span>${n ? t('shown') : '—'}</span></div>` +
+                `<div class="k g"><small>${t('done')}</small><b>${fmt(done)}<em>/ ${fmt(n)}</em></b><div class="bar"><i style="width:${wp}%"></i></div></div>` +
+                `<div class="k b"><small>${t('pcs')}</small><b>${fmt(scanned)}<em>/ ${fmt(order)}</em></b><div class="bar"><i style="width:${pct}%"></i></div><span>${pct}% · ${t('left')} ${fmt(Math.max(0, order - scanned))}</span></div>` +
+                `<div class="k y"><small>${t('printed')}</small><b>${fmt(printed)}<em>/ ${fmt(n)}</em></b><div class="bar"><i style="width:${pp}%"></i></div></div>`;
+        }
+        // ไม่มีผลลัพธ์จากตัวกรอง
+        let em = tb.querySelector('tr.lgx-none-res');
+        if (n && vis === 0) { if (!em) { em = tb.insertRow(); em.className = 'lgx-none-res lgx-empty'; em.innerHTML = `<td colspan="11" class="text-center text-muted">${t('noRes')}</td>`; } }
+        else if (em) em.remove();
+        const note = $('lgm-scroll-note'); if (note && (q || flt !== 'all') && n) note.textContent = (isEn() ? 'Showing ' : 'แสดง ') + vis + ' / ' + n + ' ' + t('rows');
+        labels();
+    }
+ 
+    // ---------- เปิด/ปิด ----------
+    function setVariant(v) {
+        const h = document.documentElement;
+        ['lgx', 'lgx-b'].forEach(c => h.classList.remove(c));
+        if (v && v !== 'off') { h.classList.add('lgx', 'lgx-' + v); VARIANT = v; }
+        const p = $(PANE); if (p) { const k = $('lgx-kpi'); if (k) k.style.display = (v && v !== 'off') ? '' : 'none'; }
+    }
+    function init() {
+        injectCss(); build(); setVariant(VARIANT); decorate();
+        const tb = $('lg-match-tbody');
+        if (tb && !tb.__lgx) {
+            tb.__lgx = true;
+            let busy = false;
+            new MutationObserver(() => { if (busy) return; busy = true; requestAnimationFrame(() => { busy = false; try { decorate(); } catch (e) { } }); }).observe(tb, { childList: true });
+        }
+        if (!window.__lgxTick) { window.__lgxTick = setInterval(() => { try { build(); decorate(); } catch (e) { } }, 1000); }
+    }
+    window.LGX = { set: setVariant, refresh: decorate };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();
+(function () {
     if (window.__hsBwide) return; window.__hsBwide = true;
     const s = document.createElement('style'); s.id = 'hsB-wide-css';
     s.textContent = '#hsB-root{max-width:2400px!important}';
