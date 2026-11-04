@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>จองรถขนส่ง · ATECH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<style>
+*{box-sizing:border-box;margin:0}
+:root{--p:#0d6efd;--pd:#0a4fc0;--ink:#0f172a;--mut:#64748b;--line:#e2e8f0;--ok:#16a34a;--warn:#d97706;--bad:#dc2626;--bg:#eef2f8}
+html{-webkit-text-size-adjust:100%}
+body{font-family:'Sarabun','Noto Sans Thai','Loma',system-ui,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;line-height:1.5}
+.wrap{max-width:520px;margin:0 auto;min-height:100vh;background:#f6f8fc;position:relative;padding-bottom:calc(30px + env(safe-area-inset-bottom))}
+@media(min-width:560px){.wrap{margin:24px auto;min-height:0;border-radius:28px;overflow:hidden;box-shadow:0 18px 50px rgba(15,23,42,.16)}}
+.hero{background:linear-gradient(135deg,#0a4fc0,#0d6efd 60%,#3b8bff);color:#fff;padding:26px 22px 58px}
+.hero.ok{background:linear-gradient(135deg,#15803d,#16a34a)}.hero.bad{background:linear-gradient(135deg,#b91c1c,#dc2626)}.hero.wait{background:linear-gradient(135deg,#b45309,#d97706)}.hero.gray{background:linear-gradient(135deg,#475569,#64748b)}
+.hero .lg{display:flex;align-items:center;gap:9px;font-weight:700;font-size:13px;opacity:.92}
+.hero .lg i{width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.2);display:grid;place-items:center}
+.hero h1{font-size:26px;margin:14px 0 4px;line-height:1.25;font-weight:700}
+.hero p{font-size:14px;opacity:.9}
+.hero .ck{width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.22);display:grid;place-items:center;margin:6px auto 12px;font-size:34px}
+.hero.center{text-align:center;padding-top:34px}
+.sheet{margin:-36px 14px 16px;background:#fff;border-radius:22px;padding:18px 16px;box-shadow:0 8px 24px rgba(15,23,42,.1);position:relative}
+.sec{font-size:11px;font-weight:700;color:var(--p);letter-spacing:.8px;margin:4px 0 10px;display:flex;align-items:center;gap:7px}
+.sec:after{content:"";flex:1;height:1px;background:var(--line)}
+.f{margin-bottom:12px}
+.f>label{display:block;font-size:13px;color:#334155;font-weight:700;margin-bottom:5px}
+.f>label b{color:var(--bad)}
+.in{width:100%;height:46px;border:1.5px solid #d5dce8;border-radius:12px;padding:0 13px;font:inherit;font-size:16px;color:var(--ink);background:#fff;outline:none;transition:.15s}
+textarea.in{height:76px;padding:10px 13px;resize:vertical}
+.in:focus{border-color:var(--p);box-shadow:0 0 0 4px rgba(13,110,253,.13)}
+.in.err{border-color:var(--bad);box-shadow:0 0 0 4px rgba(220,38,38,.1)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.chips{display:flex;gap:7px;flex-wrap:wrap}
+.chip{font:inherit;font-size:14px;border:1.5px solid #d5dce8;border-radius:999px;padding:7px 14px;color:#334155;background:#fff;cursor:pointer}
+.chip.on{background:var(--p);border-color:var(--p);color:#fff;font-weight:700}
+.hp{position:absolute!important;left:-9999px;width:1px;height:1px;overflow:hidden}
+.av{border:1px solid var(--line);border-radius:14px;padding:12px;background:#f8fafc;margin:4px 0 14px}
+.av .hd{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;font-weight:700;margin-bottom:9px}
+.av .hd small{color:var(--mut);font-weight:400;font-size:12px}
+.lanes{position:relative}
+.lane{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px;color:#475569}
+.lane .n{width:96px;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar{flex:1;height:18px;border-radius:6px;background:#e3f3e8;position:relative;overflow:hidden}
+.bar i{position:absolute;top:0;bottom:0;background:repeating-linear-gradient(135deg,#c3cdda 0 5px,#d6dde8 5px 10px)}
+.band{position:absolute;top:-3px;bottom:-3px;left:104px;right:0;pointer-events:none}
+.band b{position:absolute;top:0;bottom:0;background:rgba(13,110,253,.2);border:2px solid rgba(13,110,253,.8);border-radius:8px}
+.ax{position:relative;height:14px;margin-left:104px;font-size:10px;color:#94a3b8}
+.ax span{position:absolute;transform:translateX(-50%)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--mut);margin-top:8px}
+.legend s{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px;text-decoration:none}
+.msg{border-radius:12px;padding:9px 12px;font-size:13px;display:flex;gap:8px;align-items:flex-start;margin-top:10px}
+.msg.w{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412}.msg.i{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af}.msg.e{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
+.btn{width:100%;height:52px;border:0;border-radius:15px;background:linear-gradient(135deg,#0d6efd,#0a58ca);color:#fff;font:inherit;font-weight:700;font-size:16px;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 8px 18px rgba(13,110,253,.35);cursor:pointer}
+.btn:disabled{opacity:.6;cursor:default}
+.btn.sm{height:44px;font-size:14px;border-radius:13px;box-shadow:none}
+.btn.ghost{background:#fff;color:var(--p);border:1.5px solid #bcd0f5;box-shadow:none}
+.btn.dng{background:#fff;color:var(--bad);border:1.5px solid #fecaca;box-shadow:none}
+.row2{display:flex;gap:9px}.row2>*{flex:1}
+.note{font-size:12px;color:var(--mut);text-align:center;margin-top:10px;line-height:1.6}
+.link{background:none;border:0;color:var(--p);font:inherit;font-size:13px;text-decoration:underline;cursor:pointer;padding:6px}
+.ref{text-align:center;border:2px dashed #bcd0f5;border-radius:16px;padding:12px;background:#f2f7ff;margin-bottom:14px}
+.ref small{display:block;font-size:12px;color:var(--mut)}.ref b{font-size:30px;letter-spacing:2px;color:var(--pd)}
+.steps{margin:4px 0 6px}
+.st{display:flex;gap:12px;position:relative;padding-bottom:16px}
+.st:not(:last-child):before{content:"";position:absolute;left:13px;top:28px;bottom:0;width:2px;background:#d5dce8}
+.st .d{width:28px;height:28px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:14px;background:#e2e8f0;color:#94a3b8;z-index:1}
+.st.done .d{background:var(--ok);color:#fff}.st.now .d{background:var(--warn);color:#fff;box-shadow:0 0 0 5px rgba(217,119,6,.18)}.st.bad .d{background:var(--bad);color:#fff}
+.st b{font-size:14px;display:block}.st small{font-size:12.5px;color:var(--mut)}
+.sum>div{display:flex;gap:9px;font-size:14px;padding:8px 0;border-bottom:1px solid #f1f5f9;align-items:flex-start}
+.sum i{color:var(--p);width:18px;flex:none;margin-top:2px}.sum span{color:var(--mut);width:68px;flex:none;font-size:13px}.sum em{font-style:normal;word-break:break-word;min-width:0}
+.big{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:12px 14px;margin-bottom:12px;font-size:14px;line-height:1.8}
+.big.bad{background:#fef2f2;border-color:#fecaca}
+.big i{color:var(--ok);margin-right:6px}.big.bad i{color:var(--bad)}
+.mine{margin:0 14px 12px}
+.mine h3{font-size:12px;color:var(--mut);letter-spacing:.6px;margin:14px 4px 8px}
+.mi{background:#fff;border:1px solid var(--line);border-radius:14px;padding:11px 13px;display:flex;align-items:center;gap:10px;margin-bottom:8px;cursor:pointer}
+.mi b{font-size:14px;color:var(--pd)}.mi small{display:block;font-size:12px;color:var(--mut)}.mi .s{margin-left:auto}
+.badge{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;white-space:nowrap}
+.b-w{background:#fef3c7;color:#92400e}.b-o{background:#dcfce7;color:#166534}.b-x{background:#fee2e2;color:#991b1b}.b-g{background:#e2e8f0;color:#475569}
+.foot{text-align:center;font-size:12px;color:#94a3b8;margin:6px 14px 0}
+.ov{position:fixed;inset:0;background:rgba(15,23,42,.5);display:grid;place-items:center;z-index:50;padding:18px}
+.dlg{background:#fff;border-radius:20px;max-width:380px;width:100%;padding:20px;box-shadow:0 24px 60px rgba(15,23,42,.35)}
+.dlg h3{font-size:18px;margin-bottom:6px}.dlg p{font-size:14px;color:#475569;margin-bottom:14px}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#0f172a;color:#fff;border-radius:999px;padding:10px 18px;font-size:14px;z-index:60;box-shadow:0 8px 24px rgba(0,0,0,.3);max-width:90vw}
+.spin{width:18px;height:18px;border:3px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<noscript><p style="padding:24px">ต้องเปิดใช้งาน JavaScript เพื่อใช้หน้าจองรถ</p></noscript>
+<script>
+(function () {
+'use strict';
+// ===================== ตั้งค่า (แก้ได้ตรงนี้) =====================
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwGyMVpDNyn6A2bAEoyrnTZF4rkJYihNTJI9BsrJwoGcpnhgIJrqZssi0yK0g-yyjvp/exec';
+const PURPOSES = ['ส่งของ', 'รับของ', 'รับ-ส่งบุคคล', 'อื่นๆ'];      // ต้องตรงกับที่ Google Script รับ (อย่าเปลี่ยนชื่อ)
+const AXIS_FROM = 6, AXIS_TO = 20;                                     // แถบเวลาที่โชว์ (06:00 - 20:00)
+const REFRESH_MS = 30000;                                              // รีเฟรชสถานะอัตโนมัติทุกกี่มิลลิวินาที
+// ==================================================================
+
+const $app = document.getElementById('app');
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pad = (n) => String(n).padStart(2, '0');
+function todayStr() { const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); return p; }
+function thDate(s) { try { const d = new Date(s + 'T00:00:00Z'); return new Intl.DateTimeFormat('th-TH', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).format(d); } catch (e) { return s; } }
+function thDateTime(s) { const m = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})/.exec(String(s || '')); return m ? thDate(m[1]) + ' ' + m[2] + ' น.' : (s || ''); }
+const toMin = (t) => { const p = String(t || '').split(':'); return Number(p[0]) * 60 + Number(p[1]); };
+
+// ---------- เก็บข้อมูลในเครื่อง (ถ้าใช้ไม่ได้ก็ข้าม) ----------
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } }
+};
+const getMine = () => store.get('atech_car_mine', []);
+function addMine(code, token, extra) {
+  if (!code || code === 'CAR-0000-00') return;
+  const a = getMine().filter((x) => x.code !== code);
+  a.unshift(Object.assign({ code, token: token || '', at: Date.now() }, extra || {}));
+  store.set('atech_car_mine', a.slice(0, 15));
+}
+const getProfile = () => store.get('atech_car_profile', {});
+
+// ---------- เรียก Google Script ----------
+async function api(action, payload) {
+  let res;
+  try {
+    res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action, payload }), headers: { 'Content-Type': 'text/plain;charset=utf-8' } });
+  } catch (e) { throw new Error('เชื่อมต่อระบบไม่ได้ กรุณาตรวจอินเทอร์เน็ตแล้วลองใหม่'); }
+  let data;
+  try { data = JSON.parse(await res.text()); } catch (e) { throw new Error('ระบบตอบกลับไม่ถูกต้อง กรุณาลองใหม่ภายหลัง'); }
+  if (data && data.status === 'error') {
+    let m = String(data.message || 'เกิดข้อผิดพลาด');
+    if (/Invalid action/i.test(m)) m = 'ระบบจองรถยังไม่เปิดใช้งาน กรุณาแจ้งทีมขนส่ง';
+    m = m.replace(/^บันทึกไม่สำเร็จ \(Lock\/Error\):\s*/, '');
+    throw new Error(m);
+  }
+  return data;
+}
+
+// ---------- ป๊อปอัป/ข้อความสั้น ----------
+let toastT;
+function toast(msg) { const o = document.querySelector('.toast'); if (o) o.remove(); const d = document.createElement('div'); d.className = 'toast'; d.textContent = msg; document.body.appendChild(d); clearTimeout(toastT); toastT = setTimeout(() => d.remove(), 2600); }
+function confirmDlg(title, text, okLabel, danger) {
+  return new Promise((resolve) => {
+    const o = document.createElement('div'); o.className = 'ov';
+    o.innerHTML = '<div class="dlg"><h3>' + esc(title) + '</h3><p>' + esc(text) + '</p><div class="row2"><button class="btn sm ghost" data-r="0">กลับ</button><button class="btn sm ' + (danger ? 'dng' : '') + '" data-r="1" style="' + (danger ? 'background:#dc2626;color:#fff;border:0' : '') + '">' + esc(okLabel) + '</button></div></div>';
+    o.addEventListener('click', (e) => { const b = e.target.closest('[data-r]'); if (b || e.target === o) { o.remove(); resolve(!!b && b.dataset.r === '1'); } });
+    document.body.appendChild(o);
+  });
+}
+const HERO_LOGO = '<div class="lg"><i class="bi bi-truck-front-fill"></i>ATECH · ขอใช้รถขนส่ง</div>';
+const badgeOf = (s) => ({ pending: '<span class="badge b-w"><i class="bi bi-hourglass-split"></i>รออนุมัติ</span>', approved: '<span class="badge b-o"><i class="bi bi-check-circle-fill"></i>อนุมัติแล้ว</span>', rejected: '<span class="badge b-x"><i class="bi bi-x-circle-fill"></i>ไม่อนุมัติ</span>', cancelled: '<span class="badge b-g"><i class="bi bi-slash-circle"></i>ยกเลิกแล้ว</span>' }[s] || '');
+
+// ===================== หน้าฟอร์มจอง =====================
+let form = {};        // ค่าที่กรอกอยู่
+let editCtx = null;   // ถ้าไม่ใช่ null = กำลังแก้ไขคำขอเดิม { token, code }
+let avCache = { date: '', data: null, loading: false, err: '' };
+let busy = false;
+
+function newForm(src) {
+  const pr = getProfile();
+  return Object.assign({ requesterName: pr.requesterName || '', dept: pr.dept || '', phone: pr.phone || '', destination: '', date: '', startTime: '', endTime: '', purpose: 'ส่งของ', detail: '' }, src || {});
+}
+function renderForm() {
+  stopRefresh();
+  const mine = getMine();
+  const t = todayStr();
+  $app.innerHTML =
+    '<div class="hero">' + HERO_LOGO + '<h1>' + (editCtx ? 'แก้ไขคำขอจองรถ' : 'จองรถขนส่ง') + '</h1><p>' + (editCtx ? 'แก้ไขได้จนกว่าทีมขนส่งจะอนุมัติ · ' + esc(editCtx.code) : 'กรอกข้อมูลสั้นๆ ทีมขนส่งจะตรวจสอบและตอบกลับในหน้านี้') + '</p></div>' +
+    '<form class="sheet" id="f" autocomplete="on" novalidate>' +
+    '<div class="sec">ผู้จอง</div>' +
+    '<div class="f"><label>ชื่อ-นามสกุล <b>*</b></label><input class="in" name="requesterName" autocomplete="name" maxlength="80" value="' + esc(form.requesterName) + '"></div>' +
+    '<div class="g2"><div class="f"><label>แผนก <b>*</b></label><input class="in" name="dept" maxlength="60" value="' + esc(form.dept) + '"></div>' +
+    '<div class="f"><label>เบอร์โทร <b>*</b></label><input class="in" name="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" value="' + esc(form.phone) + '"></div></div>' +
+    '<div class="sec">การเดินทาง</div>' +
+    '<div class="f"><label>ไปที่ไหน <b>*</b></label><input class="in" name="destination" maxlength="200" placeholder="ชื่อสถานที่ / ที่อยู่" value="' + esc(form.destination) + '"></div>' +
+    '<div class="f"><label>วันที่ <b>*</b></label><input class="in" type="date" name="date" min="' + t + '" value="' + esc(form.date) + '"></div>' +
+    '<div class="g2"><div class="f"><label>เวลาไป <b>*</b></label><input class="in" type="time" name="startTime" value="' + esc(form.startTime) + '"></div>' +
+    '<div class="f"><label>เวลากลับ (โดยประมาณ) <b>*</b></label><input class="in" type="time" name="endTime" value="' + esc(form.endTime) + '"></div></div>' +
+    '<div class="f"><label>ไปเพื่อ <b>*</b></label><div class="chips" data-chips="purpose">' + PURPOSES.map((p) => '<button type="button" class="chip' + (form.purpose === p ? ' on' : '') + '" data-v="' + esc(p) + '">' + esc(p) + '</button>').join('') + '</div></div>' +
+    '<div class="f"><label>รายละเอียด / ของที่ขน</label><textarea class="in" name="detail" maxlength="400" placeholder="เช่น กล่องตัวอย่าง 5 ลัง, ไปรับลูกค้า 3 คน">' + esc(form.detail) + '</textarea></div>' +
+    '<div class="hp" aria-hidden="true"><label>website</label><input name="website" tabindex="-1" autocomplete="off"></div>' +
+    '<div id="av"></div><div id="fmsg"></div>' +
+    '<button class="btn" id="go" type="submit"><i class="bi bi-send-fill"></i>' + (editCtx ? 'บันทึกการแก้ไข' : 'ส่งคำขอจองรถ') + '</button>' +
+    '<div class="note">' + (editCtx ? '' : 'ยังไม่ใช่การยืนยัน — ทีมขนส่งจะอนุมัติ แล้วคุณกลับมาดูสถานะได้ในหน้านี้') + '</div>' +
+    (editCtx ? '<div style="margin-top:6px;text-align:center"><button type="button" class="link" id="bk">ยกเลิกการแก้ไข</button></div>' : '') +
+    '</form>' +
+    (!editCtx && mine.length ? '<div class="mine"><h3>คำขอของคุณ (บนเครื่องนี้)</h3>' + mine.map((m) => '<div class="mi" data-code="' + esc(m.code) + '"><div><b>' + esc(m.code) + '</b><small>' + esc(m.when || '') + '</small></div><span class="s">' + (m.status ? badgeOf(m.status) : '<i class="bi bi-chevron-right"></i>') + '</span></div>').join('') + '</div>' : '') +
+    (!editCtx ? '<div style="text-align:center"><button class="link" id="lk"><i class="bi bi-search"></i> ตรวจสอบสถานะด้วยเลขอ้างอิง</button></div>' : '') +
+    '<div class="foot">ระบบจองรถขนส่ง ATECH</div>';
+  bindForm();
+  drawAvailability();
+  if (form.date) loadAvailability(form.date);
+}
+function readForm() {
+  const f = document.getElementById('f'); const o = {};
+  ['requesterName', 'dept', 'phone', 'destination', 'date', 'startTime', 'endTime', 'detail'].forEach((k) => { o[k] = (f.elements[k].value || '').trim(); });
+  o.purpose = form.purpose; o.website = f.elements.website.value;
+  return o;
+}
+function bindForm() {
+  const f = document.getElementById('f');
+  f.addEventListener('input', (e) => {
+    Object.assign(form, readForm());
+    if (e.target.classList) e.target.classList.remove('err');
+    if (!editCtx || true) showMsg('', '');
+    if (e.target.name === 'date') { avCache = { date: '', data: null, loading: false, err: '' }; if (form.date) loadAvailability(form.date); }
+    if (e.target.name === 'startTime' || e.target.name === 'endTime') drawAvailability();
+  });
+  f.addEventListener('click', (e) => {
+    const c = e.target.closest('.chip'); if (!c) return;
+    const k = c.parentNode.dataset.chips; form[k] = c.dataset.v;
+    c.parentNode.querySelectorAll('.chip').forEach((x) => x.classList.toggle('on', x === c));
+  });
+  f.addEventListener('submit', (e) => { e.preventDefault(); submitForm(); });
+  const lk = document.getElementById('lk'); if (lk) lk.onclick = renderLookup;
+  const bk = document.getElementById('bk'); if (bk) bk.onclick = () => { editCtx = null; if (cur) showStatus(cur, curToken); else { form = newForm(); renderForm(); } };
+  document.querySelectorAll('.mi').forEach((m) => { m.onclick = () => { const it = getMine().find((x) => x.code === m.dataset.code); if (it) openStatus({ token: it.token, code: it.code, phone: (getProfile().phone || '') }); }; });
+}
+function showMsg(kind, html) { const m = document.getElementById('fmsg'); if (m) m.innerHTML = html ? '<div class="msg ' + kind + '"><i class="bi bi-' + (kind === 'e' ? 'exclamation-octagon-fill' : kind === 'w' ? 'exclamation-triangle-fill' : 'info-circle-fill') + '"></i><div>' + html + '</div></div>' : ''; }
+
+async function loadAvailability(date) {
+  if (avCache.date === date && (avCache.data || avCache.loading)) return;
+  avCache = { date, data: null, loading: true, err: '' }; drawAvailability();
+  try {
+    const d = await api('getVehicleBookingPublic', { date });
+    if (avCache.date !== date) return;
+    avCache = { date, data: d, loading: false, err: '' };
+  } catch (e) { if (avCache.date !== date) return; avCache = { date, data: null, loading: false, err: e.message }; }
+  drawAvailability();
+}
+function drawAvailability() {
+  const box = document.getElementById('av'); if (!box) return;
+  if (!form.date) { box.innerHTML = ''; return; }
+  const a = avCache;
+  let h = '<div class="av"><div class="hd">ช่วงเวลาที่รถไม่ว่าง<small>' + esc(thDate(form.date)) + '</small></div>';
+  if (a.loading) h += '<div style="font-size:13px;color:#64748b">กำลังโหลด...</div>';
+  else if (a.err || !a.data) h += '<div style="font-size:13px;color:#64748b">ดูช่วงเวลารถไม่ว่างไม่ได้ในตอนนี้ (ยังส่งคำขอได้ตามปกติ)</div>';
+  else if (!a.data.vehicles.length) h += '<div style="font-size:13px;color:#64748b">ยังไม่มีข้อมูลรถในระบบ</div>';
+  else {
+    const span = (AXIS_TO - AXIS_FROM) * 60;
+    const pos = (m) => Math.max(0, Math.min(100, (m - AXIS_FROM * 60) / span * 100));
+    h += '<div class="lanes">' + a.data.vehicles.map((v) => {
+      const blocks = a.data.busy.filter((b) => b.plate === v).map((b) => { const l = pos(toMin(b.start)), r = pos(toMin(b.end)); return '<i style="left:' + l + '%;width:' + Math.max(1.5, r - l) + '%"></i>'; }).join('');
+      return '<div class="lane"><span class="n" title="' + esc(v) + '">' + esc(v) + '</span><div class="bar">' + blocks + '</div></div>';
+    }).join('');
+    if (form.startTime && form.endTime && toMin(form.endTime) > toMin(form.startTime)) {
+      const l = pos(toMin(form.startTime)), r = pos(toMin(form.endTime));
+      h += '<div class="band"><b style="left:' + l + '%;width:' + Math.max(1.5, r - l) + '%"></b></div>';
+    }
+    h += '</div><div class="ax">';
+    for (let x = AXIS_FROM; x <= AXIS_TO; x += 2) h += '<span style="left:' + pos(x * 60) + '%">' + pad(x) + '</span>';
+    h += '</div><div class="legend"><span><s style="background:#e3f3e8"></s>ว่าง</span><span><s style="background:#c3cdda"></s>ไม่ว่าง</span><span><s style="background:rgba(13,110,253,.5)"></s>ช่วงที่คุณเลือก</span></div>';
+    if (form.startTime && form.endTime && toMin(form.endTime) > toMin(form.startTime)) {
+      const s = toMin(form.startTime), e = toMin(form.endTime);
+      const free = a.data.vehicles.filter((v) => !a.data.busy.some((b) => b.plate === v && s < toMin(b.end) && toMin(b.start) < e));
+      h += free.length ? '' : '<div class="msg w"><i class="bi bi-exclamation-triangle-fill"></i><div>ช่วงเวลานี้รถทุกคันไม่ว่าง ยังส่งคำขอได้ ทีมขนส่งจะพิจารณาให้</div></div>';
+    }
+  }
+  box.innerHTML = h + '</div>';
+}
+
+function validate(o) {
+  const bad = (name, msg) => ({ name, msg });
+  if (!o.requesterName) return bad('requesterName', 'กรุณากรอกชื่อ-นามสกุล');
+  if (!o.dept) return bad('dept', 'กรุณากรอกแผนก');
+  if (o.phone.replace(/\D/g, '').length < 9) return bad('phone', 'กรุณากรอกเบอร์โทรให้ถูกต้อง');
+  if (!o.destination) return bad('destination', 'กรุณากรอกสถานที่ที่จะไป');
+  if (!o.date) return bad('date', 'กรุณาเลือกวันที่');
+  if (o.date < todayStr()) return bad('date', 'จองย้อนหลังไม่ได้');
+  if (!o.startTime) return bad('startTime', 'กรุณาเลือกเวลาไป');
+  if (!o.endTime) return bad('endTime', 'กรุณาเลือกเวลากลับ');
+  if (toMin(o.endTime) <= toMin(o.startTime)) return bad('endTime', 'เวลากลับต้องหลังเวลาไป');
+  return null;
+}
+async function submitForm() {
+  if (busy) return;
+  const o = readForm(); Object.assign(form, o);
+  const v = validate(o);
+  const f = document.getElementById('f');
+  f.querySelectorAll('.err').forEach((x) => x.classList.remove('err'));
+  if (v) { const el = f.elements[v.name]; if (el) { el.classList.add('err'); el.focus(); } showMsg('e', esc(v.msg)); return; }
+  showMsg('', '');
+  busy = true; const go = document.getElementById('go'); go.disabled = true; go.innerHTML = '<span class="spin"></span>กำลังส่ง...';
+  try {
+    store.set('atech_car_profile', { requesterName: o.requesterName, dept: o.dept, phone: o.phone });
+    if (editCtx) {
+      const fields = Object.assign({}, o); delete fields.website;
+      const r = await api('updateVehicleRequestByRequester', { token: editCtx.token, code: editCtx.code, phone: o.phone, op: 'edit', fields });
+      const ctx = editCtx; editCtx = null; toast('บันทึกการแก้ไขแล้ว');
+      showStatus(r.request, ctx.token);
+    } else {
+      const r = await api('submitVehicleRequest', o);
+      addMine(r.code, r.token, { when: thDate(o.date) + ' ' + o.startTime, status: 'pending' });
+      form = newForm();
+      if (!r.request) { r.request = Object.assign({}, o, { code: r.code, status: 'pending', createdAt: '' }); }
+      showStatus(r.request, r.token, true);
+    }
+  } catch (e) { showMsg('e', esc(e.message)); go.disabled = false; go.innerHTML = '<i class="bi bi-send-fill"></i>' + (editCtx ? 'บันทึกการแก้ไข' : 'ส่งคำขอจองรถ'); }
+  busy = false;
+}
+
+// ===================== หน้าตรวจสถานะ =====================
+let cur = null, curToken = '', curPhone = '', refreshT = null;
+function stopRefresh() { clearInterval(refreshT); refreshT = null; }
+function privateLink() { return curToken ? location.href.split('#')[0] + '#t=' + curToken : ''; }
+
+async function openStatus(ref) {
+  $app.innerHTML = '<div class="hero gray">' + HERO_LOGO + '<h1>กำลังโหลด...</h1><p>&nbsp;</p></div><div class="sheet" style="min-height:90px"></div>';
+  try {
+    const r = await api('checkVehicleRequest', ref);
+    curPhone = ref.phone || '';
+    showStatus(r.request, r.token || ref.token || '');
+  } catch (e) {
+    $app.innerHTML = '<div class="hero bad">' + HERO_LOGO + '<h1>เปิดคำขอไม่ได้</h1><p>' + esc(e.message) + '</p></div><div class="sheet"><button class="btn ghost sm" id="b1">กลับหน้าจองรถ</button></div>';
+    document.getElementById('b1').onclick = () => { history.replaceState(null, '', location.pathname + location.search); openByRef(null); };
+  }
+}
+function showStatus(r, token, justSent) {
+  cur = r; curToken = token || curToken;
+  if (r && r.code) { const it = getMine().find((x) => x.code === r.code); if (it || justSent) addMine(r.code, curToken, { when: thDate(r.date) + ' ' + r.startTime, status: r.status }); }
+  renderStatus(justSent);
+  stopRefresh();
+  refreshT = setInterval(async () => {
+    if (document.hidden || !cur) return;
+    try { const x = await api('checkVehicleRequest', curToken ? { token: curToken } : { code: cur.code, phone: cur.phone }); if (x.request && x.request.status !== cur.status) { cur = x.request; addMine(cur.code, curToken, { when: thDate(cur.date) + ' ' + cur.startTime, status: cur.status }); renderStatus(false); toast('สถานะเปลี่ยนแล้ว'); } else if (x.request) cur = x.request; } catch (e) { }
+  }, REFRESH_MS);
+}
+function renderStatus(justSent) {
+  const r = cur; const s = r.status;
+  const hero = { pending: ['wait', 'hourglass-split', 'รอทีมขนส่งอนุมัติ', 'โดยปกติตอบภายในวันทำการ'], approved: ['ok', 'check-lg', 'อนุมัติแล้ว', 'จัดรถและคนขับเรียบร้อย'], rejected: ['bad', 'x-lg', 'ไม่อนุมัติ', 'ดูเหตุผลด้านล่าง'], cancelled: ['gray', 'slash-circle', 'ยกเลิกแล้ว', ''] }[s] || ['gray', 'question', '', ''];
+  const title = justSent ? 'ส่งคำขอเรียบร้อย' : hero[2];
+  const sub = justSent ? 'จดเลขอ้างอิงนี้ หรือกดคัดลอกลิงก์ส่วนตัวไว้ดูสถานะภายหลัง' : hero[3];
+  const link = privateLink();
+  const steps =
+    '<div class="steps"><div class="st done"><div class="d"><i class="bi bi-check"></i></div><div><b>รับคำขอแล้ว</b><small>' + esc(thDateTime(r.createdAt) || '-') + '</small></div></div>' +
+    (s === 'pending' ? '<div class="st now"><div class="d"><i class="bi bi-hourglass-split"></i></div><div><b>รอทีมขนส่งอนุมัติ</b><small>หน้านี้อัปเดตสถานะให้อัตโนมัติ</small></div></div><div class="st"><div class="d"><i class="bi bi-truck"></i></div><div><b>จัดรถและคนขับ</b><small>จะแสดงทะเบียนรถ + ชื่อคนขับที่นี่</small></div></div>' : '') +
+    (s === 'approved' ? '<div class="st done"><div class="d"><i class="bi bi-check"></i></div><div><b>อนุมัติแล้ว</b><small>' + esc(thDateTime(r.decidedAt)) + '</small></div></div><div class="st done"><div class="d"><i class="bi bi-truck"></i></div><div><b>จัดรถและคนขับแล้ว</b><small>ดูรายละเอียดด้านล่าง</small></div></div>' : '') +
+    (s === 'rejected' ? '<div class="st bad"><div class="d"><i class="bi bi-x-lg"></i></div><div><b>ไม่อนุมัติ</b><small>' + esc(thDateTime(r.decidedAt)) + '</small></div></div>' : '') +
+    (s === 'cancelled' ? '<div class="st bad"><div class="d"><i class="bi bi-slash-circle"></i></div><div><b>ยกเลิกแล้ว</b><small>' + esc(thDateTime(r.decidedAt)) + '</small></div></div>' : '') + '</div>';
+  let detail = '';
+  if (s === 'approved') detail = '<div class="big"><div><i class="bi bi-truck-front-fill"></i><b>' + esc(r.assignedPlate) + '</b></div>' + (r.driverName ? '<div><i class="bi bi-person-badge-fill"></i>คนขับ: ' + esc(r.driverName) + '</div>' : '') + '<div><i class="bi bi-clock-fill"></i>ออก ' + esc(r.outTime || r.startTime) + ' · กลับประมาณ ' + esc(r.backTime || r.endTime) + ' น.</div>' + (r.adminNote ? '<div><i class="bi bi-chat-left-text-fill"></i>' + esc(r.adminNote) + '</div>' : '') + '</div>';
+  if (s === 'rejected' || s === 'cancelled') detail = r.adminNote ? '<div class="big bad"><div><i class="bi bi-chat-left-text-fill"></i>เหตุผล: ' + esc(r.adminNote) + '</div></div>' : '';
+  const acts = s === 'pending'
+    ? '<div class="row2" style="margin-top:14px"><button class="btn sm ghost" id="ed"><i class="bi bi-pencil"></i>ขอแก้ไข</button><button class="btn sm dng" id="cx"><i class="bi bi-x-circle"></i>ยกเลิกคำขอ</button></div>'
+    : (s === 'rejected' || s === 'cancelled' ? '<button class="btn sm" id="again" style="margin-top:14px"><i class="bi bi-arrow-repeat"></i>ส่งคำขอใหม่ (ใช้ข้อมูลเดิม)</button>' : '<div class="note">ต้องการแก้ไขหรือยกเลิก กรุณาติดต่อทีมขนส่งโดยตรง</div>');
+  $app.innerHTML =
+    '<div class="hero center ' + hero[0] + '"><div class="ck"><i class="bi bi-' + hero[1] + '"></i></div><h1>' + esc(title) + '</h1><p>' + esc(sub) + '</p></div>' +
+    '<div class="sheet"><div class="ref"><small>เลขอ้างอิง</small><b>' + esc(r.code) + '</b></div>' + steps + detail +
+    '<div class="sum"><div><i class="bi bi-person"></i><span>ผู้จอง</span><em>' + esc(r.requesterName) + ' · ' + esc(r.dept) + '</em></div>' +
+    '<div><i class="bi bi-geo-alt"></i><span>ไปที่</span><em>' + esc(r.destination) + '</em></div>' +
+    '<div><i class="bi bi-calendar-event"></i><span>เวลา</span><em>' + esc(thDate(r.date)) + '<br>' + esc(r.startTime) + ' – ' + esc(r.endTime) + ' น.</em></div>' +
+    '<div><i class="bi bi-flag"></i><span>ไปเพื่อ</span><em>' + esc(r.purpose) + (r.detail ? ' · ' + esc(r.detail) : '') + '</em></div>' +
+    '</div>' + acts +
+    (link ? '<div class="row2" style="margin-top:12px"><button class="btn sm ghost" id="cp"><i class="bi bi-link-45deg"></i>คัดลอกลิงก์ส่วนตัว</button><button class="btn sm ghost" id="rf"><i class="bi bi-arrow-clockwise"></i>รีเฟรช</button></div><div class="note">ลิงก์นี้เปิดดูสถานะได้เลยไม่ต้องกรอกอะไร อย่าแชร์ให้คนอื่น</div>' : '<div class="row2" style="margin-top:12px"><button class="btn sm ghost" id="rf"><i class="bi bi-arrow-clockwise"></i>รีเฟรช</button></div>') +
+    '<div style="text-align:center;margin-top:6px"><button class="link" id="home">กลับหน้าจองรถ</button></div></div><div class="foot">ระบบจองรถขนส่ง ATECH</div>';
+  const $ = (id) => document.getElementById(id);
+  if ($('home')) $('home').onclick = () => { stopRefresh(); cur = null; history.replaceState(null, '', location.pathname + location.search); form = newForm(); renderForm(); };
+  if ($('rf')) $('rf').onclick = async () => { try { const x = await api('checkVehicleRequest', curToken ? { token: curToken } : { code: cur.code, phone: cur.phone }); cur = x.request; renderStatus(false); toast('อัปเดตแล้ว'); } catch (e) { toast(e.message); } };
+  if ($('cp')) $('cp').onclick = async () => { try { await navigator.clipboard.writeText(link); toast('คัดลอกลิงก์แล้ว'); } catch (e) { window.prompt('คัดลอกลิงก์นี้', link); } };
+  if ($('ed')) $('ed').onclick = () => { editCtx = { token: curToken, code: cur.code }; form = newForm({ requesterName: cur.requesterName, dept: cur.dept, phone: cur.phone, destination: cur.destination, date: cur.date, startTime: cur.startTime, endTime: cur.endTime, purpose: cur.purpose, detail: cur.detail }); avCache = { date: '', data: null, loading: false, err: '' }; renderForm(); };
+  if ($('again')) $('again').onclick = () => { editCtx = null; form = newForm({ destination: cur.destination, startTime: cur.startTime, endTime: cur.endTime, purpose: cur.purpose, detail: cur.detail, requesterName: cur.requesterName, dept: cur.dept, phone: cur.phone }); avCache = { date: '', data: null, loading: false, err: '' }; history.replaceState(null, '', location.pathname + location.search); renderForm(); };
+  if ($('cx')) $('cx').onclick = async () => {
+    if (!(await confirmDlg('ยกเลิกคำขอนี้?', 'คำขอ ' + cur.code + ' จะถูกยกเลิก และต้องส่งใหม่ถ้าต้องการใช้รถอีก', 'ยกเลิกคำขอ', true))) return;
+    try { const x = await api('updateVehicleRequestByRequester', { token: curToken, code: cur.code, phone: cur.phone, op: 'cancel' }); showStatus(x.request, curToken); toast('ยกเลิกคำขอแล้ว'); } catch (e) { toast(e.message); }
+  };
+}
+
+// ===================== ตรวจสอบด้วยเลขอ้างอิง + เบอร์ =====================
+function renderLookup() {
+  stopRefresh();
+  const pr = getProfile();
+  $app.innerHTML = '<div class="hero">' + HERO_LOGO + '<h1>ตรวจสอบสถานะ</h1><p>ใส่เลขอ้างอิง และเบอร์โทรที่ใช้จอง</p></div>' +
+    '<form class="sheet" id="lf" novalidate><div class="f"><label>เลขอ้างอิง</label><input class="in" name="code" placeholder="CAR-1104-03" autocapitalize="characters" maxlength="20"></div>' +
+    '<div class="f"><label>เบอร์โทรที่ใช้จอง</label><input class="in" name="phone" type="tel" inputmode="tel" maxlength="20" value="' + esc(pr.phone || '') + '"></div><div id="lm"></div>' +
+    '<button class="btn" type="submit"><i class="bi bi-search"></i>ตรวจสอบ</button><div style="text-align:center;margin-top:8px"><button type="button" class="link" id="lb">กลับหน้าจองรถ</button></div></form><div class="foot">ระบบจองรถขนส่ง ATECH</div>';
+  document.getElementById('lb').onclick = () => { form = newForm(); renderForm(); };
+  document.getElementById('lf').onsubmit = async (e) => {
+    e.preventDefault();
+    const f = e.target, code = f.elements.code.value.trim().toUpperCase(), phone = f.elements.phone.value.trim();
+    if (!code || phone.replace(/\D/g, '').length < 9) { document.getElementById('lm').innerHTML = '<div class="msg e"><i class="bi bi-exclamation-octagon-fill"></i><div>กรุณาใส่เลขอ้างอิงและเบอร์โทรให้ครบ</div></div>'; return; }
+    try { const r = await api('checkVehicleRequest', { code, phone }); curPhone = phone; showStatus(r.request, ''); }
+    catch (er) { document.getElementById('lm').innerHTML = '<div class="msg e"><i class="bi bi-exclamation-octagon-fill"></i><div>' + esc(er.message) + '</div></div>'; }
+  };
+}
+
+// ===================== เริ่มต้น =====================
+function openByRef(ref) {
+  if (ref) { openStatus(ref); return; }
+  const m = /[#&]t=([A-Za-z0-9]{8,40})/.exec(location.hash);
+  if (m) { openStatus({ token: m[1] }); return; }
+  form = newForm(); renderForm();
+}
+window.addEventListener('hashchange', () => { if (/[#&]t=/.test(location.hash)) openByRef(null); });
+openByRef(null);
+})();
+</script>
+</body>
+</html>
