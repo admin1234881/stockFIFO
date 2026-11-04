@@ -16,6 +16,9 @@ body{font-family:'Sarabun','Noto Sans Thai','Loma',system-ui,sans-serif;backgrou
 .wrap{max-width:520px;margin:0 auto;min-height:100vh;background:#f6f8fc;position:relative;padding-bottom:calc(30px + env(safe-area-inset-bottom))}
 @media(min-width:560px){.wrap{margin:24px auto;min-height:0;border-radius:28px;overflow:hidden;box-shadow:0 18px 50px rgba(15,23,42,.16)}}
 .hero{background:linear-gradient(135deg,#0a4fc0,#0d6efd 60%,#3b8bff);color:#fff;padding:26px 22px 58px}
+.hero{position:relative}
+.rfb{position:absolute;top:20px;right:16px;border:0;background:rgba(255,255,255,.22);color:#fff;font:inherit;font-size:13px;font-weight:600;padding:7px 13px;border-radius:99px;display:flex;align-items:center;gap:6px;cursor:pointer}
+.rfb:active{background:rgba(255,255,255,.35)}.rfb:disabled{opacity:.8;cursor:default}.rfb.spin i{animation:sp .8s linear infinite}
 .hero.ok{background:linear-gradient(135deg,#15803d,#16a34a)}.hero.bad{background:linear-gradient(135deg,#b91c1c,#dc2626)}.hero.wait{background:linear-gradient(135deg,#b45309,#d97706)}.hero.gray{background:linear-gradient(135deg,#475569,#64748b)}
 .hero .lg{display:flex;align-items:center;gap:9px;font-weight:700;font-size:13px;opacity:.92}
 .hero .lg i{width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.2);display:grid;place-items:center}
@@ -74,6 +77,8 @@ textarea.in{height:76px;padding:10px 13px;resize:vertical}
 .sum i{color:var(--p);width:18px;flex:none;margin-top:2px}.sum span{color:var(--mut);width:68px;flex:none;font-size:13px}.sum em{font-style:normal;word-break:break-word;min-width:0}
 .big{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:12px 14px;margin-bottom:12px;font-size:14px;line-height:1.8}
 .big.bad{background:#fef2f2;border-color:#fecaca}
+.chg{background:#fffbeb;border:1px solid #fde68a;border-radius:14px;padding:12px 14px;margin-bottom:12px;font-size:14px;line-height:1.7}
+.chg b{display:block;color:#92400e;margin-bottom:4px}.chg i{color:#d97706;margin-right:6px}.chg s{color:#94a3b8}.chg .nw{font-weight:700;color:#0f172a}
 .big i{color:var(--ok);margin-right:6px}.big.bad i{color:var(--bad)}
 .mine{margin:0 14px 12px}
 .mine h3{font-size:12px;color:var(--mut);letter-spacing:.6px;margin:14px 4px 8px}
@@ -172,7 +177,7 @@ function renderForm() {
   const mine = getMine();
   const t = todayStr();
   $app.innerHTML =
-    '<div class="hero">' + HERO_LOGO + '<h1>' + (editCtx ? 'แก้ไขคำขอจองรถ' : 'จองรถขนส่ง') + '</h1><p>' + (editCtx ? 'แก้ไขได้จนกว่าทีมขนส่งจะอนุมัติ · ' + esc(editCtx.code) : 'กรอกข้อมูลสั้นๆ ทีมขนส่งจะตรวจสอบและตอบกลับในหน้านี้') + '</p></div>' +
+    '<div class="hero">' + HERO_LOGO + (editCtx ? '' : '<button type="button" class="rfb" id="frf" title="อัปเดตสถานะการจองและรถว่าง"><i class="bi bi-arrow-clockwise"></i>รีเฟรช</button>') + '<h1>' + (editCtx ? 'แก้ไขคำขอจองรถ' : 'จองรถขนส่ง') + '</h1><p>' + (editCtx ? 'แก้ไขได้จนกว่าทีมขนส่งจะอนุมัติ · ' + esc(editCtx.code) : 'กรอกข้อมูลสั้นๆ ทีมขนส่งจะตรวจสอบและตอบกลับในหน้านี้') + '</p></div>' +
     '<form class="sheet" id="f" autocomplete="on" novalidate>' +
     '<div class="sec">ผู้จอง</div>' +
     '<div class="f"><label>ชื่อ-นามสกุล <b>*</b></label><input class="in" name="requesterName" autocomplete="name" maxlength="80" value="' + esc(form.requesterName) + '"></div>' +
@@ -220,11 +225,33 @@ function bindForm() {
   });
   f.addEventListener('submit', (e) => { e.preventDefault(); submitForm(); });
   const lk = document.getElementById('lk'); if (lk) lk.onclick = renderLookup;
+  const frf = document.getElementById('frf'); if (frf) frf.onclick = refreshHome;
   const bk = document.getElementById('bk'); if (bk) bk.onclick = () => { editCtx = null; if (cur) showStatus(cur, curToken); else { form = newForm(); renderForm(); } };
   document.querySelectorAll('.mi').forEach((m) => { m.onclick = () => { const it = getMine().find((x) => x.code === m.dataset.code); if (it) openStatus({ token: it.token, code: it.code, phone: (getProfile().phone || '') }); }; });
 }
 function showMsg(kind, html) { const m = document.getElementById('fmsg'); if (m) m.innerHTML = html ? '<div class="msg ' + kind + '"><i class="bi bi-' + (kind === 'e' ? 'exclamation-octagon-fill' : kind === 'w' ? 'exclamation-triangle-fill' : 'info-circle-fill') + '"></i><div>' + html + '</div></div>' : ''; }
 
+// ปุ่มรีเฟรชหน้าจอง: อัปเดตสถานะรายการ "คำขอของคุณ" + ช่วงรถว่างของวันที่เลือก (ข้อมูลที่กรอกค้างอยู่ไม่หาย)
+async function refreshHome() {
+  const b = document.getElementById('frf'); if (!b || b.disabled) return;
+  b.disabled = true; b.classList.add('spin');
+  Object.assign(form, readForm());
+  const list = getMine(); let changed = 0, bad = 0;
+  await Promise.all(list.map(async (m) => {
+    try {
+      const x = await api('checkVehicleRequest', m.token ? { token: m.token } : { code: m.code, phone: getProfile().phone || '' });
+      const q = x && x.request; if (!q) return;
+      const when = thDate(q.date) + ' ' + q.startTime;
+      if (q.status !== m.status || when !== m.when) changed++;
+      m.status = q.status; m.when = when;
+    } catch (e) { bad++; }
+  }));
+  if (list.length) store.set('atech_car_mine', list);
+  avCache = { date: '', data: null, loading: false, err: '' };
+  renderForm();
+  if (form.date) loadAvailability(form.date);
+  toast(list.length && bad === list.length ? 'รีเฟรชไม่สำเร็จ ลองใหม่อีกครั้ง' : changed ? 'อัปเดตแล้ว มี ' + changed + ' รายการเปลี่ยนแปลง' : 'อัปเดตแล้ว ยังไม่มีการเปลี่ยนแปลง');
+}
 async function loadAvailability(date) {
   if (avCache.date === date && (avCache.data || avCache.loading)) return;
   avCache = { date, data: null, loading: true, err: '' }; drawAvailability();
@@ -329,7 +356,7 @@ function showStatus(r, token, justSent) {
   stopRefresh();
   refreshT = setInterval(async () => {
     if (document.hidden || !cur) return;
-    try { const x = await api('checkVehicleRequest', curToken ? { token: curToken } : { code: cur.code, phone: cur.phone }); if (x.request && x.request.status !== cur.status) { cur = x.request; addMine(cur.code, curToken, { when: thDate(cur.date) + ' ' + cur.startTime, status: cur.status }); renderStatus(false); toast('สถานะเปลี่ยนแล้ว'); } else if (x.request) cur = x.request; } catch (e) { }
+    try { const x = await api('checkVehicleRequest', curToken ? { token: curToken } : { code: cur.code, phone: cur.phone }); const sg = (q) => [q.status, q.date, q.startTime, q.endTime, q.origDate, q.adminNote, q.assignedPlate, q.driverName, q.outTime, q.backTime].join('|'); if (x.request && sg(x.request) !== sg(cur)) { const stChanged = x.request.status !== cur.status; cur = x.request; addMine(cur.code, curToken, { when: thDate(cur.date) + ' ' + cur.startTime, status: cur.status }); renderStatus(false); toast(stChanged ? 'สถานะเปลี่ยนแล้ว' : 'ทีมขนส่งปรับข้อมูลให้แล้ว'); } else if (x.request) cur = x.request; } catch (e) { }
   }, REFRESH_MS);
 }
 function renderStatus(justSent) {
@@ -347,12 +374,14 @@ function renderStatus(justSent) {
   let detail = '';
   if (s === 'approved') detail = '<div class="big"><div><i class="bi bi-truck-front-fill"></i><b>' + esc(r.assignedPlate) + '</b></div>' + (r.driverName ? '<div><i class="bi bi-person-badge-fill"></i>คนขับ: ' + esc(r.driverName) + '</div>' : '') + '<div><i class="bi bi-clock-fill"></i>ออก ' + esc(r.outTime || r.startTime) + ' · กลับประมาณ ' + esc(r.backTime || r.endTime) + ' น.</div>' + (r.adminNote ? '<div><i class="bi bi-chat-left-text-fill"></i>' + esc(r.adminNote) + '</div>' : '') + '</div>';
   if (s === 'rejected' || s === 'cancelled') detail = r.adminNote ? '<div class="big bad"><div><i class="bi bi-chat-left-text-fill"></i>เหตุผล: ' + esc(r.adminNote) + '</div></div>' : '';
+  const changed = r.origDate && (s === 'pending' || s === 'approved') && (r.origDate !== r.date || r.origStart !== r.startTime || r.origEnd !== r.endTime);
+  const chg = changed ? '<div class="chg"><b><i class="bi bi-arrow-repeat"></i>ทีมขนส่งปรับวัน/เวลาให้</b><div><s>' + esc(thDate(r.origDate)) + ' ' + esc(r.origStart) + ' – ' + esc(r.origEnd) + ' น.</s></div><div class="nw"><i class="bi bi-arrow-return-right"></i>' + esc(thDate(r.date)) + ' ' + esc(s === 'approved' ? (r.outTime || r.startTime) : r.startTime) + ' – ' + esc(s === 'approved' ? (r.backTime || r.endTime) : r.endTime) + ' น.</div>' + (s === 'pending' && r.adminNote ? '<div><i class="bi bi-chat-left-text-fill"></i>' + esc(r.adminNote) + '</div>' : '') + '</div>' : '';
   const acts = s === 'pending'
     ? '<div class="row2" style="margin-top:14px"><button class="btn sm ghost" id="ed"><i class="bi bi-pencil"></i>ขอแก้ไข</button><button class="btn sm dng" id="cx"><i class="bi bi-x-circle"></i>ยกเลิกคำขอ</button></div>'
     : (s === 'rejected' || s === 'cancelled' ? '<button class="btn sm" id="again" style="margin-top:14px"><i class="bi bi-arrow-repeat"></i>ส่งคำขอใหม่ (ใช้ข้อมูลเดิม)</button>' : '<div class="note">ต้องการแก้ไขหรือยกเลิก กรุณาติดต่อทีมขนส่งโดยตรง</div>');
   $app.innerHTML =
     '<div class="hero center ' + hero[0] + '"><div class="ck"><i class="bi bi-' + hero[1] + '"></i></div><h1>' + esc(title) + '</h1><p>' + esc(sub) + '</p></div>' +
-    '<div class="sheet"><div class="ref"><small>เลขอ้างอิง</small><b>' + esc(r.code) + '</b></div>' + steps + detail +
+    '<div class="sheet"><div class="ref"><small>เลขอ้างอิง</small><b>' + esc(r.code) + '</b></div>' + steps + chg + detail +
     '<div class="sum"><div><i class="bi bi-person"></i><span>ผู้จอง</span><em>' + esc(r.requesterName) + ' · ' + esc(r.dept) + '</em></div>' +
     '<div><i class="bi bi-geo-alt"></i><span>ไปที่</span><em>' + esc(r.destination) + '</em></div>' +
     '<div><i class="bi bi-calendar-event"></i><span>เวลา</span><em>' + esc(thDate(r.date)) + '<br>' + esc(r.startTime) + ' – ' + esc(r.endTime) + ' น.</em></div>' +
