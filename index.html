@@ -35526,6 +35526,435 @@ html.lgx-b .lgx-ctrl .card-header{padding-top:16px!important}`
     };
 })();
 // ===== จบ LG-TAGPRINT-POPUPS =====
+// ===== VEHICLE-REQ-ADMIN: แถบ "คำขอจองรถ" ในหน้า Delivery plan (แผนกอื่นจองรถผ่านหน้า book.html) =====
+(function () {
+    if (window.__vrqAdmin) return; window.__vrqAdmin = true;
+ 
+    const me = () => (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null;
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const lang = () => { try { return currentLanguage === 'en' ? 'en' : 'th'; } catch (e) { return 'th'; } };
+    const BOOK_FILE = 'book.html';   // ชื่อไฟล์หน้าจองรถ (วางข้างไฟล์หน้าเว็บหลัก)
+ 
+    const TX = {
+        th: {
+            btn: 'คำขอจองรถ', sX: 'ไม่อนุมัติ', sC: 'ยกเลิกแล้ว', title: 'คำขอจองรถจากแผนกอื่น', sub: 'ผู้จองกรอกเองจากหน้าจองรถ — คุณอนุมัติแล้วระบบเพิ่มลงแผนส่งของให้',
+            fP: 'รออนุมัติ', fA: 'อนุมัติแล้ว', fX: 'ไม่อนุมัติ / ยกเลิก', fAll: 'ทั้งหมด',
+            link: 'คัดลอกลิงก์หน้าจอง', linkOk: 'คัดลอกลิงก์แล้ว', qr: 'QR', open: 'เปิดดู', hide: 'ซ่อน', more: 'แสดงเพิ่ม',
+            empty: 'ยังไม่มีคำขอในกลุ่มนี้', noGs: 'Google Script ยังไม่ได้อัปเดตระบบจองรถ — วางแพตช์ฝั่ง Google Script แล้ว Deploy เป็น Version ใหม่ก่อน',
+            ok: 'อนุมัติ', no: 'ปฏิเสธ', cx: 'ยกเลิก', today: 'วันนี้', tomorrow: 'พรุ่งนี้', req: 'ต้องการ', tel: 'โทร', inPlan: 'อยู่ในแผนส่งของแล้ว', plate: 'รถ', driver: 'คนขับ',
+            allBusy: 'ช่วงนี้รถทุกคันถูกจองแล้ว — ต้องเลื่อนเวลา หรืออนุมัติซ้อนเวลา', stOpen: 'เปิดหน้าจองรถให้แผนกอื่น',
+            aTitle: 'อนุมัติคำขอจองรถ', pickPlate: 'เลือกรถ', driverL: 'คนขับ (ไม่บังคับ)', outL: 'เวลาออก', backL: 'กลับประมาณ', noteL: 'ข้อความถึงผู้จอง (ไม่บังคับ)', notePh: 'เช่น คนขับจะโทรหาก่อนออก 15 นาที',
+            free: 'รถคันนี้ว่างในช่วงเวลานี้ ไม่ชนการจองอื่น', clash: 'ชนกับการจองอื่นของรถคันนี้: {c}', noPlate: 'กรุณาเลือกรถ', badTime: 'เวลากลับต้องหลังเวลาออก', busyTag: 'ไม่ว่าง', typePlate: 'พิมพ์ทะเบียนรถ',
+            aDo: 'อนุมัติ และเพิ่มลงแผนส่งของ', close: 'ปิด', back: 'กลับ', infoPlan: 'เมื่ออนุมัติ ระบบจะเพิ่มแถว "อื่นๆ" ลงแผนส่งของวันนั้น เวลาออกตามที่ตั้ง — ปล่อยรถ/ยกเลิกได้จากบอร์ดเหมือนงานปกติ',
+            clashTitle: 'รถคันนี้ซ้อนเวลากับการจองอื่น', clashAsk: 'ยืนยันอนุมัติทั้งที่เวลาซ้อนกันไหม?', clashYes: 'อนุมัติซ้อนเวลา',
+            rTitle: 'ไม่อนุมัติคำขอนี้', rWhy: 'เหตุผล (ผู้จองจะเห็น)', rNeed: 'กรุณาใส่เหตุผล', rDo: 'ไม่อนุมัติ',
+            cTitle: 'ยกเลิกคำขอที่อนุมัติแล้ว', cWhy: 'เหตุผลที่ยกเลิก (ผู้จองจะเห็น)', cDo: 'ยกเลิกคำขอ', cNote: 'ถ้ารายการในแผนส่งของยังเป็น "รอจัดส่ง" ระบบจะเปลี่ยนเป็นยกเลิกให้ด้วย (ถ้าปล่อยรถไปแล้วจะไม่แตะ)',
+            busyA: 'กำลังอนุมัติ…', busyR: 'กำลังบันทึก…', busyS: 'กรุณารอสักครู่ อย่าเพิ่งปิดหน้านี้',
+            doneA: 'อนุมัติแล้ว', doneAMsg: 'เพิ่มลงแผนส่งของวันที่ {d} เวลา {t} แล้ว', gotoPlan: 'ดูแผนวันนั้น', doneR: 'บันทึกไม่อนุมัติแล้ว', doneC: 'ยกเลิกคำขอแล้ว', doneCPlan: 'แถวในแผนส่งของถูกเปลี่ยนเป็นยกเลิกด้วย',
+            failed: 'ทำรายการไม่สำเร็จ', needUpdate: 'Google Script ยังไม่ได้อัปเดต (ยังไม่รู้จักคำสั่งนี้) ให้วางแพตช์ฝั่ง Google Script แล้ว Deploy เป็น Version ใหม่',
+            qrTitle: 'QR หน้าจองรถ', qrSub: 'ให้แผนกอื่นสแกน หรือส่งลิงก์ให้', qrNo: 'สร้าง QR ไม่ได้ในตอนนี้ — ใช้ปุ่มคัดลอกลิงก์แทน',
+            mo: ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'], wd: ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.']
+        },
+        en: {
+            btn: 'Vehicle requests', sX: 'Rejected', sC: 'Cancelled', title: 'Vehicle requests from other departments', sub: 'Requesters fill in the booking page themselves — approve and it is added to the delivery plan',
+            fP: 'Pending', fA: 'Approved', fX: 'Rejected / cancelled', fAll: 'All',
+            link: 'Copy booking link', linkOk: 'Link copied', qr: 'QR', open: 'Open', hide: 'Hide', more: 'Show more',
+            empty: 'No requests in this group', noGs: 'The Google Script has not been updated for vehicle booking yet — paste the patch and deploy a new version first',
+            ok: 'Approve', no: 'Reject', cx: 'Cancel', today: 'Today', tomorrow: 'Tomorrow', req: 'Wants', tel: 'Tel', inPlan: 'In the delivery plan', plate: 'Vehicle', driver: 'Driver',
+            allBusy: 'Every vehicle is booked in this window — move the time or approve with overlap', stOpen: 'Open the booking page for other departments',
+            aTitle: 'Approve vehicle request', pickPlate: 'Vehicle', driverL: 'Driver (optional)', outL: 'Leaves', backL: 'Back about', noteL: 'Message to requester (optional)', notePh: 'e.g. The driver will call 15 minutes before leaving',
+            free: 'This vehicle is free in this window — no clash with other bookings', clash: 'Clashes with another booking of this vehicle: {c}', noPlate: 'Please choose a vehicle', badTime: 'Return time must be after departure', busyTag: 'busy', typePlate: 'Type the plate',
+            aDo: 'Approve and add to delivery plan', close: 'Close', back: 'Back', infoPlan: 'On approval an "Other" row is added to that day\'s delivery plan at the departure time — release / cancel it from the board as usual',
+            clashTitle: 'This vehicle overlaps another booking', clashAsk: 'Approve even though the times overlap?', clashYes: 'Approve with overlap',
+            rTitle: 'Reject this request', rWhy: 'Reason (the requester will see it)', rNeed: 'Please enter a reason', rDo: 'Reject',
+            cTitle: 'Cancel an approved request', cWhy: 'Reason for cancelling (the requester will see it)', cDo: 'Cancel request', cNote: 'If the delivery-plan row is still "Pending" it is cancelled too (it is left alone once the truck has been released)',
+            busyA: 'Approving…', busyR: 'Saving…', busyS: 'Please wait — do not close this page',
+            doneA: 'Approved', doneAMsg: 'Added to the plan for {d} at {t}', gotoPlan: 'View that day', doneR: 'Rejection saved', doneC: 'Request cancelled', doneCPlan: 'The delivery-plan row was cancelled too',
+            failed: 'Could not complete', needUpdate: 'The Google Script has not been updated yet (it does not know this command). Paste the patch and deploy a new version.',
+            qrTitle: 'Booking page QR', qrSub: 'Let other departments scan it, or send them the link', qrNo: 'Could not create a QR right now — use the copy link button',
+            mo: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], wd: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+        }
+    };
+    const t = (k, v) => {
+        let s = (TX[lang()] || TX.th)[k]; if (s === undefined) s = TX.th[k]; if (s === undefined) return k;
+        if (v && typeof s === 'string') Object.keys(v).forEach(n => { s = s.split('{' + n + '}').join(v[n]); });
+        return s;
+    };
+ 
+    // ---------- CSS ----------
+    const st = document.createElement('style'); st.id = 'vrq-css';
+    st.textContent = `
+#vrq-btn{position:relative}
+.vrq-btn-cnt{background:#dc2626;color:#fff;border-radius:99px;font-size:.7rem;font-weight:700;padding:0 7px;line-height:1.55;margin-left:2px}
+.vrq-btn-cnt.z{background:#cbd5e1;color:#475569}
+.vrq-btn.hot{border-color:#fecaca!important;background:#fff5f5!important;color:#991b1b!important;animation:vrqPulse 2.2s ease-in-out infinite}
+@keyframes vrqPulse{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.28)}50%{box-shadow:0 0 0 7px rgba(220,38,38,0)}}
+.vrq-wrap{position:fixed;inset:0;z-index:1055;pointer-events:none;visibility:hidden}
+.vrq-wrap.on{pointer-events:auto;visibility:visible}
+.vrq-bk{position:absolute;inset:0;background:rgba(15,23,42,.32);opacity:0;transition:opacity .2s}
+.vrq-wrap.on .vrq-bk{opacity:1}
+.vrq-pn{position:absolute;top:0;right:0;bottom:0;width:min(500px,100vw);background:#f6f8fc;box-shadow:-18px 0 50px rgba(15,23,42,.25);display:flex;flex-direction:column;transform:translateX(104%);transition:transform .24s cubic-bezier(.2,.8,.2,1);text-align:left}
+.vrq-wrap.on .vrq-pn{transform:none}
+.vrq-pn.pop{top:var(--vt,70px);left:var(--vl,24px);right:auto;bottom:auto;width:min(560px,94vw);max-height:calc(100vh - var(--vt,70px) - 18px);border-radius:22px;transform:translateY(-8px) scale(.98);opacity:0;transition:.16s;box-shadow:0 24px 60px rgba(15,23,42,.32)}
+.vrq-wrap.on .vrq-pn.pop{transform:none;opacity:1}
+.vrq-wrap.pm .vrq-bk{background:rgba(15,23,42,.12)}
+.vrq-ph{background:linear-gradient(135deg,#0a4fc0,#0d6efd 70%,#3b8bff);color:#fff;padding:16px 18px 14px;border-radius:inherit;border-bottom-left-radius:0;border-bottom-right-radius:0;flex:none}
+.vrq-ph .r1{display:flex;gap:11px;align-items:center}
+.vrq-ph .ic{width:40px;height:40px;border-radius:13px;background:rgba(255,255,255,.2);display:grid;place-items:center;font-size:1.15rem;flex:none}
+.vrq-ph h3{margin:0;font-size:1.05rem;font-weight:700;line-height:1.25}.vrq-ph p{margin:2px 0 0;font-size:.76rem;opacity:.88}
+.vrq-x{margin-left:auto;border:0;background:rgba(255,255,255,.18);color:#fff;width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:1rem;flex:none}.vrq-x:hover{background:rgba(255,255,255,.3)}
+.vrq-ph .r2{display:flex;gap:7px;margin-top:12px;flex-wrap:wrap}
+.vrq-ph .vrq-b{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);color:#fff;font-size:.78rem}.vrq-ph .vrq-b:hover{background:rgba(255,255,255,.28)}
+.vrq-b{border:1.5px solid #d5dce8;background:#fff;color:#334155;border-radius:99px;padding:6px 13px;font:inherit;font-size:.8rem;cursor:pointer;display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
+.vrq-b:hover{background:#f1f5f9}
+.vrq-f{display:flex;gap:6px;flex-wrap:wrap;padding:12px 16px 4px;flex:none}
+.vrq-f .vrq-b{padding:5px 11px;font-size:.78rem}.vrq-f .vrq-b.on{background:#0f172a;border-color:#0f172a;color:#fff;font-weight:600}
+.vrq-f .vrq-b i.n{font-style:normal;background:rgba(100,116,139,.18);border-radius:99px;padding:0 7px;font-size:.7rem}.vrq-f .vrq-b.on i.n{background:rgba(255,255,255,.22)}
+.vrq-ls{overflow:auto;padding:8px 16px 18px;flex:1;min-height:60px}
+.vrq-r{background:#fff;border:1px solid #e6ecf5;border-left:5px solid #d97706;border-radius:16px;padding:12px 14px;margin-bottom:10px;box-shadow:0 4px 12px rgba(30,41,90,.05)}
+.vrq-r.a{border-left-color:#16a34a}.vrq-r.x{border-left-color:#dc2626;opacity:.85}.vrq-r.c{border-left-color:#94a3b8;opacity:.78}
+.vrq-r1{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.vrq-cd{font-weight:700;color:#0a4fc0;font-size:.86rem}.vrq-cd small{color:#94a3b8;font-weight:400;font-size:.7rem;margin-left:6px}
+.vrq-st{margin-left:auto;border-radius:99px;font-size:.68rem;font-weight:700;padding:1px 9px}
+.vrq-st.p{background:#fef3c7;color:#92400e}.vrq-st.a{background:#dcfce7;color:#166534}.vrq-st.x{background:#fee2e2;color:#991b1b}.vrq-st.c{background:#e2e8f0;color:#475569}
+.vrq-who{margin-top:6px}.vrq-who b{font-size:.95rem}
+.vrq-dp{display:inline-block;background:#e0ecff;color:#1e40af;border-radius:99px;font-size:.68rem;font-weight:700;padding:1px 9px;margin-left:6px;vertical-align:1px}
+.vrq-ln{font-size:.8rem;color:#475569;margin-top:3px;line-height:1.45;word-break:break-word}.vrq-ln i{color:#0d6efd;margin-right:6px;width:14px;display:inline-block}
+.vrq-ln.d{font-weight:700;color:#0f172a}
+.vrq-tag{display:inline-block;border-radius:99px;font-size:.66rem;font-weight:700;padding:0 8px;margin-left:5px;background:#dbeafe;color:#1e40af}.vrq-tag.t{background:#fee2e2;color:#991b1b}
+.vrq-ac{display:flex;gap:7px;margin-top:10px}
+.vrq-a{border:0;border-radius:11px;padding:8px 13px;font:inherit;font-size:.82rem;font-weight:600;cursor:pointer;display:inline-flex;gap:6px;align-items:center;justify-content:center;flex:1}
+.vrq-a.ok{background:#16a34a;color:#fff;flex:1.4}.vrq-a.no{background:#fff;color:#dc2626;border:1.5px solid #fecaca}.vrq-a.cx{background:#fff;color:#64748b;border:1.5px solid #d5dce8;flex:0 0 auto;font-size:.76rem;padding:6px 12px}
+.vrq-ok{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:10px;padding:5px 10px;font-size:.76rem;font-weight:600;display:flex;gap:6px;align-items:center;flex:1}
+.vrq-wn{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:6px 10px;font-size:.76rem;display:flex;gap:7px;align-items:center;margin-top:8px}
+.vrq-rs{background:#f1f5f9;border-radius:10px;padding:6px 10px;font-size:.76rem;color:#475569;margin-top:8px}
+.vrq-em{text-align:center;color:#94a3b8;padding:34px 8px;font-size:.88rem}
+.vrq-gs{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:12px;padding:10px 14px;font-size:.84rem;margin:12px 16px}
+.vrq-nb{display:inline-block;background:#dc2626;color:#fff;border-radius:99px;font-size:.62rem;font-weight:700;padding:0 6px;line-height:1.5;margin-left:4px;vertical-align:top}
+.swal2-popup.vrq-pop{width:min(540px,94vw);padding:0;border-radius:26px;overflow:hidden;text-align:left}
+.vrq-pop .swal2-html-container{margin:0;padding:0;text-align:left}
+.vrq-hd{padding:20px 24px;display:flex;gap:14px;align-items:center;color:#fff;background:linear-gradient(135deg,#15803d,#16a34a)}
+.vrq-hd.no{background:linear-gradient(135deg,#b91c1c,#dc2626)}.vrq-hd.wn{background:linear-gradient(135deg,#b45309,#d97706)}.vrq-hd.bl{background:linear-gradient(135deg,#0a4fc0,#0d6efd)}
+.vrq-hd .ic{width:44px;height:44px;border-radius:14px;background:rgba(255,255,255,.2);display:grid;place-items:center;font-size:1.35rem;flex:none}
+.vrq-hd h3{margin:0;font-size:1.15rem;font-weight:700}.vrq-hd p{margin:2px 0 0;font-size:.82rem;opacity:.92}
+.vrq-bd{padding:18px 24px 6px}
+.vrq-card{background:#f8fafc;border:1px solid #e6ecf5;border-radius:14px;padding:11px 14px;font-size:.86rem;line-height:1.7;margin-bottom:14px}.vrq-card i{color:#0d6efd;margin-right:6px}
+.vrq-g2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.vrq-l{font-size:.78rem;font-weight:700;color:#334155;margin:0 0 4px;display:block}
+.vrq-in{width:100%;height:44px;border:1.5px solid #d5dce8;border-radius:12px;padding:0 12px;font:inherit;font-size:.95rem;color:#0f172a;background:#fff;outline:none}
+.vrq-in:focus{border-color:#0d6efd;box-shadow:0 0 0 4px rgba(13,110,253,.13)}
+.vrq-m{border-radius:10px;padding:8px 12px;font-size:.82rem;display:flex;gap:8px;align-items:center;margin:10px 0 4px}
+.vrq-m.g{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534}.vrq-m.w{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412}.vrq-m.i{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af}
+.vrq-qr{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 4px}.vrq-qr button{border:1px solid #d5dce8;background:#fff;border-radius:99px;padding:4px 11px;font:inherit;font-size:.76rem;color:#475569;cursor:pointer}
+.vrq-actions{margin:14px 24px 22px!important;gap:10px;width:auto!important;justify-content:stretch!important}
+.vrq-b2{border:0;border-radius:13px;padding:0 18px;height:46px;font:inherit;font-weight:700;font-size:.95rem;cursor:pointer;flex:1;color:#fff;background:#16a34a;box-shadow:0 8px 18px rgba(22,163,74,.28)}
+.vrq-b2.dg{background:#dc2626;box-shadow:0 8px 18px rgba(220,38,38,.25)}.vrq-b2.gh{background:#f1f5f9;color:#475569;box-shadow:none;flex:.6}
+.vrq-spin{width:50px;height:50px;margin:8px auto 14px;border-radius:50%;background:conic-gradient(from 0deg,#16a34a,#0d6efd,#e2e8f0 70%);-webkit-mask:radial-gradient(circle,transparent 54%,#000 56%);mask:radial-gradient(circle,transparent 54%,#000 56%);animation:vrqSp .9s linear infinite}
+@keyframes vrqSp{to{transform:rotate(360deg)}}
+.swal2-popup.vrq-busy{width:21em;padding:1.6em 1.2em 1.4em;border-radius:24px}
+.vrq-busy .swal2-html-container{margin:0;padding:0;text-align:center}.vrq-busy b{display:block;font-size:1.05rem;color:#0f172a}.vrq-busy small{color:#64748b}
+.vrq-qrbox{display:flex;justify-content:center;padding:6px 0 14px}.vrq-qrbox img,.vrq-qrbox canvas{border-radius:12px}
+.vrq-lk{word-break:break-all;font-size:.74rem;color:#64748b;text-align:center;margin-bottom:6px}`;
+    document.head.appendChild(st);
+ 
+    // ---------- ข้อมูล ----------
+    const rowsAll = () => (typeof db !== 'undefined' && db && Array.isArray(db.vehicleRequests)) ? db.vehicleRequests : null;
+    const hasGs = () => rowsAll() !== null;
+    const plates = () => {
+        try {
+            const out = [];
+            ((db && db.vehicles) || []).forEach(v => { const p = String(v.licensePlate || v.plate || v.LicensePlate || v['ทะเบียนรถ'] || v['ทะเบียน'] || Object.values(v)[0] || '').trim(); if (p && out.indexOf(p) < 0) out.push(p); });
+            return out;
+        } catch (e) { return []; }
+    };
+    const mm = (s) => { const p = String(s || '').split(':'); return (Number(p[0]) || 0) * 60 + (Number(p[1]) || 0); };
+    const ymd = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const todayS = () => ymd(new Date());
+    const tomorrowS = () => { const d = new Date(); d.setDate(d.getDate() + 1); return ymd(d); };
+    function thD(s) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || '')); if (!m) return String(s || '');
+        const d = new Date(+m[1], +m[2] - 1, +m[3]);
+        return TX[lang()].wd[d.getDay()] + ' ' + (+m[3]) + ' ' + TX[lang()].mo[+m[2] - 1] + (lang() === 'th' ? ' ' + (+m[1] + 543) : ' ' + m[1]);
+    }
+    const fmtAt = (s) => { const m = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})/.exec(String(s || '')); return m ? m[1].slice(5).split('-').reverse().join('/') + ' ' + m[2] : String(s || ''); };
+    function clashesFor(r, plate, out, back) {
+        const o = mm(out), b = mm(back), list = [];
+        (rowsAll() || []).forEach(x => {
+            if (x.status !== 'approved' || x.id === r.id || x.date !== r.date || String(x.assignedPlate) !== String(plate)) return;
+            const s = mm(x.outTime || x.startTime), e = mm(x.backTime || x.endTime);
+            if (o < e && s < b) list.push(x);
+        });
+        return list;
+    }
+    function allBusy(r) {
+        const pl = plates(); if (!pl.length) return false;
+        return pl.every(p => clashesFor(r, p, r.startTime, r.endTime).length > 0);
+    }
+ 
+    // ---------- ปุ่ม + แผงคำขอ (ไม่ดันหน้าแผนจัดส่งลง) ----------
+    const PANEL_MODE = 'drawer';   // 'drawer' = แผงเลื่อนออกจากขอบขวา · 'pop' = กล่องลอยใต้ปุ่ม
+    let uiOpen = false, uiFilter = 'pending', uiLimit = 30, lastSig = '', lastBtn = '';
+    const counts = () => {
+        const c = { pending: 0, approved: 0, closed: 0, all: 0 };
+        (rowsAll() || []).forEach(r => { c.all++; if (r.status === 'pending') c.pending++; else if (r.status === 'approved') c.approved++; else c.closed++; });
+        return c;
+    };
+    const bookUrl = () => { try { return new URL(BOOK_FILE, location.href).href; } catch (e) { return BOOK_FILE; } };
+    function sortRows(list, f) {
+        const k = (r) => (r.date || '') + ' ' + (r.startTime || '');
+        const d = (r) => String(r.decidedAt || r.createdAt || '');
+        if (f === 'pending') return list.slice().sort((a, b) => k(a).localeCompare(k(b)));
+        if (f === 'approved') return list.slice().sort((a, b) => k(b).localeCompare(k(a)));
+        return list.slice().sort((a, b) => d(b).localeCompare(d(a)));
+    }
+    function rowHtml(r) {
+        const cls = r.status === 'approved' ? 'a' : r.status === 'rejected' ? 'x' : r.status === 'cancelled' ? 'c' : '';
+        const stc = cls || 'p', stt = { pending: 'fP', approved: 'fA', rejected: 'sX', cancelled: 'sC' }[r.status] || 'fP';
+        let tag = '';
+        if (r.date === todayS()) tag = '<span class="vrq-tag t">' + esc(t('today')) + '</span>'; else if (r.date === tomorrowS()) tag = '<span class="vrq-tag">' + esc(t('tomorrow')) + '</span>';
+        const time = r.status === 'approved' ? (r.outTime || r.startTime) + ' – ' + (r.backTime || r.endTime) : r.startTime + ' – ' + r.endTime;
+        let acts = '';
+        if (r.status === 'pending') acts = '<div class="vrq-ac"><button class="vrq-a no" data-a="no" data-id="' + esc(r.id) + '"><i class="bi bi-x-lg"></i>' + esc(t('no')) + '</button><button class="vrq-a ok" data-a="ok" data-id="' + esc(r.id) + '"><i class="bi bi-check-lg"></i>' + esc(t('ok')) + '</button></div>';
+        else if (r.status === 'approved') acts = '<div class="vrq-ac"><span class="vrq-ok"><i class="bi bi-check-circle-fill"></i>' + esc(t('inPlan')) + '</span><button class="vrq-a cx" data-a="cx" data-id="' + esc(r.id) + '">' + esc(t('cx')) + '</button></div>';
+        let extra = '';
+        if (r.status === 'pending' && allBusy(r)) extra = '<div class="vrq-wn"><i class="bi bi-exclamation-triangle-fill"></i>' + esc(t('allBusy')) + '</div>';
+        if ((r.status === 'rejected' || r.status === 'cancelled') && r.adminNote) extra = '<div class="vrq-rs"><i class="bi bi-chat-left-text"></i> ' + esc(r.adminNote) + '</div>';
+        return '<div class="vrq-r ' + cls + '"><div class="vrq-r1"><span class="vrq-cd">' + esc(r.id) + '<small>' + esc(fmtAt(r.createdAt)) + '</small></span><span class="vrq-st ' + stc + '">' + esc(t(stt)) + '</span></div>' +
+            '<div class="vrq-who"><b>' + esc(r.requesterName) + '</b><span class="vrq-dp">' + esc(r.dept) + '</span></div>' +
+            '<div class="vrq-ln"><i class="bi bi-geo-alt"></i>' + esc(r.destination) + ' · ' + esc(r.purpose) + (r.detail ? ' · ' + esc(r.detail) : '') + '</div>' +
+            '<div class="vrq-ln d"><i class="bi bi-calendar-event"></i>' + esc(thD(r.date)) + tag + ' · ' + esc(time) + '</div>' +
+            (r.status === 'approved' ? '<div class="vrq-ln"><i class="bi bi-truck-front"></i>' + esc(r.assignedPlate) + (r.driverName ? ' · ' + esc(r.driverName) : '') + '</div>' : '') +
+            '<div class="vrq-ln"><i class="bi bi-telephone"></i>' + (r.vehicleType ? esc(t('req')) + ': ' + esc(r.vehicleType) + ' · ' : '') + esc(t('tel')) + ' ' + esc(r.phone) + '</div>' + extra + acts + '</div>';
+    }
+    // ปุ่มเล็กในแถวปุ่มของบอร์ดแผนจัดส่ง (ถ้าหาแถวนั้นไม่เจอ จะวางไว้มุมขวาบนของหน้า)
+    function ensureButton() {
+        const p = document.getElementById('pills-delivery-plan'); if (!p) return null;
+        let b = document.getElementById('vrq-btn');
+        const acts = p.querySelector('#dpB-root .top .acts');
+        if (b && b.isConnected && (!acts || b.parentNode === acts || b.parentNode === p)) return b;
+        if (!b) { b = document.createElement('button'); b.type = 'button'; b.id = 'vrq-btn'; b.setAttribute('data-vrq', 'open'); }
+        b.className = 'vrq-btn ' + (acts ? 'dpB-btn' : 'vrq-b');
+        if (acts) acts.insertBefore(b, acts.firstChild);
+        else { b.style.cssText = 'margin:0 0 10px auto;display:flex'; p.insertBefore(b, p.firstChild); }
+        lastBtn = ''; return b;
+    }
+    function ensurePanel() {
+        let w = document.getElementById('vrq-wrap'); if (w) return w;
+        w = document.createElement('div'); w.id = 'vrq-wrap'; w.className = 'vrq-wrap' + (PANEL_MODE === 'pop' ? ' pm' : '');
+        w.innerHTML = '<div class="vrq-bk" data-a="close"></div><aside class="vrq-pn' + (PANEL_MODE === 'pop' ? ' pop' : '') + '" id="vrq-pn"></aside>';
+        document.body.appendChild(w); return w;
+    }
+    function placePop() {
+        if (PANEL_MODE !== 'pop') return;
+        const b = document.getElementById('vrq-btn'), pn = document.getElementById('vrq-pn'); if (!b || !pn) return;
+        const r = b.getBoundingClientRect();
+        pn.style.setProperty('--vt', Math.max(8, Math.round(r.bottom + 8)) + 'px');
+        const w = Math.min(560, window.innerWidth * 0.94);
+        pn.style.setProperty('--vl', Math.max(8, Math.min(Math.round(r.left), Math.round(window.innerWidth - w - 8))) + 'px');
+    }
+    function render() {
+        const rows = rowsAll(), c = counts();
+        // ปุ่ม
+        const b = ensureButton();
+        if (b) {
+            const bsig = [c.pending, !!rows, lang()].join('|');
+            if (bsig !== lastBtn) {
+                lastBtn = bsig;
+                b.innerHTML = '<i class="bi bi-inbox-fill"></i> ' + esc(t('btn')) + (rows ? ' <span class="vrq-btn-cnt' + (c.pending ? '' : ' z') + '">' + c.pending + '</span>' : '');
+                b.classList.toggle('hot', !!(rows && c.pending));
+                b.title = t('title');
+            }
+        }
+        // ตัวเลขแดงบนปุ่มเมนู "แผนส่งของ"
+        try {
+            const nb = document.getElementById('nav-delivery-plan-item');
+            if (nb) { let x = nb.querySelector('.vrq-nb'); if (c.pending > 0 && rows) { if (!x) { x = document.createElement('span'); x.className = 'vrq-nb'; nb.appendChild(x); } x.textContent = c.pending; x.title = t('title'); } else if (x) x.remove(); }
+        } catch (e) { }
+        // แผง (วาดเฉพาะตอนเปิด)
+        const w = ensurePanel();
+        w.classList.toggle('on', uiOpen);
+        if (!uiOpen) { lastSig = ''; return; }
+        const sig = JSON.stringify([rows, lang(), uiFilter, uiLimit, plates().length]);
+        if (sig === lastSig) return; lastSig = sig;
+        const pn = document.getElementById('vrq-pn'); const keep = pn.querySelector('.vrq-ls'); const sc = keep ? keep.scrollTop : 0;
+        let h = '<div class="vrq-ph"><div class="r1"><div class="ic"><i class="bi bi-inbox-fill"></i></div><div><h3>' + esc(t('title')) + '</h3><p>' + esc(t('sub')) + '</p></div><button class="vrq-x" data-a="close" title="' + esc(t('close')) + '"><i class="bi bi-x-lg"></i></button></div>' +
+            '<div class="r2"><button class="vrq-b" data-a="link"><i class="bi bi-link-45deg"></i>' + esc(t('link')) + '</button><button class="vrq-b" data-a="qr"><i class="bi bi-qr-code"></i>' + esc(t('qr')) + '</button></div></div>';
+        if (!rows) h += '<div class="vrq-gs"><i class="bi bi-exclamation-triangle-fill"></i> ' + esc(t('noGs')) + '</div>';
+        else {
+            const F = [['pending', 'fP', c.pending], ['approved', 'fA', c.approved], ['closed', 'fX', c.closed], ['all', 'fAll', c.all]];
+            h += '<div class="vrq-f">' + F.map(f => '<button class="vrq-b' + (uiFilter === f[0] ? ' on' : '') + '" data-a="f" data-f="' + f[0] + '">' + esc(t(f[1])) + ' <i class="n">' + f[2] + '</i></button>').join('') + '</div>';
+            let list = rows.filter(r => uiFilter === 'all' ? true : uiFilter === 'closed' ? (r.status === 'rejected' || r.status === 'cancelled') : r.status === uiFilter);
+            list = sortRows(list, uiFilter);
+            h += '<div class="vrq-ls">';
+            if (!list.length) h += '<div class="vrq-em">' + esc(t('empty')) + '</div>';
+            else {
+                h += list.slice(0, uiLimit).map(rowHtml).join('');
+                if (list.length > uiLimit) h += '<div style="text-align:center"><button class="vrq-b" data-a="more">' + esc(t('more')) + ' (' + (list.length - uiLimit) + ')</button></div>';
+            }
+            h += '</div>';
+        }
+        pn.innerHTML = h; placePop();
+        const ls = pn.querySelector('.vrq-ls'); if (ls && sc) ls.scrollTop = sc;
+    }
+    function setOpen(v) { uiOpen = !!v; lastSig = ''; render(); }
+    // ---------- ป๊อปอัป ----------
+    const IC = (n) => '<i class="bi bi-' + n + '"></i>';
+    const hd = (kind, icon, title, sub) => '<div class="vrq-hd ' + kind + '"><div class="ic">' + IC(icon) + '</div><div><h3>' + esc(title) + '</h3>' + (sub ? '<p>' + esc(sub) + '</p>' : '') + '</div></div>';
+    function pop(o) {
+        return Swal.fire({
+            customClass: { popup: 'vrq-pop', actions: 'vrq-actions', confirmButton: 'vrq-b2' + (o.danger ? ' dg' : ''), cancelButton: 'vrq-b2 gh' },
+            buttonsStyling: false, reverseButtons: true, focusConfirm: false,
+            html: hd(o.kind, o.icon, o.title, o.sub) + '<div class="vrq-bd">' + (o.body || '') + '</div>',
+            confirmButtonText: o.ok, showCancelButton: !!o.cancel, cancelButtonText: o.cancel || '', showConfirmButton: o.ok !== null,
+            allowOutsideClick: !o.lock, allowEscapeKey: !o.lock, preConfirm: o.preConfirm, didOpen: o.didOpen
+        });
+    }
+    function busyPop(k) {
+        Swal.fire({ customClass: { popup: 'vrq-busy' }, allowOutsideClick: false, allowEscapeKey: false, showConfirmButton: false, html: '<div class="vrq-spin"></div><b>' + esc(t(k)) + '</b><small>' + esc(t('busyS')) + '</small>' });
+    }
+    function fail(e) {
+        const msg = String((e && e.message) || e || '');
+        pop({ kind: 'no', icon: 'x-octagon-fill', title: t('failed'), body: '<div style="font-size:.9rem;color:#334155;padding-bottom:6px">' + esc(/Invalid action/i.test(msg) ? t('needUpdate') : msg) + '</div>', ok: t('close') });
+    }
+    const reqCard = (r) => '<div class="vrq-card"><div><i class="bi bi-person"></i><b>' + esc(r.requesterName) + '</b> · ' + esc(r.dept) + ' · ' + esc(t('tel')) + ' ' + esc(r.phone) + '</div><div><i class="bi bi-geo-alt"></i>' + esc(r.destination) + '</div><div><i class="bi bi-calendar-event"></i>' + esc(thD(r.date)) + ' · ' + esc(r.startTime) + ' – ' + esc(r.endTime) + '</div><div><i class="bi bi-flag"></i>' + esc(r.purpose) + (r.detail ? ' · ' + esc(r.detail) : '') + (r.vehicleType ? ' · ' + esc(t('req')) + ': ' + esc(r.vehicleType) : '') + '</div></div>';
+    const find = (id) => (rowsAll() || []).find(r => String(r.id) === String(id)) || null;
+    const who = () => { const u = me(); return u ? u.username : ''; };
+    let busy = false;
+    function applyResult(out) {
+        const rows = rowsAll();
+        if (rows && out && out.request) { const i = rows.findIndex(r => String(r.id) === String(out.request.id)); if (i >= 0) rows[i] = Object.assign({}, rows[i], out.request); }
+        if (out && out.plan && typeof db !== 'undefined') {
+            db.deliveryPlans = db.deliveryPlans || [];
+            if (!db.deliveryPlans.some(p => String(p.id) === String(out.plan.id))) db.deliveryPlans.push(out.plan);
+        }
+        if (out && out.planId && out.planCancelled && typeof db !== 'undefined') {
+            (db.deliveryPlans || []).forEach(p => { if (String(p.id) === String(out.planId)) p.status = 'Cancelled'; });
+        }
+        redrawBoard(); lastSig = ''; render();
+    }
+    function redrawBoard() {
+        try { const v = document.getElementById('view-plan-date'); if (typeof window.renderDeliveryPlanTable === 'function') window.renderDeliveryPlanTable(v ? v.value : undefined); } catch (e) { }
+    }
+    function gotoDate(d) {
+        try { const v = document.getElementById('view-plan-date'); if (v && d) { v.value = d; v.dispatchEvent(new Event('input', { bubbles: true })); v.dispatchEvent(new Event('change', { bubbles: true })); redrawBoard(); } } catch (e) { }
+    }
+ 
+    async function approve(id) {
+        if (busy) return; const r = find(id); if (!r) return;
+        const pl = plates();
+        const opts = pl.map(p => '<option value="' + esc(p) + '">' + esc(p) + '</option>').join('');
+        const res = await pop({
+            kind: '', icon: 'check2-circle', title: t('aTitle'), sub: r.id + ' · ' + r.requesterName + ' (' + r.dept + ')',
+            body: reqCard(r) +
+                '<div class="vrq-g2"><div><label class="vrq-l">' + esc(t('pickPlate')) + '</label>' + (pl.length ? '<select id="vrq-pl" class="vrq-in">' + opts + '</select>' : '<input id="vrq-pl" class="vrq-in" placeholder="' + esc(t('typePlate')) + '">') + '</div>' +
+                '<div><label class="vrq-l">' + esc(t('driverL')) + '</label><input id="vrq-dr" class="vrq-in" list="vrq-drl" maxlength="80"><datalist id="vrq-drl">' + ((db && db.drivers) || []).map(d => '<option value="' + esc(d.driverName || d.name || '') + '">').join('') + '</datalist></div></div>' +
+                '<div class="vrq-g2"><div><label class="vrq-l">' + esc(t('outL')) + '</label><input id="vrq-out" type="time" class="vrq-in" value="' + esc(r.startTime) + '"></div><div><label class="vrq-l">' + esc(t('backL')) + '</label><input id="vrq-back" type="time" class="vrq-in" value="' + esc(r.endTime) + '"></div></div>' +
+                '<label class="vrq-l">' + esc(t('noteL')) + '</label><input id="vrq-note" class="vrq-in" maxlength="300" placeholder="' + esc(t('notePh')) + '">' +
+                '<div id="vrq-chk"></div><div class="vrq-m i">' + IC('info-circle-fill') + '<div>' + esc(t('infoPlan')) + '</div></div>',
+            ok: t('aDo'), cancel: t('close'),
+            didOpen: () => {
+                const g = (i) => document.getElementById(i);
+                const check = () => {
+                    const p = g('vrq-pl').value, o = g('vrq-out').value, b = g('vrq-back').value, box = g('vrq-chk'); if (!box) return;
+                    if (!p) { box.innerHTML = ''; return; }
+                    const c = (o && b && mm(b) > mm(o)) ? clashesFor(r, p, o, b) : [];
+                    box.innerHTML = c.length ? '<div class="vrq-m w">' + IC('exclamation-triangle-fill') + '<div>' + esc(t('clash', { c: c.map(x => x.requesterName + ' ' + (x.outTime || x.startTime) + '–' + (x.backTime || x.endTime)).join(', ') })) + '</div></div>' : '<div class="vrq-m g">' + IC('shield-check') + '<div>' + esc(t('free')) + '</div></div>';
+                };
+                ['vrq-pl', 'vrq-out', 'vrq-back'].forEach(i => { const e = g(i); e.addEventListener('input', check); e.addEventListener('change', check); });
+                // เลือกรถคันแรกที่ว่างในช่วงเวลานี้ให้ก่อน
+                const sel = g('vrq-pl'); if (sel && sel.tagName === 'SELECT') { const free = pl.find(p => !clashesFor(r, p, r.startTime, r.endTime).length); if (free) sel.value = free; Array.prototype.forEach.call(sel.options, o => { if (clashesFor(r, o.value, r.startTime, r.endTime).length) o.textContent = o.value + '  (' + t('busyTag') + ')'; }); }
+                check();
+            },
+            preConfirm: () => {
+                const v = { plate: document.getElementById('vrq-pl').value.trim(), driver: document.getElementById('vrq-dr').value.trim(), outTime: document.getElementById('vrq-out').value, backTime: document.getElementById('vrq-back').value, note: document.getElementById('vrq-note').value.trim() };
+                if (!v.plate) { Swal.showValidationMessage(t('noPlate')); return false; }
+                if (!v.outTime || !v.backTime || mm(v.backTime) <= mm(v.outTime)) { Swal.showValidationMessage(t('badTime')); return false; }
+                return v;
+            }
+        });
+        if (!res.isConfirmed || !res.value) return;
+        busy = true;
+        try {
+            busyPop('busyA');
+            const body = Object.assign({ id: r.id, by: who(), force: false }, res.value);
+            let out = await callAppsScript('approveVehicleRequest', body);
+            if (out && out.status === 'conflict') {
+                Swal.close();
+                const names = (out.conflicts || []).map(x => x.requesterName + ' ' + x.outTime + '–' + x.backTime).join(', ');
+                const c = await pop({ kind: 'wn', icon: 'exclamation-triangle-fill', title: t('clashTitle'), sub: res.value.plate, body: '<div style="font-size:.92rem;color:#334155;padding-bottom:8px">' + esc(names) + '<br><b>' + esc(t('clashAsk')) + '</b></div>', ok: t('clashYes'), cancel: t('back'), danger: true });
+                if (!c.isConfirmed) return;
+                busyPop('busyA');
+                out = await callAppsScript('approveVehicleRequest', Object.assign(body, { force: true }));
+            }
+            Swal.close();
+            applyResult(out);
+            const goto = await pop({ kind: '', icon: 'check2-circle', title: t('doneA'), sub: r.id, body: '<div style="font-size:.92rem;color:#334155;padding-bottom:6px">' + esc(t('doneAMsg', { d: thD(r.date), t: res.value.outTime })) + '</div>', ok: t('gotoPlan'), cancel: t('close') });
+            if (goto.isConfirmed) gotoDate(r.date);
+        } catch (e) { fail(e); } finally { busy = false; }
+    }
+    function quick(kind) {
+        const L = lang() === 'th' ? { no: ['รถทุกคันถูกใช้ส่งของลูกค้าช่วงนั้น', 'ขอเลื่อนเวลาได้ไหม', 'กรุณาติดต่อทีมขนส่ง', 'รายละเอียดไม่ชัดเจน'], cx: ['รถเสีย / ติดภารกิจ', 'ผู้จองขอยกเลิก', 'เปลี่ยนแผน'] } : { no: ['All vehicles are busy then', 'Could you move the time?', 'Please contact the transport team', 'Details unclear'], cx: ['Vehicle unavailable', 'Requester asked to cancel', 'Plan changed'] };
+        return '<div class="vrq-qr">' + L[kind].map(x => '<button type="button" data-q="' + esc(x) + '">' + esc(x) + '</button>').join('') + '</div>';
+    }
+    function bindQuick() { document.querySelectorAll('.vrq-qr button').forEach(b => b.addEventListener('click', () => { const w = document.getElementById('vrq-why'); if (w) { w.value = b.getAttribute('data-q'); w.focus(); } })); }
+    async function reasonFlow(id, mode) {
+        if (busy) return; const r = find(id); if (!r) return;
+        const rej = mode === 'no';
+        const res = await pop({
+            kind: 'no', icon: rej ? 'x-circle-fill' : 'trash3-fill', title: t(rej ? 'rTitle' : 'cTitle'), sub: r.id + ' · ' + r.requesterName, danger: true,
+            body: reqCard(r) + '<label class="vrq-l">' + esc(t(rej ? 'rWhy' : 'cWhy')) + '</label><input id="vrq-why" class="vrq-in" maxlength="300">' + quick(rej ? 'no' : 'cx') + (rej ? '' : '<div class="vrq-m i">' + IC('info-circle-fill') + '<div>' + esc(t('cNote')) + '</div></div>'),
+            ok: t(rej ? 'rDo' : 'cDo'), cancel: t('back'),
+            didOpen: () => { bindQuick(); const w = document.getElementById('vrq-why'); if (w) w.focus(); },
+            preConfirm: () => { const w = String(document.getElementById('vrq-why').value || '').trim(); if (!w) { Swal.showValidationMessage(t('rNeed')); return false; } return w; }
+        });
+        if (!res.isConfirmed || !res.value) return;
+        busy = true;
+        try {
+            busyPop('busyR');
+            const out = await callAppsScript(rej ? 'rejectVehicleRequest' : 'adminCancelVehicleRequest', { id: r.id, reason: res.value, by: who() });
+            Swal.close(); applyResult(out);
+            pop({ kind: rej ? 'no' : 'bl', icon: 'check2-circle', title: t(rej ? 'doneR' : 'doneC'), sub: r.id, body: !rej && out && out.planCancelled ? '<div style="font-size:.9rem;color:#334155;padding-bottom:6px">' + esc(t('doneCPlan')) + '</div>' : '', ok: t('close') });
+        } catch (e) { fail(e); } finally { busy = false; }
+    }
+ 
+    async function copyLink() {
+        const u = bookUrl();
+        try { await navigator.clipboard.writeText(u); }
+        catch (e) { try { const ta = document.createElement('textarea'); ta.value = u; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); } catch (e2) { window.prompt('Copy', u); return; } }
+        Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2200, timerProgressBar: true, icon: 'success', title: t('linkOk') });
+    }
+    function showQR() {
+        const u = bookUrl();
+        pop({ kind: 'bl', icon: 'qr-code', title: t('qrTitle'), sub: t('qrSub'), body: '<div class="vrq-qrbox" id="vrq-qrbox"></div><div class="vrq-lk">' + esc(u) + '</div>', ok: t('close'),
+            didOpen: () => {
+                const box = document.getElementById('vrq-qrbox');
+                try { if (typeof QRCode === 'undefined') throw new Error('no qr'); new QRCode(box, { text: u, width: 220, height: 220, correctLevel: QRCode.CorrectLevel ? QRCode.CorrectLevel.M : 0 }); }
+                catch (e) { box.innerHTML = '<div style="color:#64748b;font-size:.85rem;text-align:center">' + esc(t('qrNo')) + '</div>'; }
+            } });
+    }
+ 
+    document.addEventListener('click', function (e) {
+        const tg = e.target && e.target.closest ? e.target : null; if (!tg) return;
+        if (tg.closest('#vrq-btn')) { e.preventDefault(); e.stopPropagation(); setOpen(!uiOpen); return; }
+        const el = tg.closest('#vrq-wrap [data-a]'); if (!el) return;
+        const a = el.getAttribute('data-a');
+        e.stopPropagation();
+        if (a === 'close') setOpen(false);
+        else if (a === 'link') copyLink();
+        else if (a === 'qr') showQR();
+        else if (a === 'f') { uiFilter = el.getAttribute('data-f'); uiLimit = 30; render(); }
+        else if (a === 'more') { uiLimit += 30; render(); }
+        else if (a === 'ok') approve(el.getAttribute('data-id'));
+        else if (a === 'no') reasonFlow(el.getAttribute('data-id'), 'no');
+        else if (a === 'cx') reasonFlow(el.getAttribute('data-id'), 'cx');
+    }, true);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && uiOpen && !(typeof Swal !== 'undefined' && Swal.isVisible && Swal.isVisible())) setOpen(false); });
+    window.addEventListener('resize', () => { if (uiOpen) placePop(); });
+ 
+    setInterval(() => { try { if (me()) render(); } catch (e) { } }, 1000);
+    window.VRQ = { refresh: () => { lastSig = ''; lastBtn = ''; render(); }, open: () => setOpen(true), close: () => setOpen(false) };
+})();
+// ===== จบ VEHICLE-REQ-ADMIN =====
 (function () {
     if (window.__hsBwide) return; window.__hsBwide = true;
     const s = document.createElement('style'); s.id = 'hsB-wide-css';
