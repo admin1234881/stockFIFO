@@ -129,7 +129,9 @@ function addMine(code, token, extra) {
   a.unshift(Object.assign({ code, token: token || '', at: Date.now() }, extra || {}));
   store.set('atech_car_mine', a.slice(0, 15));
 }
-const getProfile = () => store.get('atech_car_profile', {});
+// ไม่จำชื่อ/แผนก/เบอร์ไว้ในเครื่องอีกต่อไป (เครื่องเดียวอาจมีหลายคนใช้) — ล้างค่าที่เคยจำไว้ของเวอร์ชันก่อนด้วย
+try { localStorage.removeItem('atech_car_profile'); } catch (e) { }
+const getProfile = () => ({});
 
 // ---------- เรียก Google Script ----------
 async function api(action, payload) {
@@ -178,11 +180,11 @@ function renderForm() {
   const t = todayStr();
   $app.innerHTML =
     '<div class="hero">' + HERO_LOGO + (editCtx ? '' : '<button type="button" class="rfb" id="frf" title="อัปเดตสถานะการจองและรถว่าง"><i class="bi bi-arrow-clockwise"></i>รีเฟรช</button>') + '<h1>' + (editCtx ? 'แก้ไขคำขอจองรถ' : 'จองรถขนส่ง') + '</h1><p>' + (editCtx ? 'แก้ไขได้จนกว่าทีมขนส่งจะอนุมัติ · ' + esc(editCtx.code) : 'กรอกข้อมูลสั้นๆ ทีมขนส่งจะตรวจสอบและตอบกลับในหน้านี้') + '</p></div>' +
-    '<form class="sheet" id="f" autocomplete="on" novalidate>' +
+    '<form class="sheet" id="f" autocomplete="off" novalidate>' +
     '<div class="sec">ผู้จอง</div>' +
-    '<div class="f"><label>ชื่อ-นามสกุล <b>*</b></label><input class="in" name="requesterName" autocomplete="name" maxlength="80" value="' + esc(form.requesterName) + '"></div>' +
+    '<div class="f"><label>ชื่อ-นามสกุล <b>*</b></label><input class="in" name="requesterName" autocomplete="off" maxlength="80" value="' + esc(form.requesterName) + '"></div>' +
     '<div class="g2"><div class="f"><label>แผนก <b>*</b></label><input class="in" name="dept" maxlength="60" value="' + esc(form.dept) + '"></div>' +
-    '<div class="f"><label>เบอร์โทร <b>*</b></label><input class="in" name="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" value="' + esc(form.phone) + '"></div></div>' +
+    '<div class="f"><label>เบอร์โทร <b>*</b></label><input class="in" name="phone" type="tel" inputmode="tel" autocomplete="off" maxlength="20" value="' + esc(form.phone) + '"></div></div>' +
     '<div class="sec">การเดินทาง</div>' +
     '<div class="f"><label>ไปที่ไหน <b>*</b></label><input class="in" name="destination" maxlength="200" placeholder="ชื่อสถานที่ / ที่อยู่" value="' + esc(form.destination) + '"></div>' +
     '<div class="f"><label>วันที่ <b>*</b></label><input class="in" type="date" name="date" min="' + t + '" value="' + esc(form.date) + '"></div>' +
@@ -316,7 +318,6 @@ async function submitForm() {
   showMsg('', '');
   busy = true; const go = document.getElementById('go'); go.disabled = true; go.innerHTML = '<span class="spin"></span>กำลังส่ง...';
   try {
-    store.set('atech_car_profile', { requesterName: o.requesterName, dept: o.dept, phone: o.phone });
     if (editCtx) {
       const fields = Object.assign({}, o); delete fields.website;
       const r = await api('updateVehicleRequestByRequester', { token: editCtx.token, code: editCtx.code, phone: o.phone, op: 'edit', fields });
