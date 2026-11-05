@@ -1,0 +1,665 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>จองรถขนส่ง · ATECH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<style>
+*{box-sizing:border-box;margin:0}
+:root{--ac:#4f46e5;--ac2:#7c3aed;--acd:#4338ca;--ink:#0f172a;--mut:#64748b;--line:#e6e9f5;--ok:#16a34a;--warn:#d97706;--bad:#dc2626;--bg:#e9e7f7;--fld:#f7f8fc}
+html{-webkit-text-size-adjust:100%}
+body{font-family:'Sarabun','Noto Sans Thai','Loma',system-ui,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;line-height:1.5}
+body.noscroll{overflow:hidden}
+.wrap{max-width:480px;margin:0 auto;min-height:100vh;background:#f3f1fb;position:relative;padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+@media(min-width:560px){.wrap{margin:24px auto;min-height:0;border-radius:30px;overflow:hidden;box-shadow:0 22px 60px rgba(67,56,202,.22)}}
+/* hero */
+.hero{background:linear-gradient(150deg,#4338ca,#6366f1 55%,#8b5cf6);color:#fff;padding:18px 18px 74px;border-radius:0 0 34px 34px;position:relative;overflow:hidden}
+.hero:before{content:'';position:absolute;width:230px;height:230px;border-radius:50%;background:rgba(255,255,255,.1);right:-75px;top:-65px}
+.hero:after{content:'';position:absolute;width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,.08);left:-45px;bottom:-70px}
+.hero>*{position:relative;z-index:1}
+.hero.ok{background:linear-gradient(150deg,#15803d,#22c55e)}.hero.bad{background:linear-gradient(150deg,#b91c1c,#ef4444)}.hero.wait{background:linear-gradient(150deg,#b45309,#f59e0b)}.hero.gray{background:linear-gradient(150deg,#475569,#94a3b8)}
+.hr{display:flex;align-items:center;gap:9px;font-weight:700;font-size:14px}
+.hr .lg{width:34px;height:34px;border-radius:11px;background:rgba(255,255,255,.2);display:grid;place-items:center;font-size:16px}
+.hr .sp{flex:1}
+.lang{display:flex;gap:3px;background:rgba(255,255,255,.2);border-radius:99px;padding:3px}
+.lang button{border:0;background:transparent;color:#e0e7ff;font:inherit;font-size:13px;font-weight:700;padding:4px 12px;border-radius:99px;cursor:pointer}
+.lang button.on{background:#fff;color:var(--acd)}
+.rfb{width:34px;height:34px;border-radius:50%;border:0;background:rgba(255,255,255,.2);color:#fff;font-size:15px;display:grid;place-items:center;cursor:pointer}
+.rfb:active{background:rgba(255,255,255,.35)}.rfb:disabled{opacity:.8;cursor:default}.rfb.spin i{animation:sp .8s linear infinite}
+.hero h1{font-size:28px;margin:18px 0 4px;line-height:1.2;font-weight:700}
+.hero p{font-size:14px;opacity:.92}
+.hero.center{text-align:center}.hero.center h1{margin-top:8px}
+.hero .ck{width:66px;height:66px;border-radius:50%;background:rgba(255,255,255,.25);display:grid;place-items:center;margin:14px auto 8px;font-size:34px}
+.body{margin-top:-50px;padding:0 14px;position:relative;z-index:2}
+/* cards */
+.card{background:#fff;border-radius:22px;padding:15px 15px 12px;margin-bottom:12px;box-shadow:0 10px 26px rgba(67,56,202,.1)}
+.ct{display:flex;gap:9px;align-items:center;font-weight:700;font-size:15px;margin-bottom:11px}
+.ct i{width:30px;height:30px;border-radius:10px;background:#eef0ff;color:var(--ac);display:grid;place-items:center;font-size:15px}
+.ct small{margin-left:auto;font-weight:400;color:var(--mut);font-size:12px}
+.f{margin-bottom:11px}
+.f>label{display:block;font-size:13px;color:#334155;font-weight:700;margin-bottom:5px}
+.f>label b{color:var(--bad)}
+.in{width:100%;height:46px;border:1.5px solid var(--line);border-radius:13px;padding:0 13px;font:inherit;font-size:16px;color:var(--ink);background:var(--fld);outline:none;transition:.15s}
+textarea.in{height:76px;padding:10px 13px;resize:vertical}
+.in:focus{border-color:var(--ac);background:#fff;box-shadow:0 0 0 4px rgba(79,70,229,.13)}
+.in.err{border-color:var(--bad);box-shadow:0 0 0 4px rgba(220,38,38,.1)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.chip.tile{border:1.5px solid var(--line);border-radius:16px;text-align:center;padding:10px 2px 8px;font:inherit;font-size:12px;font-weight:700;color:var(--mut);background:var(--fld);cursor:pointer;line-height:1.25}
+.chip.tile i{display:block;font-size:21px;color:var(--ac);margin-bottom:4px}
+.chip.tile.on{background:linear-gradient(150deg,#4f46e5,#7c3aed);border-color:transparent;color:#fff;box-shadow:0 8px 16px rgba(79,70,229,.3)}
+.chip.tile.on i{color:#fff}
+.hp{position:absolute!important;left:-9999px;width:1px;height:1px;overflow:hidden}
+/* availability */
+.lanes{position:relative}
+.lane{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px;color:#475569}
+.lane .n{width:92px;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar{flex:1;height:18px;border-radius:6px;background:#e7f6ec;position:relative;overflow:hidden}
+.bar i{position:absolute;top:0;bottom:0;background:repeating-linear-gradient(135deg,#c1c8dc 0 5px,#d6dbea 5px 10px)}
+.band{position:absolute;top:-3px;bottom:-3px;left:100px;right:0;pointer-events:none}
+.band b{position:absolute;top:0;bottom:0;background:rgba(79,70,229,.14);border:2px solid #4f46e5;border-radius:8px}
+.ax{position:relative;height:14px;margin-left:100px;font-size:10px;color:#94a3b8}
+.ax span{position:absolute;transform:translateX(-50%)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--mut);margin-top:8px}
+.legend s{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px;text-decoration:none}
+.pill{margin-left:auto;border-radius:99px;font-size:12px;font-weight:700;padding:2px 11px}
+.pill.g{background:#dcfce7;color:#166534}.pill.w{background:#fef3c7;color:#92400e}
+.msg{border-radius:12px;padding:9px 12px;font-size:13px;display:flex;gap:8px;align-items:flex-start;margin:4px 0 10px}
+.msg.w{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412}.msg.e{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
+/* buttons */
+.btn{width:100%;height:50px;border:0;border-radius:15px;background:linear-gradient(150deg,#4f46e5,#7c3aed);color:#fff;font:inherit;font-weight:700;font-size:16px;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 10px 20px rgba(79,70,229,.32);cursor:pointer}
+.btn:disabled{opacity:.6;cursor:default}
+.btn.sm{height:44px;font-size:14px;border-radius:13px;box-shadow:none}
+.btn.ghost{background:#eceefe;color:var(--acd);box-shadow:none}
+.btn.line{background:#fff;color:var(--acd);border:1.5px solid #c7c2fb;box-shadow:none}
+.btn.dng{background:#fff;color:var(--bad);border:1.5px solid #fecaca;box-shadow:none}
+.btn.red{background:linear-gradient(150deg,#dc2626,#ef4444);box-shadow:0 10px 20px rgba(220,38,38,.28)}
+.row2{display:flex;gap:9px}.row2>*{flex:1}
+.note{font-size:12px;color:var(--mut);text-align:center;margin:8px 0 4px;line-height:1.6}
+.link{background:none;border:0;color:var(--ac);font:inherit;font-size:13px;text-decoration:underline;cursor:pointer;padding:6px}
+.sbar{position:sticky;bottom:0;z-index:5;background:rgba(255,255,255,.93);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:11px 16px calc(14px + env(safe-area-inset-bottom));box-shadow:0 -10px 30px rgba(67,56,202,.13);display:flex;align-items:center;gap:12px;margin-top:6px}
+.sbar .t{font-size:12px;color:var(--mut);min-width:0;line-height:1.3}.sbar .t b{display:block;color:var(--ink);font-size:14px}
+.sbar .btn{flex:1;min-width:0}
+/* mine */
+.mi{background:var(--fld);border:1px solid var(--line);border-radius:14px;padding:10px 10px 10px 13px;display:flex;align-items:center;gap:9px;margin-bottom:8px;cursor:pointer}
+.mi b{font-size:14px;color:var(--acd)}.mi small{display:block;font-size:12px;color:var(--mut)}.mi .s{margin-left:auto}
+.mx{border:0;background:transparent;color:#94a3b8;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:12px;flex:none}.mx:hover{background:#fee2e2;color:var(--bad)}
+.badge{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;white-space:nowrap}
+.b-w{background:#fef3c7;color:#92400e}.b-o{background:#dcfce7;color:#166534}.b-x{background:#fee2e2;color:#991b1b}.b-g{background:#e2e8f0;color:#475569}
+.foot{text-align:center;font-size:12px;color:#94a3b8;margin:10px 14px 0}
+/* status */
+.ref{text-align:center;border:2px dashed #c7c2fb;border-radius:16px;padding:10px;background:#f1efff;margin-bottom:12px}
+.ref small{display:block;font-size:12px;color:var(--mut)}.ref b{font-size:30px;letter-spacing:2px;color:var(--acd)}
+.hst{display:flex;margin:6px 0 14px}
+.hst>div{flex:1;text-align:center;font-size:12px;color:var(--mut);font-weight:600;position:relative}
+.hst i{width:28px;height:28px;border-radius:50%;background:#e2e8f0;color:#94a3b8;display:grid;place-items:center;margin:0 auto 4px;font-style:normal;font-size:14px;position:relative;z-index:1}
+.hst .d i{background:var(--ok);color:#fff}.hst .n i{background:var(--warn);color:#fff;box-shadow:0 0 0 5px rgba(217,119,6,.2)}.hst .x i{background:var(--bad);color:#fff}
+.hst .d,.hst .n,.hst .x{color:var(--ink)}
+.hst>div:not(:last-child):after{content:'';position:absolute;top:13px;left:calc(50% + 18px);right:calc(-50% + 18px);height:2px;background:#e2e8f0}
+.hst .d:not(:last-child):after{background:var(--ok)}
+.sum>div{display:flex;gap:9px;font-size:14px;padding:8px 0;border-bottom:1px solid #f0f1f8;align-items:flex-start}
+.sum>div:last-child{border:0}
+.sum i{color:var(--ac);width:18px;flex:none;margin-top:2px}.sum span{color:var(--mut);width:84px;flex:none;font-size:13px}.sum em{font-style:normal;word-break:break-word;min-width:0}
+.big{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:11px 14px;margin-bottom:12px;font-size:14px;line-height:1.8}
+.big.bad{background:#fef2f2;border-color:#fecaca}
+.big i{color:var(--ok);margin-right:6px}.big.bad i{color:var(--bad)}
+.chg{background:#fffbeb;border:1px solid #fde68a;border-radius:14px;padding:11px 14px;margin-bottom:12px;font-size:14px;line-height:1.7}
+.chg b{display:block;color:#92400e;margin-bottom:3px}.chg i{color:var(--warn);margin-right:6px}.chg s{color:#94a3b8}.chg .nw{font-weight:700;color:var(--ink)}
+/* modal */
+.ov{position:fixed;inset:0;background:rgba(15,23,42,.5);display:grid;place-items:center;z-index:50;padding:18px;opacity:0;transition:opacity .18s}
+.ov.on{opacity:1}
+.md{background:#fff;border-radius:26px;max-width:400px;width:100%;padding:24px 20px 18px;box-shadow:0 30px 60px rgba(15,23,42,.35);text-align:center;max-height:calc(100vh - 36px);overflow:auto;transform:translateY(14px) scale(.97);transition:transform .2s cubic-bezier(.2,.9,.3,1.2)}
+.ov.on .md{transform:none}
+.md h3{font-size:20px;margin-bottom:4px}.md p.s{font-size:14px;color:var(--mut);margin-bottom:14px}
+.md .left{text-align:left}
+.mic{width:72px;height:72px;border-radius:50%;display:grid;place-items:center;font-size:34px;margin:0 auto 12px}
+.mic.ok{background:linear-gradient(150deg,#4f46e5,#7c3aed);color:#fff;box-shadow:0 12px 24px rgba(79,70,229,.35);animation:pop .45s cubic-bezier(.2,.9,.3,1.4)}
+.mic.wn{background:#fef3c7;color:var(--warn)}.mic.rd{background:#fee2e2;color:var(--bad)}.mic.in{background:#eef0ff;color:var(--ac)}
+@keyframes pop{0%{transform:scale(.4);opacity:0}100%{transform:scale(1);opacity:1}}
+.code{background:#f1efff;border:2px dashed #c7c2fb;border-radius:16px;padding:9px;margin:0 0 14px}.code small{display:block;color:var(--mut);font-size:12px}.code b{font-size:28px;letter-spacing:2px;color:var(--acd)}
+.md .row2{margin-top:6px}.md .btn{height:46px;font-size:15px}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#0f172a;color:#fff;border-radius:999px;padding:10px 18px;font-size:14px;z-index:80;box-shadow:0 8px 24px rgba(0,0,0,.3);max-width:90vw;text-align:center}
+.spin{width:18px;height:18px;border:3px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<noscript><p style="padding:24px">ต้องเปิดใช้งาน JavaScript เพื่อใช้หน้าจองรถ / JavaScript is required</p></noscript>
+<script>
+(function () {
+'use strict';
+// ===================== ตั้งค่า (แก้ได้ตรงนี้) =====================
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwGyMVpDNyn6A2bAEoyrnTZF4rkJYihNTJI9BsrJwoGcpnhgIJrqZssi0yK0g-yyjvp/exec';
+const AXIS_FROM = 6, AXIS_TO = 20;                                     // แถบเวลาที่โชว์ (06:00 - 20:00)
+const REFRESH_MS = 30000;                                              // รีเฟรชสถานะอัตโนมัติทุกกี่มิลลิวินาที
+// ค่า v ต้องตรงกับที่ Google Script รับ (อย่าเปลี่ยน) — เปลี่ยนได้เฉพาะชื่อที่แสดงในพจนานุกรมภาษาด้านล่าง
+const PURPOSES = [
+  { v: 'ส่งของ', k: 'pDeliver', icon: 'box-seam' },
+  { v: 'รับของ', k: 'pPick', icon: 'box-arrow-in-down' },
+  { v: 'รับ-ส่งบุคคล', k: 'pPax', icon: 'people' },
+  { v: 'อื่นๆ', k: 'pOther', icon: 'three-dots' }
+];
+// ==================================================================
+
+// ===================== พจนานุกรมภาษา (ไทย / English) =====================
+const TX = {
+th: {
+  appName: 'ATECH · ขอใช้รถขนส่ง', title: 'จองรถขนส่ง', sub: 'กรอกข้อมูลสั้นๆ ทีมขนส่งจะตรวจสอบและตอบกลับในหน้านี้',
+  editTitle: 'แก้ไขคำขอจองรถ', editSub: 'แก้ไขได้จนกว่าทีมขนส่งจะอนุมัติ · {c}', refreshTip: 'อัปเดตสถานะการจองและรถว่าง',
+  cWho: 'ผู้จอง', cTrip: 'การเดินทาง', cDetail: 'รายละเอียด',
+  name: 'ชื่อ-นามสกุล', dept: 'แผนก', phone: 'เบอร์โทร', dest: 'ไปที่ไหน', destPh: 'ชื่อสถานที่ / ที่อยู่', date: 'วันที่', from: 'เวลาไป', to: 'เวลากลับ (โดยประมาณ)',
+  purpose: 'ไปเพื่อ', detail: 'รายละเอียด / ของที่ขน', detailPh: 'เช่น กล่องตัวอย่าง 5 ลัง, ไปรับลูกค้า 3 คน',
+  pDeliver: 'ส่งของ', pPick: 'รับของ', pPax: 'รับ-ส่งบุคคล', pOther: 'อื่นๆ',
+  avT: 'รถว่างช่วงที่เลือก', avFree: 'ว่าง {n} จาก {m} คัน', avNone: 'ไม่มีรถว่าง', avLoad: 'กำลังโหลด...', avErr: 'ดูช่วงเวลารถไม่ว่างไม่ได้ในตอนนี้ (ยังส่งคำขอได้ตามปกติ)', avNoCar: 'ยังไม่มีข้อมูลรถในระบบ',
+  lgFree: 'ว่าง', lgBusy: 'ไม่ว่าง', lgSel: 'ช่วงที่คุณเลือก',
+  pickWhen: 'เลือกวัน/เวลา', send: 'ส่งคำขอจองรถ', sending: 'กำลังส่ง...', saveEdit: 'บันทึกการแก้ไข', cancelEdit: 'ยกเลิกการแก้ไข',
+  note: 'ยังไม่ใช่การยืนยัน — ทีมขนส่งจะอนุมัติ แล้วคุณกลับมาดูสถานะได้ในหน้านี้',
+  mine: 'คำขอของคุณ (บนเครื่องนี้)', lookupBtn: 'ตรวจสอบสถานะด้วยเลขอ้างอิง', delTip: 'ลบรายการนี้ออกจากเครื่อง',
+  delT: 'ลบรายการนี้ออกจากเครื่อง?', delP: 'เอาเลข {c} ออกจากรายการในเครื่องนี้เท่านั้น ไม่ได้ยกเลิกคำขอ และยังค้นหาได้ด้วยเลขอ้างอิง + เบอร์โทร', delOk: 'ลบออก',
+  foot: 'ระบบจองรถขนส่ง ATECH',
+  st_pending: 'รออนุมัติ', st_approved: 'อนุมัติแล้ว', st_rejected: 'ไม่อนุมัติ', st_cancelled: 'ยกเลิกแล้ว',
+  hP: 'รอทีมขนส่งอนุมัติ', hPs: 'โดยปกติตอบภายในวันทำการ', hA: 'อนุมัติแล้ว', hAs: 'จัดรถและคนขับเรียบร้อย', hX: 'ไม่อนุมัติ', hXs: 'ดูเหตุผลด้านล่าง', hC: 'ยกเลิกแล้ว', hCs: '',
+  ref: 'เลขอ้างอิง', sRecv: 'รับคำขอแล้ว', sWait: 'รออนุมัติ', sAssign: 'จัดรถ+คนขับ', sApproved: 'อนุมัติแล้ว', sRejected: 'ไม่อนุมัติ', sCancelled: 'ยกเลิก',
+  autoUp: 'หน้านี้อัปเดตสถานะให้อัตโนมัติ', whoL: 'ผู้จอง', toL: 'ไปที่', whenL: 'เวลา', purL: 'ไปเพื่อ',
+  plate: 'ทะเบียนรถ', driver: 'คนขับ', leaves: 'ออก', backAbout: 'กลับประมาณ', reason: 'เหตุผล: {r}', tsfx: ' น.',
+  chgT: 'ทีมขนส่งปรับวัน/เวลาให้', edit: 'ขอแก้ไข', cancelReq: 'ยกเลิกคำขอ', again: 'ส่งคำขอใหม่ (ใช้ข้อมูลเดิม)',
+  contactTeam: 'ต้องการแก้ไขหรือยกเลิก กรุณาติดต่อทีมขนส่งโดยตรง', copyLink: 'คัดลอกลิงก์ส่วนตัว', copyShort: 'คัดลอกลิงก์', refresh: 'รีเฟรช', home: 'กลับหน้าจองรถ',
+  linkNote: 'ลิงก์นี้เปิดดูสถานะได้เลยไม่ต้องกรอกอะไร อย่าแชร์ให้คนอื่น',
+  lkT: 'ตรวจสอบสถานะ', lkS: 'ใส่เลขอ้างอิง และเบอร์โทรที่ใช้จอง', lkCode: 'เลขอ้างอิง', lkPhone: 'เบอร์โทรที่ใช้จอง', lkGo: 'ตรวจสอบ', lkClose: 'ปิด', lkNeed: 'กรุณาใส่เลขอ้างอิงและเบอร์โทรให้ครบ',
+  okT: 'ส่งคำขอเรียบร้อย', okS: 'จดเลขอ้างอิงนี้ หรือคัดลอกลิงก์ส่วนตัวไว้ดูสถานะภายหลัง', okView: 'ดูสถานะ',
+  wT: 'ช่วงเวลานี้รถอาจไม่ว่าง', wS: 'รถทุกคันถูกจองแล้วในช่วงเวลาที่เลือก ยังส่งคำขอได้ ทีมขนส่งอาจปรับเวลาให้', wChange: 'เปลี่ยนเวลา', wKeep: 'ส่งต่อ',
+  cxT: 'ยกเลิกคำขอนี้?', cxP: 'คำขอ {c} จะถูกยกเลิก และต้องส่งใหม่ถ้าต้องการใช้รถอีก', cxBack: 'กลับ',
+  nfT: 'ไม่พบคำขอนี้ในระบบแล้ว', nfP: 'คำขอ {c} ถูกลบออกจากระบบ จึงเอาออกจากรายการในเครื่องนี้ให้แล้ว', ok: 'ตกลง',
+  openLoad: 'กำลังโหลด...', openFail: 'เปิดคำขอไม่ได้',
+  tUpdated: 'อัปเดตแล้ว ยังไม่มีการเปลี่ยนแปลง', tRefreshed: 'อัปเดตแล้ว', tChanged: 'อัปเดตแล้ว มี {n} รายการเปลี่ยนแปลง', tRemoved: 'เอารายการที่ไม่มีในระบบออกแล้ว {n} รายการ', tFail: 'รีเฟรชไม่สำเร็จ ลองใหม่อีกครั้ง',
+  tStatus: 'สถานะเปลี่ยนแล้ว', tAdjusted: 'ทีมขนส่งปรับข้อมูลให้แล้ว', tCopied: 'คัดลอกลิงก์แล้ว', tCopyPrompt: 'คัดลอกลิงก์นี้', tSaved: 'บันทึกการแก้ไขแล้ว', tCancelled: 'ยกเลิกคำขอแล้ว', tDeleted: 'ลบออกจากเครื่องแล้ว',
+  vName: 'กรุณากรอกชื่อ-นามสกุล', vDept: 'กรุณากรอกแผนก', vPhone: 'กรุณากรอกเบอร์โทรให้ถูกต้อง', vDest: 'กรุณากรอกสถานที่ที่จะไป', vDate: 'กรุณาเลือกวันที่', vPast: 'จองย้อนหลังไม่ได้',
+  vFrom: 'กรุณาเลือกเวลาไป', vTo: 'กรุณาเลือกเวลากลับ', vOrder: 'เวลากลับต้องหลังเวลาไป',
+  eConn: 'เชื่อมต่อระบบไม่ได้ กรุณาตรวจอินเทอร์เน็ตแล้วลองใหม่', eBad: 'ระบบตอบกลับไม่ถูกต้อง กรุณาลองใหม่ภายหลัง', eGeneric: 'เกิดข้อผิดพลาด', eNotReady: 'ระบบจองรถยังไม่เปิดใช้งาน กรุณาแจ้งทีมขนส่ง',
+  eNotFound: 'ไม่พบคำขอ กรุณาตรวจเลขอ้างอิงและเบอร์โทรอีกครั้ง', eQuota: 'ส่งคำขอวันนี้ครบจำนวนที่กำหนดแล้ว กรุณาติดต่อทีมขนส่ง', eQueue: 'ระบบมีคำขอค้างอยู่มาก กรุณาติดต่อทีมขนส่งโดยตรง',
+  eAhead: 'จองล่วงหน้าได้ไม่เกิน {n} วัน', eDecided: 'คำขอนี้ทีมขนส่งพิจารณาแล้ว ไม่สามารถแก้ไขได้',
+  mo: ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'], wd: ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'], yoff: 543
+},
+en: {
+  appName: 'ATECH · Transport request', title: 'Book a vehicle', sub: 'Fill in a few details. The transport team will review and reply on this page',
+  editTitle: 'Edit vehicle request', editSub: 'You can edit until the transport team approves · {c}', refreshTip: 'Update booking status and free vehicles',
+  cWho: 'Requester', cTrip: 'Trip', cDetail: 'Details',
+  name: 'Full name', dept: 'Department', phone: 'Phone', dest: 'Destination', destPh: 'Place name / address', date: 'Date', from: 'Departure', to: 'Return (approx.)',
+  purpose: 'Purpose', detail: 'Details / items to carry', detailPh: 'e.g. 5 boxes of samples, picking up 3 customers',
+  pDeliver: 'Delivery', pPick: 'Pick-up', pPax: 'Passengers', pOther: 'Other',
+  avT: 'Vehicles free in this window', avFree: '{n} of {m} free', avNone: 'None free', avLoad: 'Loading...', avErr: 'Cannot load vehicle availability right now (you can still send the request)', avNoCar: 'No vehicle data yet',
+  lgFree: 'Free', lgBusy: 'Busy', lgSel: 'Your selection',
+  pickWhen: 'Pick date/time', send: 'Send request', sending: 'Sending...', saveEdit: 'Save changes', cancelEdit: 'Cancel editing',
+  note: 'This is not a confirmation. The transport team will approve it, then check back on this page',
+  mine: 'Your requests (on this device)', lookupBtn: 'Check status with a reference code', delTip: 'Remove from this device',
+  delT: 'Remove from this device?', delP: 'Only removes {c} from the list on this device. The request is not cancelled and can still be found with the reference code + phone', delOk: 'Remove',
+  foot: 'ATECH Transport Booking',
+  st_pending: 'Pending', st_approved: 'Approved', st_rejected: 'Rejected', st_cancelled: 'Cancelled',
+  hP: 'Waiting for approval', hPs: 'Usually answered within working days', hA: 'Approved', hAs: 'Vehicle and driver assigned', hX: 'Rejected', hXs: 'See the reason below', hC: 'Cancelled', hCs: '',
+  ref: 'Reference code', sRecv: 'Received', sWait: 'Approval', sAssign: 'Vehicle + driver', sApproved: 'Approved', sRejected: 'Rejected', sCancelled: 'Cancelled',
+  autoUp: 'This page updates automatically', whoL: 'Requester', toL: 'Destination', whenL: 'When', purL: 'Purpose',
+  plate: 'Vehicle', driver: 'Driver', leaves: 'Leaves', backAbout: 'back around', reason: 'Reason: {r}', tsfx: '',
+  chgT: 'The transport team adjusted your date/time', edit: 'Request edit', cancelReq: 'Cancel request', again: 'Send a new request (reuse details)',
+  contactTeam: 'To change or cancel, please contact the transport team directly', copyLink: 'Copy private link', copyShort: 'Copy link', refresh: 'Refresh', home: 'Back to booking',
+  linkNote: 'This link opens the status without any input. Do not share it with others',
+  lkT: 'Check status', lkS: 'Enter the reference code and the phone number you booked with', lkCode: 'Reference code', lkPhone: 'Phone used to book', lkGo: 'Check', lkClose: 'Close', lkNeed: 'Please enter both the reference code and phone number',
+  okT: 'Request sent', okS: 'Keep this reference code, or copy your private link to check the status later', okView: 'View status',
+  wT: 'No vehicle may be free then', wS: 'All vehicles are booked in the selected window. You can still send the request; the team may adjust the time', wChange: 'Change time', wKeep: 'Send anyway',
+  cxT: 'Cancel this request?', cxP: 'Request {c} will be cancelled. You must send a new one to use a vehicle again', cxBack: 'Back',
+  nfT: 'This request no longer exists', nfP: 'Request {c} was removed from the system, so it was also removed from the list on this device', ok: 'OK',
+  openLoad: 'Loading...', openFail: 'Cannot open the request',
+  tUpdated: 'Updated. No changes', tRefreshed: 'Updated', tChanged: 'Updated. {n} request(s) changed', tRemoved: 'Removed {n} request(s) that no longer exist', tFail: 'Refresh failed, please try again',
+  tStatus: 'Status changed', tAdjusted: 'The transport team updated your request', tCopied: 'Link copied', tCopyPrompt: 'Copy this link', tSaved: 'Changes saved', tCancelled: 'Request cancelled', tDeleted: 'Removed from this device',
+  vName: 'Please enter your full name', vDept: 'Please enter your department', vPhone: 'Please enter a valid phone number', vDest: 'Please enter the destination', vDate: 'Please pick a date', vPast: 'Cannot book a past date',
+  vFrom: 'Please pick the departure time', vTo: 'Please pick the return time', vOrder: 'Return time must be after departure',
+  eConn: 'Cannot connect. Please check your internet and try again', eBad: 'Invalid response from the system. Please try again later', eGeneric: 'Something went wrong', eNotReady: 'The booking system is not enabled yet. Please contact the transport team',
+  eNotFound: 'Request not found. Please check the reference code and phone number', eQuota: 'You have reached today\'s request limit. Please contact the transport team', eQueue: 'Too many requests are waiting. Please contact the transport team directly',
+  eAhead: 'You can book at most {n} days ahead', eDecided: 'The transport team has already reviewed this request, so it cannot be edited',
+  mo: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], wd: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], yoff: 0
+}
+};
+let LANG = 'th';
+try { const q = /[?&]lang=(th|en)/.exec(location.search); LANG = q ? q[1] : (localStorage.getItem('atech_car_lang') === 'en' ? 'en' : 'th'); } catch (e) { }
+const t = (k, v) => {
+  let s = (TX[LANG] && TX[LANG][k] !== undefined) ? TX[LANG][k] : TX.th[k];
+  if (s === undefined) return k;
+  if (v && typeof s === 'string') Object.keys(v).forEach((n) => { s = s.split('{' + n + '}').join(v[n]); });
+  return s;
+};
+function setLang(l) { LANG = l === 'en' ? 'en' : 'th'; try { localStorage.setItem('atech_car_lang', LANG); } catch (e) { } document.documentElement.lang = LANG; document.title = t('title') + ' · ATECH'; }
+
+const $app = document.getElementById('app');
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pad = (n) => String(n).padStart(2, '0');
+function todayStr() { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); }
+function fmtDate(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || '')); if (!m) return String(s || '');
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])), T = TX[LANG];
+  return T.wd[d.getUTCDay()] + ' ' + (+m[3]) + ' ' + T.mo[+m[2] - 1] + ' ' + (+m[1] + T.yoff);
+}
+function fmtShort(s) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || '')); if (!m) return ''; const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])); return TX[LANG].wd[d.getUTCDay()] + ' ' + (+m[3]) + ' ' + TX[LANG].mo[+m[2] - 1]; }
+function fmtDateTime(s) { const m = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})/.exec(String(s || '')); return m ? fmtDate(m[1]) + ' ' + m[2] + t('tsfx') : (s || ''); }
+const toMin = (x) => { const p = String(x || '').split(':'); return Number(p[0]) * 60 + Number(p[1]); };
+const purposeLabel = (v) => { const p = PURPOSES.find((x) => x.v === v); return p ? t(p.k) : v; };
+
+// ---------- เก็บข้อมูลในเครื่อง (ถ้าใช้ไม่ได้ก็ข้าม) ----------
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } }
+};
+const getMine = () => store.get('atech_car_mine', []);
+const setMine = (a) => store.set('atech_car_mine', a.slice(0, 15));
+function addMine(code, token, extra) {
+  if (!code || code === 'CAR-0000-00') return;
+  const a = getMine().filter((x) => x.code !== code);
+  a.unshift(Object.assign({ code, token: token || '', at: Date.now() }, extra || {}));
+  setMine(a);
+}
+const mineMeta = (r) => ({ date: r.date, startTime: r.startTime, status: r.status });
+const mineWhen = (m) => m.date ? fmtDate(m.date) + ' ' + m.startTime : (m.when || '');
+// ไม่จำชื่อ/แผนก/เบอร์ไว้ในเครื่อง (เครื่องเดียวอาจมีหลายคนใช้) — ล้างค่าที่เคยจำไว้ของเวอร์ชันก่อนด้วย
+try { localStorage.removeItem('atech_car_profile'); } catch (e) { }
+
+// ---------- เรียก Google Script ----------
+function mkErr(key, msg, vars) { const e = new Error(msg || t(key, vars)); e.key = key; return e; }
+async function api(action, payload) {
+  let res;
+  try {
+    res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action, payload }), headers: { 'Content-Type': 'text/plain;charset=utf-8' } });
+  } catch (e) { throw mkErr('eConn'); }
+  let data;
+  try { data = JSON.parse(await res.text()); } catch (e) { throw mkErr('eBad'); }
+  if (data && data.status === 'error') {
+    let m = String(data.message || '').replace(/^บันทึกไม่สำเร็จ \(Lock\/Error\):\s*/, '');
+    // ข้อความจากฝั่ง Google Script เป็นภาษาไทย — แปลงเป็นภาษาที่เลือกอยู่ (คงข้อความเดิมไว้ถ้าไม่รู้จัก)
+    const map = [[/Invalid action/i, 'eNotReady'], [/ไม่พบคำขอ/, 'eNotFound'], [/เบอร์โทรไม่ถูกต้อง/, 'vPhone'], [/จองย้อนหลังไม่ได้/, 'vPast'], [/ส่งคำขอวันนี้ครบ/, 'eQuota'], [/ระบบมีคำขอค้างอยู่มาก/, 'eQueue'], [/ทีมขนส่งพิจารณาแล้ว/, 'eDecided'], [/เวลากลับต้องหลังเวลาไป/, 'vOrder']];
+    for (let i = 0; i < map.length; i++) if (map[i][0].test(m) || map[i][0].test(String(data.message || ''))) throw mkErr(map[i][1]);
+    const a = /จองล่วงหน้าได้ไม่เกิน\s*(\d+)/.exec(m); if (a) throw mkErr('eAhead', '', { n: a[1] });
+    throw mkErr('eGeneric', m || t('eGeneric'));
+  }
+  return data;
+}
+
+// ---------- ป๊อปอัป / ข้อความสั้น ----------
+let toastT;
+function toast(msg) { const o = document.querySelector('.toast'); if (o) o.remove(); const d = document.createElement('div'); d.className = 'toast'; d.textContent = msg; document.body.appendChild(d); clearTimeout(toastT); toastT = setTimeout(() => d.remove(), 2600); }
+let mRes = null;
+function closeModal(v) {
+  const o = document.querySelector('.ov'); if (o) o.remove();
+  document.body.classList.remove('noscroll');
+  const r = mRes; mRes = null; if (r) r(v === undefined ? false : v);
+}
+// เปิดป๊อปอัปกลางจอ — คืนค่า Promise: ค่า data-r ของปุ่มที่กด (หรือ false ถ้ากดพื้นหลัง/Esc)
+function modal(inner, bind, cls) {
+  if (document.querySelector('.ov')) closeModal();
+  return new Promise((resolve) => {
+    mRes = resolve;
+    const o = document.createElement('div'); o.className = 'ov';
+    o.innerHTML = '<div class="md ' + (cls || '') + '" role="dialog" aria-modal="true">' + inner + '</div>';
+    o.addEventListener('mousedown', (e) => { if (e.target === o) closeModal(false); });
+    o.addEventListener('click', (e) => { const b = e.target.closest('[data-r]'); if (b) closeModal(b.getAttribute('data-r')); });
+    document.body.appendChild(o); document.body.classList.add('noscroll');
+    requestAnimationFrame(() => o.classList.add('on'));
+    if (bind) bind(o.querySelector('.md'));
+  });
+}
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.querySelector('.ov')) closeModal(false); });
+const icon = (tone, ic) => '<div class="mic ' + tone + '"><i class="bi bi-' + ic + '"></i></div>';
+async function ask(o) {   // ป๊อปอัปถาม ตกลง/กลับ → true/false
+  const r = await modal(icon(o.danger ? 'rd' : 'in', o.icon || 'question-lg') + '<h3>' + esc(o.title) + '</h3><p class="s">' + esc(o.text) + '</p><div class="row2"><button class="btn ghost" data-r="0">' + esc(o.cancel || t('cxBack')) + '</button><button class="btn' + (o.danger ? ' red' : '') + '" data-r="1">' + esc(o.ok) + '</button></div>', null, 'dlg');
+  return r === '1';
+}
+async function notice(tone, ic, title, text) { await modal(icon(tone, ic) + '<h3>' + esc(title) + '</h3><p class="s">' + esc(text) + '</p><div class="row2"><button class="btn" data-r="1">' + esc(t('ok')) + '</button></div>', null, 'dlg'); }
+
+const statusBadge = (s) => ({ pending: '<span class="badge b-w"><i class="bi bi-hourglass-split"></i>' + esc(t('st_pending')) + '</span>', approved: '<span class="badge b-o"><i class="bi bi-check-circle-fill"></i>' + esc(t('st_approved')) + '</span>', rejected: '<span class="badge b-x"><i class="bi bi-x-circle-fill"></i>' + esc(t('st_rejected')) + '</span>', cancelled: '<span class="badge b-g"><i class="bi bi-slash-circle"></i>' + esc(t('st_cancelled')) + '</span>' }[s] || '');
+const langPill = () => '<div class="lang"><button type="button" data-lang="th" class="' + (LANG === 'th' ? 'on' : '') + '">ไทย</button><button type="button" data-lang="en" class="' + (LANG === 'en' ? 'on' : '') + '">EN</button></div>';
+const brandRow = (extra) => '<div class="hr"><div class="lg"><i class="bi bi-truck-front-fill"></i></div>ATECH<span class="sp"></span>' + langPill() + (extra || '') + '</div>';
+function bindLang() {
+  document.querySelectorAll('[data-lang]').forEach((b) => { b.onclick = () => { if (b.getAttribute('data-lang') === LANG) return; setLang(b.getAttribute('data-lang')); rerender(); }; });
+}
+
+// ===================== หน้าฟอร์มจอง =====================
+let view = 'form';
+let form = {};        // ค่าที่กรอกอยู่
+let editCtx = null;   // ถ้าไม่ใช่ null = กำลังแก้ไขคำขอเดิม { token, code }
+let avCache = { date: '', data: null, loading: false, err: '' };
+let busy = false;
+const resetAv = () => { avCache = { date: '', data: null, loading: false, err: '' }; };
+
+function newForm(src) {
+  return Object.assign({ requesterName: '', dept: '', phone: '', destination: '', date: '', startTime: '', endTime: '', purpose: 'ส่งของ', detail: '' }, src || {});
+}
+function rerender() {
+  if (view === 'form') { try { Object.assign(form, readForm()); } catch (e) { } renderForm(); }
+  else if (view === 'status' && cur) renderStatus();
+  else if (view === 'error' && lastRef) openStatus(lastRef);
+  else { form = newForm(); renderForm(); }
+}
+function renderForm() {
+  view = 'form'; stopRefresh(); window.scrollTo(0, 0);
+  const mine = getMine(), tdy = todayStr();
+  const heroH = editCtx ? t('editTitle') : t('title'), heroP = editCtx ? t('editSub', { c: editCtx.code }) : t('sub');
+  $app.innerHTML =
+    '<div class="hero">' + brandRow(editCtx ? '' : '<button type="button" class="rfb" id="frf" title="' + esc(t('refreshTip')) + '"><i class="bi bi-arrow-clockwise"></i></button>') + '<h1>' + esc(heroH) + '</h1><p>' + esc(heroP) + '</p></div>' +
+    '<form class="body" id="f" autocomplete="off" novalidate>' +
+    '<div class="card"><div class="ct"><i class="bi bi-person-fill"></i>' + esc(t('cWho')) + '</div>' +
+    '<div class="f"><label>' + esc(t('name')) + ' <b>*</b></label><input class="in" name="requesterName" autocomplete="off" maxlength="80" value="' + esc(form.requesterName) + '"></div>' +
+    '<div class="g2"><div class="f"><label>' + esc(t('dept')) + ' <b>*</b></label><input class="in" name="dept" autocomplete="off" maxlength="60" value="' + esc(form.dept) + '"></div>' +
+    '<div class="f"><label>' + esc(t('phone')) + ' <b>*</b></label><input class="in" name="phone" type="tel" inputmode="tel" autocomplete="off" maxlength="20" value="' + esc(form.phone) + '"></div></div></div>' +
+    '<div class="card"><div class="ct"><i class="bi bi-geo-alt-fill"></i>' + esc(t('cTrip')) + '</div>' +
+    '<div class="f"><label>' + esc(t('dest')) + ' <b>*</b></label><input class="in" name="destination" maxlength="200" placeholder="' + esc(t('destPh')) + '" value="' + esc(form.destination) + '"></div>' +
+    '<div class="f"><label>' + esc(t('date')) + ' <b>*</b></label><input class="in" type="date" name="date" min="' + tdy + '" value="' + esc(form.date) + '"></div>' +
+    '<div class="g2"><div class="f"><label>' + esc(t('from')) + ' <b>*</b></label><input class="in" type="time" name="startTime" value="' + esc(form.startTime) + '"></div>' +
+    '<div class="f"><label>' + esc(t('to')) + ' <b>*</b></label><input class="in" type="time" name="endTime" value="' + esc(form.endTime) + '"></div></div>' +
+    '<div class="f"><label>' + esc(t('purpose')) + ' <b>*</b></label><div class="tiles" data-chips="purpose">' + PURPOSES.map((p) => '<button type="button" class="chip tile' + (form.purpose === p.v ? ' on' : '') + '" data-v="' + esc(p.v) + '"><i class="bi bi-' + p.icon + '"></i>' + esc(t(p.k)) + '</button>').join('') + '</div></div>' +
+    '<div class="f" style="margin-bottom:4px"><label>' + esc(t('detail')) + '</label><textarea class="in" name="detail" maxlength="400" placeholder="' + esc(t('detailPh')) + '">' + esc(form.detail) + '</textarea></div></div>' +
+    '<div class="hp" aria-hidden="true"><label>website</label><input name="website" tabindex="-1" autocomplete="off"></div>' +
+    '<div id="av"></div>' +
+    (!editCtx ? mineCard(mine) : '') +
+    '<div id="fmsg"></div>' +
+    '<div class="note">' + (editCtx ? '' : esc(t('note'))) + '</div>' +
+    (editCtx ? '<div style="text-align:center"><button type="button" class="link" id="bk">' + esc(t('cancelEdit')) + '</button></div>' : '') +
+    '<div class="foot">' + esc(t('foot')) + '</div>' +
+    '<div class="sbar"><div class="t" id="sbt"></div><button class="btn" id="go" type="submit"><i class="bi bi-send-fill"></i>' + esc(editCtx ? t('saveEdit') : t('send')) + '</button></div>' +
+    '</form>';
+  bindForm(); bindLang(); drawAvailability(); updateBar();
+  if (form.date) loadAvailability(form.date);
+}
+function mineCard(mine) {
+  let h = '<div class="card" id="minebox"><div class="ct"><i class="bi bi-' + (mine.length ? 'clock-history' : 'search') + '"></i>' + esc(mine.length ? t('mine') : t('lkT')) + '</div>';
+  mine.forEach((m) => { h += '<div class="mi" data-code="' + esc(m.code) + '"><div><b>' + esc(m.code) + '</b><small>' + esc(mineWhen(m)) + '</small></div><span class="s">' + (m.status ? statusBadge(m.status) : '<i class="bi bi-chevron-right"></i>') + '</span><button type="button" class="mx" data-del="' + esc(m.code) + '" title="' + esc(t('delTip')) + '"><i class="bi bi-x-lg"></i></button></div>'; });
+  return h + '<button type="button" class="btn sm line" id="lk" style="margin-bottom:4px"><i class="bi bi-search"></i>' + esc(t('lookupBtn')) + '</button></div>';
+}
+function updateBar() {
+  const el = document.getElementById('sbt'); if (!el) return;
+  const ok = form.date && form.startTime && form.endTime;
+  el.innerHTML = ok ? esc(fmtShort(form.date)) + '<b>' + esc(form.startTime) + ' – ' + esc(form.endTime) + '</b>' : esc(t('pickWhen')) + '<b>—</b>';
+}
+function readForm() {
+  const f = document.getElementById('f'); const o = {};
+  ['requesterName', 'dept', 'phone', 'destination', 'date', 'startTime', 'endTime', 'detail'].forEach((k) => { o[k] = (f.elements[k].value || '').trim(); });
+  o.purpose = form.purpose; o.website = f.elements.website.value;
+  return o;
+}
+function bindForm() {
+  const f = document.getElementById('f');
+  f.addEventListener('input', (e) => {
+    Object.assign(form, readForm());
+    if (e.target.classList) e.target.classList.remove('err');
+    showMsg('', '');
+    if (e.target.name === 'date') { resetAv(); if (form.date) loadAvailability(form.date); else drawAvailability(); }
+    if (e.target.name === 'startTime' || e.target.name === 'endTime') drawAvailability();
+    updateBar();
+  });
+  f.addEventListener('click', (e) => {
+    const c = e.target.closest('.chip'); if (!c) return;
+    const k = c.parentNode.dataset.chips; form[k] = c.dataset.v;
+    c.parentNode.querySelectorAll('.chip').forEach((x) => x.classList.toggle('on', x === c));
+  });
+  f.addEventListener('submit', (e) => { e.preventDefault(); submitForm(); });
+  const lk = document.getElementById('lk'); if (lk) lk.onclick = openLookup;
+  const frf = document.getElementById('frf'); if (frf) frf.onclick = () => syncMine(true);
+  const bk = document.getElementById('bk'); if (bk) bk.onclick = () => { editCtx = null; if (cur) showStatus(cur, curToken); else { form = newForm(); renderForm(); } };
+  document.querySelectorAll('.mi').forEach((m) => {
+    m.onclick = (e) => {
+      if (e.target.closest('.mx')) return;
+      const it = getMine().find((x) => x.code === m.dataset.code); if (it) openStatus({ token: it.token, code: it.code });
+    };
+  });
+  document.querySelectorAll('.mx').forEach((b) => { b.onclick = async (e) => { e.stopPropagation(); const c = b.getAttribute('data-del'); if (await ask({ icon: 'trash3', danger: true, title: t('delT'), text: t('delP', { c }), ok: t('delOk') })) { setMine(getMine().filter((x) => x.code !== c)); toast(t('tDeleted')); Object.assign(form, readForm()); renderForm(); } }; });
+}
+function showMsg(kind, html) { const m = document.getElementById('fmsg'); if (m) m.innerHTML = html ? '<div class="msg ' + kind + '"><i class="bi bi-' + (kind === 'e' ? 'exclamation-octagon-fill' : 'exclamation-triangle-fill') + '"></i><div>' + html + '</div></div>' : ''; }
+
+// เช็คทุกรายการใน "คำขอของคุณ" กับระบบ: อัปเดตสถานะ + เอารายการที่ถูกลบออกจากชีตทิ้ง (เน็ตหลุด/ระบบมีปัญหา = ไม่ลบ)
+async function syncMine(manual) {
+  const b = document.getElementById('frf');
+  if (manual) { if (!b || b.disabled) return; b.disabled = true; b.classList.add('spin'); try { Object.assign(form, readForm()); } catch (e) { } }
+  const list = getMine(); let changed = 0, bad = 0, gone = [];
+  await Promise.all(list.map(async (m) => {
+    if (!m.token) return;   // ไม่มีลิงก์ส่วนตัว = เช็คเองไม่ได้ (ต้องมีเบอร์)
+    try {
+      const x = await api('checkVehicleRequest', { token: m.token });
+      const q = x && x.request; if (!q) return;
+      if (q.status !== m.status || q.date !== m.date || q.startTime !== m.startTime) changed++;
+      m.status = q.status; m.date = q.date; m.startTime = q.startTime;
+    } catch (e) { if (e && e.key === 'eNotFound') gone.push(m.code); else bad++; }
+  }));
+  if (view !== 'form' || editCtx) { if (manual && b) { b.disabled = false; b.classList.remove('spin'); } return; }
+  const keep = list.filter((m) => gone.indexOf(m.code) < 0);
+  // รวมกับรายการที่เพิ่งเพิ่มระหว่างรอ (กันทับ)
+  const now = getMine(); const merged = now.filter((m) => gone.indexOf(m.code) < 0).map((m) => keep.find((k) => k.code === m.code) || m);
+  if (list.length) setMine(merged);
+  if (manual) { resetAv(); try { Object.assign(form, readForm()); } catch (e) { } }
+  if (manual || gone.length || changed) { renderForm(); }
+  if (manual) toast(list.length && bad === list.length && !gone.length ? t('tFail') : gone.length ? t('tRemoved', { n: gone.length }) : changed ? t('tChanged', { n: changed }) : t('tUpdated'));
+  else if (gone.length) toast(t('tRemoved', { n: gone.length }));
+}
+
+async function loadAvailability(date) {
+  if (avCache.date === date && (avCache.data || avCache.loading)) return;
+  avCache = { date, data: null, loading: true, err: '' }; drawAvailability();
+  try {
+    const d = await api('getVehicleBookingPublic', { date });
+    if (avCache.date !== date) return;
+    avCache = { date, data: d, loading: false, err: '' };
+  } catch (e) { if (avCache.date !== date) return; avCache = { date, data: null, loading: false, err: e.message }; }
+  drawAvailability();
+}
+function freeVehicles() {
+  const a = avCache; if (!a.data || !form.startTime || !form.endTime || toMin(form.endTime) <= toMin(form.startTime)) return null;
+  const s = toMin(form.startTime), e = toMin(form.endTime);
+  return a.data.vehicles.filter((v) => !a.data.busy.some((b) => b.plate === v && s < toMin(b.end) && toMin(b.start) < e));
+}
+function drawAvailability() {
+  const box = document.getElementById('av'); if (!box) return;
+  if (!form.date) { box.innerHTML = ''; return; }
+  const a = avCache, fv = freeVehicles();
+  let pillH = '';
+  if (a.data && fv && a.data.vehicles.length) pillH = '<span class="pill ' + (fv.length ? 'g' : 'w') + '">' + esc(fv.length ? t('avFree', { n: fv.length, m: a.data.vehicles.length }) : t('avNone')) + '</span>';
+  let h = '<div class="card"><div class="ct"><i class="bi bi-truck-front-fill"></i>' + esc(t('avT')) + (pillH || '<small>' + esc(fmtShort(form.date)) + '</small>') + '</div>';
+  if (a.loading) h += '<div style="font-size:13px;color:#64748b">' + esc(t('avLoad')) + '</div>';
+  else if (a.err || !a.data) h += '<div style="font-size:13px;color:#64748b">' + esc(t('avErr')) + '</div>';
+  else if (!a.data.vehicles.length) h += '<div style="font-size:13px;color:#64748b">' + esc(t('avNoCar')) + '</div>';
+  else {
+    const span = (AXIS_TO - AXIS_FROM) * 60;
+    const pos = (m) => Math.max(0, Math.min(100, (m - AXIS_FROM * 60) / span * 100));
+    h += '<div class="lanes">' + a.data.vehicles.map((v) => {
+      const blocks = a.data.busy.filter((b) => b.plate === v).map((b) => { const l = pos(toMin(b.start)), r = pos(toMin(b.end)); return '<i style="left:' + l + '%;width:' + Math.max(1.5, r - l) + '%"></i>'; }).join('');
+      return '<div class="lane"><span class="n" title="' + esc(v) + '">' + esc(v) + '</span><div class="bar">' + blocks + '</div></div>';
+    }).join('');
+    if (form.startTime && form.endTime && toMin(form.endTime) > toMin(form.startTime)) {
+      const l = pos(toMin(form.startTime)), r = pos(toMin(form.endTime));
+      h += '<div class="band"><b style="left:' + l + '%;width:' + Math.max(1.5, r - l) + '%"></b></div>';
+    }
+    h += '</div><div class="ax">';
+    for (let x = AXIS_FROM; x <= AXIS_TO; x += 2) h += '<span style="left:' + pos(x * 60) + '%">' + pad(x) + '</span>';
+    h += '</div><div class="legend"><span><s style="background:#e7f6ec"></s>' + esc(t('lgFree')) + '</span><span><s style="background:#c1c8dc"></s>' + esc(t('lgBusy')) + '</span><span><s style="background:rgba(79,70,229,.5)"></s>' + esc(t('lgSel')) + '</span></div>';
+  }
+  box.innerHTML = h + '</div>';
+}
+
+function validate(o) {
+  const bad = (name, key) => ({ name, msg: t(key) });
+  if (!o.requesterName) return bad('requesterName', 'vName');
+  if (!o.dept) return bad('dept', 'vDept');
+  if (o.phone.replace(/\D/g, '').length < 9) return bad('phone', 'vPhone');
+  if (!o.destination) return bad('destination', 'vDest');
+  if (!o.date) return bad('date', 'vDate');
+  if (o.date < todayStr()) return bad('date', 'vPast');
+  if (!o.startTime) return bad('startTime', 'vFrom');
+  if (!o.endTime) return bad('endTime', 'vTo');
+  if (toMin(o.endTime) <= toMin(o.startTime)) return bad('endTime', 'vOrder');
+  return null;
+}
+async function submitForm() {
+  if (busy) return;
+  const o = readForm(); Object.assign(form, o);
+  const v = validate(o);
+  const f = document.getElementById('f');
+  f.querySelectorAll('.err').forEach((x) => x.classList.remove('err'));
+  if (v) { const el = f.elements[v.name]; if (el) { el.classList.add('err'); el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.focus({ preventScroll: true }); } showMsg('e', esc(v.msg)); return; }
+  showMsg('', '');
+  // ถ้ารถทุกคันไม่ว่างในช่วงที่เลือก ถามก่อน (ยังส่งต่อได้)
+  const fv = freeVehicles();
+  if (!editCtx && fv && avCache.data && avCache.data.vehicles.length && !fv.length) {
+    const r = await modal(icon('wn', 'exclamation-triangle-fill') + '<h3>' + esc(t('wT')) + '</h3><p class="s">' + esc(t('wS')) + '</p><div class="row2"><button class="btn ghost" data-r="change">' + esc(t('wChange')) + '</button><button class="btn" data-r="keep">' + esc(t('wKeep')) + '</button></div>', null, 'dlg');
+    if (r !== 'keep') { const el = f.elements.startTime; if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.focus({ preventScroll: true }); } return; }
+  }
+  busy = true; const go = document.getElementById('go'); go.disabled = true; go.innerHTML = '<span class="spin"></span>' + esc(t('sending'));
+  const restore = () => { const g = document.getElementById('go'); if (g) { g.disabled = false; g.innerHTML = '<i class="bi bi-send-fill"></i>' + esc(editCtx ? t('saveEdit') : t('send')); } };
+  try {
+    if (editCtx) {
+      const fields = Object.assign({}, o); delete fields.website;
+      const r = await api('updateVehicleRequestByRequester', { token: editCtx.token, code: editCtx.code, phone: o.phone, op: 'edit', fields });
+      const ctx = editCtx; editCtx = null; toast(t('tSaved'));
+      showStatus(r.request, ctx.token);
+    } else {
+      const r = await api('submitVehicleRequest', o);
+      if (!r.request) r.request = Object.assign({}, o, { code: r.code, status: 'pending', createdAt: '' });
+      addMine(r.code, r.token, mineMeta(r.request));
+      form = newForm(); resetAv(); renderForm();
+      busy = false;
+      await successModal(r);
+      return;
+    }
+  } catch (e) { showMsg('e', esc(e.message)); restore(); }
+  busy = false;
+}
+async function successModal(r) {
+  const link = location.href.split('#')[0] + '#t=' + r.token;
+  const res = await modal(icon('ok', 'check-lg') + '<h3>' + esc(t('okT')) + '</h3><p class="s">' + esc(t('okS')) + '</p><div class="code"><small>' + esc(t('ref')) + '</small><b>' + esc(r.code) + '</b></div><div class="row2"><button class="btn ghost" id="okcopy"><i class="bi bi-link-45deg"></i>' + esc(t('copyShort')) + '</button><button class="btn" id="okview" data-r="view">' + esc(t('okView')) + '</button></div>',
+    (md) => { md.querySelector('#okcopy').onclick = () => copyText(link); }, 'dlg');
+  if (res === 'view') showStatus(r.request, r.token);
+}
+async function copyText(txt) { try { await navigator.clipboard.writeText(txt); toast(t('tCopied')); } catch (e) { window.prompt(t('tCopyPrompt'), txt); } }
+
+// ===================== หน้าตรวจสถานะ =====================
+let cur = null, curToken = '', curPhone = '', refreshT = null;
+function stopRefresh() { clearInterval(refreshT); refreshT = null; }
+function privateLink() { return curToken ? location.href.split('#')[0] + '#t=' + curToken : ''; }
+function dropMine(code) { setMine(getMine().filter((x) => x.code !== code)); }
+
+async function openStatus(ref) {
+  view = 'loading'; window.scrollTo(0, 0);
+  $app.innerHTML = '<div class="hero gray center">' + brandRow() + '<h1>' + esc(t('openLoad')) + '</h1><p>&nbsp;</p></div><div class="body"><div class="card" style="min-height:90px"></div></div>';
+  bindLang();
+  try {
+    const r = await api('checkVehicleRequest', ref);
+    curPhone = ref.phone || '';
+    showStatus(r.request, r.token || ref.token || '');
+  } catch (e) {
+    if (e.key === 'eNotFound' && ref.code) dropMine(ref.code);
+    view = 'error'; lastRef = ref;
+    $app.innerHTML = '<div class="hero bad center">' + brandRow() + '<div class="ck"><i class="bi bi-x-lg"></i></div><h1>' + esc(t('openFail')) + '</h1><p>' + esc(e.message) + '</p></div><div class="body"><div class="card"><button class="btn ghost" id="b1"><i class="bi bi-arrow-left"></i>' + esc(t('home')) + '</button></div></div>';
+    bindLang();
+    document.getElementById('b1').onclick = () => { history.replaceState(null, '', location.pathname + location.search); form = newForm(); renderForm(); };
+  }
+}
+let lastRef = null;
+function showStatus(r, token) {
+  cur = r; curToken = token || curToken;
+  if (r && r.code) { const it = getMine().find((x) => x.code === r.code); if (it) addMineKeep(r.code, curToken, mineMeta(r)); }
+  renderStatus();
+  stopRefresh();
+  refreshT = setInterval(async () => {
+    if (document.hidden || !cur || view !== 'status' || document.querySelector('.ov')) return;
+    try {
+      const x = await api('checkVehicleRequest', curToken ? { token: curToken } : { code: cur.code, phone: cur.phone });
+      const sg = (q) => [q.status, q.date, q.startTime, q.endTime, q.origDate, q.adminNote, q.assignedPlate, q.driverName, q.outTime, q.backTime].join('|');
+      if (x.request && sg(x.request) !== sg(cur)) { const stChanged = x.request.status !== cur.status; cur = x.request; addMineKeep(cur.code, curToken, mineMeta(cur)); renderStatus(); toast(stChanged ? t('tStatus') : t('tAdjusted')); }
+      else if (x.request) cur = x.request;
+    } catch (e) { if (e && e.key === 'eNotFound') gone(); }
+  }, REFRESH_MS);
+}
+function addMineKeep(code, token, meta) {   // อัปเดตรายการเดิมโดยไม่ย้ายลำดับ
+  const a = getMine(); const i = a.findIndex((x) => x.code === code); if (i < 0) return;
+  a[i] = Object.assign({}, a[i], { token: token || a[i].token }, meta); delete a[i].when; setMine(a);
+}
+async function gone() {
+  const code = cur ? cur.code : ''; stopRefresh(); dropMine(code); cur = null;
+  history.replaceState(null, '', location.pathname + location.search); form = newForm(); renderForm();
+  await notice('in', 'info-circle-fill', t('nfT'), t('nfP', { c: code }));
+}
+function renderStatus() {
+  view = 'status'; window.scrollTo(0, 0);
+  const r = cur, s = r.status;
+  const H = { pending: ['wait', 'hourglass-split', 'hP', 'hPs'], approved: ['ok', 'check-lg', 'hA', 'hAs'], rejected: ['bad', 'x-lg', 'hX', 'hXs'], cancelled: ['gray', 'slash-circle', 'hC', 'hCs'] }[s] || ['gray', 'question', 'hC', 'hCs'];
+  const link = privateLink();
+  const st = (cls, ic, label) => '<div class="' + cls + '"><i>' + ic + '</i>' + esc(label) + '</div>';
+  const steps = '<div class="hst">' + st('d', '<span class="bi bi-check"></span>', t('sRecv')) +
+    (s === 'pending' ? st('n', '<span class="bi bi-hourglass-split"></span>', t('sWait')) + st('', '<span class="bi bi-truck"></span>', t('sAssign'))
+      : s === 'approved' ? st('d', '<span class="bi bi-check"></span>', t('sApproved')) + st('d', '<span class="bi bi-truck"></span>', t('sAssign'))
+        : st('x', '<span class="bi bi-' + (s === 'rejected' ? 'x-lg' : 'slash-circle') + '"></span>', t(s === 'rejected' ? 'sRejected' : 'sCancelled')) + st('', '<span class="bi bi-truck"></span>', t('sAssign'))) + '</div>';
+  let detail = '';
+  if (s === 'approved') detail = '<div class="big"><div><i class="bi bi-truck-front-fill"></i><b>' + esc(r.assignedPlate) + '</b></div>' + (r.driverName ? '<div><i class="bi bi-person-badge-fill"></i>' + esc(t('driver')) + ': ' + esc(r.driverName) + '</div>' : '') + '<div><i class="bi bi-clock-fill"></i>' + esc(t('leaves')) + ' ' + esc(r.outTime || r.startTime) + ' · ' + esc(t('backAbout')) + ' ' + esc(r.backTime || r.endTime) + esc(t('tsfx')) + '</div>' + (r.adminNote ? '<div><i class="bi bi-chat-left-text-fill"></i>' + esc(r.adminNote) + '</div>' : '') + '</div>';
+  if (s === 'rejected' || s === 'cancelled') detail = r.adminNote ? '<div class="big bad"><div><i class="bi bi-chat-left-text-fill"></i>' + esc(t('reason', { r: r.adminNote })) + '</div></div>' : '';
+  const changed = r.origDate && (s === 'pending' || s === 'approved') && (r.origDate !== r.date || r.origStart !== r.startTime || r.origEnd !== r.endTime);
+  const chg = changed ? '<div class="chg"><b><i class="bi bi-arrow-repeat"></i>' + esc(t('chgT')) + '</b><div><s>' + esc(fmtDate(r.origDate)) + ' ' + esc(r.origStart) + ' – ' + esc(r.origEnd) + esc(t('tsfx')) + '</s></div><div class="nw"><i class="bi bi-arrow-return-right"></i>' + esc(fmtDate(r.date)) + ' ' + esc(s === 'approved' ? (r.outTime || r.startTime) : r.startTime) + ' – ' + esc(s === 'approved' ? (r.backTime || r.endTime) : r.endTime) + esc(t('tsfx')) + '</div>' + (s === 'pending' && r.adminNote ? '<div><i class="bi bi-chat-left-text-fill"></i>' + esc(r.adminNote) + '</div>' : '') + '</div>' : '';
+  const acts = s === 'pending'
+    ? '<div class="row2"><button class="btn sm line" id="ed"><i class="bi bi-pencil"></i>' + esc(t('edit')) + '</button><button class="btn sm dng" id="cx"><i class="bi bi-x-circle"></i>' + esc(t('cancelReq')) + '</button></div>'
+    : (s === 'rejected' || s === 'cancelled' ? '<button class="btn sm" id="again"><i class="bi bi-arrow-repeat"></i>' + esc(t('again')) + '</button>' : '<div class="note" style="margin:0">' + esc(t('contactTeam')) + '</div>');
+  $app.innerHTML =
+    '<div class="hero center ' + H[0] + '">' + brandRow() + '<div class="ck"><i class="bi bi-' + H[1] + '"></i></div><h1>' + esc(t(H[2])) + '</h1><p>' + esc(t(H[3])) + '</p></div>' +
+    '<div class="body"><div class="card"><div class="ref"><small>' + esc(t('ref')) + '</small><b>' + esc(r.code) + '</b></div>' + steps + chg + detail +
+    '<div class="sum"><div><i class="bi bi-person"></i><span>' + esc(t('whoL')) + '</span><em>' + esc(r.requesterName) + ' · ' + esc(r.dept) + '</em></div>' +
+    '<div><i class="bi bi-geo-alt"></i><span>' + esc(t('toL')) + '</span><em>' + esc(r.destination) + '</em></div>' +
+    '<div><i class="bi bi-calendar-event"></i><span>' + esc(t('whenL')) + '</span><em>' + esc(fmtDate(r.date)) + '<br>' + esc(r.startTime) + ' – ' + esc(r.endTime) + esc(t('tsfx')) + '</em></div>' +
+    '<div><i class="bi bi-flag"></i><span>' + esc(t('purL')) + '</span><em>' + esc(purposeLabel(r.purpose)) + (r.detail ? ' · ' + esc(r.detail) : '') + '</em></div></div></div>' +
+    '<div class="card" style="padding-bottom:15px">' + acts + '</div>' +
+    '<div class="row2" style="margin:0 0 4px">' + (link ? '<button class="btn sm ghost" id="cp"><i class="bi bi-link-45deg"></i>' + esc(t('copyLink')) + '</button>' : '') + '<button class="btn sm ghost" id="rf"><i class="bi bi-arrow-clockwise"></i>' + esc(t('refresh')) + '</button></div>' +
+    (link ? '<div class="note">' + esc(t('linkNote')) + '</div>' : '') +
+    '<div style="text-align:center;margin-top:2px"><button class="link" id="home">' + esc(t('home')) + '</button></div><div class="foot">' + esc(t('foot')) + '</div></div>';
+  bindLang();
+  const $ = (id) => document.getElementById(id);
+  if ($('home')) $('home').onclick = () => { stopRefresh(); cur = null; history.replaceState(null, '', location.pathname + location.search); form = newForm(); renderForm(); };
+  if ($('rf')) $('rf').onclick = async () => { try { const x = await api('checkVehicleRequest', curToken ? { token: curToken } : { code: cur.code, phone: cur.phone }); cur = x.request; renderStatus(); toast(t('tRefreshed')); } catch (e) { if (e.key === 'eNotFound') gone(); else toast(e.message); } };
+  if ($('cp')) $('cp').onclick = () => copyText(link);
+  if ($('ed')) $('ed').onclick = () => { editCtx = { token: curToken, code: cur.code }; form = newForm({ requesterName: cur.requesterName, dept: cur.dept, phone: cur.phone, destination: cur.destination, date: cur.date, startTime: cur.startTime, endTime: cur.endTime, purpose: cur.purpose, detail: cur.detail }); resetAv(); renderForm(); };
+  if ($('again')) $('again').onclick = () => { editCtx = null; form = newForm({ destination: cur.destination, startTime: cur.startTime, endTime: cur.endTime, purpose: cur.purpose, detail: cur.detail, requesterName: cur.requesterName, dept: cur.dept, phone: cur.phone }); resetAv(); history.replaceState(null, '', location.pathname + location.search); renderForm(); };
+  if ($('cx')) $('cx').onclick = async () => {
+    if (!(await ask({ icon: 'trash3', danger: true, title: t('cxT'), text: t('cxP', { c: cur.code }), ok: t('cancelReq') }))) return;
+    try { const x = await api('updateVehicleRequestByRequester', { token: curToken, code: cur.code, phone: cur.phone, op: 'cancel' }); showStatus(x.request, curToken); toast(t('tCancelled')); } catch (e) { toast(e.message); }
+  };
+}
+
+// ===================== ตรวจสอบด้วยเลขอ้างอิง + เบอร์ (ป็อปอัป) =====================
+function openLookup() {
+  const mine = getMine().slice(0, 3);
+  const list = mine.length ? '<div style="margin:4px 0 12px">' + mine.map((m) => '<div class="mi" data-code="' + esc(m.code) + '" data-r="open:' + esc(m.code) + '"><div style="text-align:left"><b>' + esc(m.code) + '</b><small>' + esc(mineWhen(m)) + '</small></div><span class="s">' + (m.status ? statusBadge(m.status) : '') + '</span></div>').join('') + '</div>' : '';
+  modal(icon('in', 'search') + '<h3>' + esc(t('lkT')) + '</h3><p class="s">' + esc(t('lkS')) + '</p>' +
+    '<form id="lf" class="left" novalidate><div class="f"><label>' + esc(t('lkCode')) + '</label><input class="in" name="code" placeholder="CAR-1104-03" autocapitalize="characters" autocomplete="off" maxlength="20"></div>' +
+    '<div class="f"><label>' + esc(t('lkPhone')) + '</label><input class="in" name="phone" type="tel" inputmode="tel" autocomplete="off" maxlength="20"></div><div id="lm"></div>' + list +
+    '<div class="row2"><button type="button" class="btn ghost" data-r="0">' + esc(t('lkClose')) + '</button><button class="btn" type="submit"><i class="bi bi-search"></i>' + esc(t('lkGo')) + '</button></div></form>', (md) => {
+    const msg = (h) => { md.querySelector('#lm').innerHTML = h ? '<div class="msg e"><i class="bi bi-exclamation-octagon-fill"></i><div>' + esc(h) + '</div></div>' : ''; };
+    md.querySelector('#lf').onsubmit = async (e) => {
+      e.preventDefault();
+      const f = e.target, code = f.elements.code.value.trim().toUpperCase(), phone = f.elements.phone.value.trim();
+      if (!code || phone.replace(/\D/g, '').length < 9) { msg(t('lkNeed')); return; }
+      try { const r = await api('checkVehicleRequest', { code, phone }); curPhone = phone; closeModal(false); showStatus(r.request, ''); }
+      catch (er) { msg(er.message); }
+    };
+    const first = md.querySelector('input[name=code]'); if (first && !('ontouchstart' in window)) first.focus();
+  }, 'dlg').then((r) => { if (typeof r === 'string' && r.indexOf('open:') === 0) { const c = r.slice(5); const it = getMine().find((x) => x.code === c); if (it) openStatus({ token: it.token, code: it.code }); } });
+}
+
+// ===================== เริ่มต้น =====================
+function openByRef(ref) {
+  if (ref) { openStatus(ref); return; }
+  const m = /[#&]t=([A-Za-z0-9]{8,40})/.exec(location.hash);
+  if (m) { openStatus({ token: m[1] }); return; }
+  form = newForm(); renderForm();
+  if (getMine().length) syncMine(false);   // เช็คเงียบๆ: เอารายการที่ถูกลบจากชีตออก + อัปเดตสถานะ
+}
+window.addEventListener('hashchange', () => { if (/[#&]t=/.test(location.hash)) openByRef(null); });
+setLang(LANG);
+openByRef(null);
+})();
+</script>
+</body>
+</html>
