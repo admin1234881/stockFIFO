@@ -10378,7 +10378,8 @@ window.releaseGroupVehicle = async function(date, displayTime, customer) {
                 return existingPlate === plateLower;
             });
 
-            if (plateInUseItem) {
+            const __ts = (plateInUseItem && window.__tsAsk) ? window.__tsAsk(plate, safeCustomer, safeDate) : null; if (__ts === 'wait') return false;
+            if (plateInUseItem && __ts !== 'go') {
                 const stuckDate = typeof formatDate === 'function' ? formatDate(plateInUseItem.date) : plateInUseItem.date;
                 const stuckTime = typeof formatTimeDisplay === 'function' ? formatTimeDisplay(plateInUseItem.time) : plateInUseItem.time;
                 Swal.showValidationMessage(
@@ -35748,7 +35749,8 @@ html.lgx-b .lgx-ctrl .card-header{padding-top:16px!important}`
         (rowsAll() || []).forEach(r => { c.all++; if (r.status === 'pending') c.pending++; else if (r.status === 'approved') c.approved++; else c.closed++; });
         return c;
     };
-    const bookUrl = () => { try { return new URL(BOOK_FILE, location.href).href; } catch (e) { return BOOK_FILE; } };
+     const BOOK_URL = 'https://admin1234881.github.io/stockFIFO/book.HTML';   // ลิงก์หน้าจองรถ (ตัวพิมพ์เล็กทั้งหมด — GitHub Pages แยกตัวใหญ่/เล็ก)
+    const bookUrl = () => BOOK_URL;
     function sortRows(list, f) {
         const k = (r) => (r.date || '') + ' ' + (r.startTime || '');
         const d = (r) => String(r.decidedAt || r.createdAt || '');
@@ -36151,6 +36153,215 @@ html.lgx-b .lgx-ctrl .card-header{padding-top:16px!important}`
     window.VRQ = { day: (d) => { pickDay(d); }, refresh: () => { lastSig = ''; lastBtn = ''; render(); }, open: () => setOpen(true), close: () => setOpen(false) };
 })();
 // ===== จบ VEHICLE-REQ-ADMIN =====
+// ===== TRUCKSHARE: รถคันเดียวกันขนของ 2 ลูกค้า (พ่วง) =====
+(function () {
+    if (window.__truckShare) return; window.__truckShare = true;
+ 
+    const lang = () => (typeof currentLanguage !== 'undefined' && currentLanguage === 'en') ? 'en' : 'th';
+    const TX = {
+        th: {
+            warn: '<span class="ts-w">⚠️ รถคันนี้กำลังวิ่งงานของ <b>{c}</b> อยู่ ({t} น.) — ถ้าจะ <b>พ่วงลูกค้านี้ไปกับรถคันเดียวกัน</b> กดปล่อยรถอีกครั้งเพื่อยืนยัน</span>',
+            info: '<i class="bi bi-link-45deg"></i><span>รถคันนี้กำลังวิ่งงานของ <b>{c}</b> อยู่ — ปล่อยต่อ = <b>พ่วงไปด้วยกัน</b> (กดปล่อยรถ 2 ครั้งเพื่อยืนยัน)</span>',
+            chip: 'พ่วงได้',
+            tag: '🔗 พ่วงกับ {c}',
+            rTitle: '🏁 รถคันนี้พ่วงหลายลูกค้า',
+            rBody: 'รถทะเบียน <b>{p}</b> ขนของ {n} ลูกค้า ยังไม่กลับ:<br>{list}<br>ต้องการรับรถกลับแบบไหน?',
+            all: 'รับกลับทั้งหมด ({n} ลูกค้า)',
+            one: 'เฉพาะ {c}',
+            cancel: 'ยกเลิก',
+            saving: 'กำลังบันทึกรถเข้าบริษัท...',
+            ok: '✅ รับรถกลับ {n} ลูกค้า สำเร็จแล้ว!',
+            errT: 'เกิดข้อผิดพลาด',
+            errB: 'บันทึกไม่ครบ: '
+        },
+        en: {
+            warn: '<span class="ts-w">⚠️ This truck is out for <b>{c}</b> ({t}) — to <b>load this customer on the same truck</b>, press Release again to confirm</span>',
+            info: '<i class="bi bi-link-45deg"></i><span>This truck is out for <b>{c}</b> — releasing = <b>shared trip</b> (press Release twice to confirm)</span>',
+            chip: 'can share',
+            tag: '🔗 Shared with {c}',
+            rTitle: '🏁 This truck carries several customers',
+            rBody: 'Truck <b>{p}</b> carries {n} customers, not back yet:<br>{list}<br>How do you want to receive it?',
+            all: 'Receive all ({n} customers)',
+            one: 'Only {c}',
+            cancel: 'Cancel',
+            saving: 'Saving truck return...',
+            ok: '✅ Truck received for {n} customers!',
+            errT: 'Error',
+            errB: 'Not all saved: '
+        }
+    };
+    const t = (k, v) => String((TX[lang()] || TX.th)[k] || k).replace(/\{(\w+)\}/g, (m, n) => (v && v[n] != null) ? v[n] : m);
+    const str = (v) => String(v == null ? '' : v).trim();
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const normP = (v) => str(v).toLowerCase().replace(/\s+/g, '');
+    const fd = (v) => (typeof formatDate === 'function') ? formatDate(v) : str(v);
+    const ft = (v) => { const s = str(v).replace(/^'+/, ''); return (typeof formatTimeDisplay === 'function') ? formatTimeDisplay(s) : s; };
+    const toast = (o) => {
+        try { if (typeof CornerToast !== 'undefined' && CornerToast) { CornerToast.fire(o); return; } } catch (e) { }
+        try { Swal.mixin({ toast: true, position: 'bottom-start', showConfirmButton: false, timerProgressBar: true }).fire(o); } catch (e) { }
+    };
+    const callGS = async (action, payload) => {
+        if (typeof callAppsScriptWithRetry === 'function') return callAppsScriptWithRetry(action, payload);
+        let last; for (let i = 0; i < 3; i++) { try { return await callAppsScript(action, payload); } catch (e) { last = e; await new Promise((r) => setTimeout(r, 600 * (i + 1))); } }
+        throw last;
+    };
+    const allPlans = () => ((typeof db !== 'undefined' && db && db.deliveryPlans) || []);
+    const delivering = () => allPlans().filter((p) => p.status === 'Delivering');
+ 
+    // รวมแผนที่กำลังวิ่ง เป็นกลุ่ม (เวลา + ลูกค้า)
+    function groupsOf(list) {
+        const m = {};
+        list.forEach((p) => {
+            const k = ft(p.time) + '|' + str(p.customer);
+            (m[k] = m[k] || { time: ft(p.time), cust: str(p.customer), date: fd(p.date), plans: [] }).plans.push(p);
+        });
+        return Object.keys(m).map((k) => m[k]);
+    }
+ 
+    // ---------- 1) ปล่อยรถ: ทะเบียนซ้ำ = ถามยืนยันพ่วง แทนการบล็อก ----------
+    let armed = null;            // { key, cust, at } = กดปล่อยครั้งที่ 1 แล้ว รอยืนยัน
+    let cur = null;              // งานที่กำลังเปิดป๊อบอัพปล่อยรถอยู่ { date, cust }
+    // ทะเบียนนี้ "พ่วงได้" เมื่อทุกงานที่ยังวิ่งอยู่ด้วยทะเบียนนี้ เป็นวันเดียวกัน และเป็นลูกค้าคนละราย
+    function shareable(plate, cust, date) {
+        const key = normP(plate); if (!key) return null;
+        const hits = delivering().filter((p) => normP(p.licensePlate) === key);
+        if (!hits.length) return null;
+        const c = str(cust), d = fd(date);
+        if (!hits.every((p) => fd(p.date) === d && str(p.customer) !== c)) return null;
+        return groupsOf(hits);
+    }
+    window.__tsAsk = function (plate, cust, date) {
+        try {
+            const gs = shareable(plate, cust, date);
+            if (!gs) return null;                       // ไม่เข้าเงื่อนไขพ่วง → ใช้การบล็อกเดิม
+            const key = normP(plate), c = str(cust);
+            if (armed && armed.key === key && armed.cust === c && Date.now() - armed.at < 180000) return 'go';
+            armed = { key: key, cust: c, at: Date.now() };
+            Swal.showValidationMessage(t('warn', { c: gs.map((g) => esc(g.cust)).join(', '), t: gs.map((g) => esc(g.time)).join(', ') }));
+            return 'wait';
+        } catch (e) { console.warn('TRUCKSHARE ask', e); return null; }
+    };
+    // เปิดป๊อบอัพใหม่ทุกครั้ง = ล้างสถานะ "กดครั้งที่ 1"
+    const _fire = Swal.fire;
+    Swal.fire = function () { armed = null; return _fire.apply(this, arguments); };
+ 
+    // ครอบฟังก์ชัน window.xxx ที่อาจถูกประกาศทีหลัง (getter/setter) โดยต่อจากตัวครอบเดิม
+    function chain(name, mk) {
+        const d = Object.getOwnPropertyDescriptor(window, name);
+        let getPrev, setPrev;
+        if (d && d.get) { getPrev = d.get; setPrev = d.set || function () {}; }
+        else { let v = d ? d.value : undefined; getPrev = () => v; setPrev = (x) => { v = x; }; }
+        let forFn = null, wrapped = null;
+        Object.defineProperty(window, name, {
+            configurable: true, enumerable: true,
+            get() { const p = getPrev(); if (typeof p !== 'function') return p; if (forFn !== p) { forFn = p; wrapped = mk(p); } return wrapped; },
+            set(v) { setPrev(v); }
+        });
+    }
+    chain('releaseGroupVehicle', (prev) => function (date, time, cust) {
+        cur = { date: fd(date), cust: str(cust) };
+        return prev.apply(this, arguments);
+    });
+ 
+    // ---------- 2) รับรถกลับ: ถ้าพ่วงหลายลูกค้า ให้เลือก ทั้งหมด / เฉพาะใบนี้ ----------
+    chain('returnGroupVehicle', (prev) => function (date, time, cust) {
+        const self = this, args = arguments;
+        try {
+            const d = fd(date), tm = ft(time), c = str(cust);
+            const mine = delivering().filter((p) => fd(p.date) === d && ft(p.time) === tm && str(p.customer) === c);
+            const plates = Array.from(new Set(mine.map((p) => normP(p.licensePlate)).filter(Boolean)));
+            if (mine.length && plates.length) {
+                const others = delivering().filter((p) => fd(p.date) === d && plates.indexOf(normP(p.licensePlate)) >= 0 && !(ft(p.time) === tm && str(p.customer) === c));
+                if (others.length) {
+                    askReturn(d, groupsOf(mine).concat(groupsOf(others)), { tm: tm, c: c }, () => prev.apply(self, args));
+                    return;
+                }
+            }
+        } catch (e) { console.warn('TRUCKSHARE return', e); }
+        return prev.apply(this, arguments);
+    });
+    async function askReturn(d, groups, me, single) {
+        const plate = str(groups[0].plans[0].licensePlate);
+        const list = '<div style="text-align:left;margin:8px auto;max-width:340px">' + groups.map((g) =>
+            `<div>• <b>${esc(g.cust)}</b> <small>(${esc(g.time)} น.)</small></div>`).join('') + '</div>';
+        const r = await Swal.fire({
+            title: t('rTitle'),
+            html: t('rBody', { p: esc(plate), n: groups.length, list: list }),
+            showDenyButton: true, showCancelButton: true,
+            confirmButtonText: t('all', { n: groups.length }), denyButtonText: t('one', { c: esc(me.c) }), cancelButtonText: t('cancel'),
+            confirmButtonColor: '#198754', denyButtonColor: '#0d6efd', focusCancel: false
+        });
+        if (r.isDenied) return single();
+        if (!r.isConfirmed) return;
+        toast({ icon: 'info', title: t('saving'), timer: 2500 });
+        const rt = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+        const todo = []; groups.forEach((g) => g.plans.forEach((p) => todo.push(p)));
+        const failed = [];
+        for (const p of todo) {
+            try {
+                await callGS('updateDeliveryPlan', { id: p.id, status: 'Completed', actualReturnTime: "'" + rt });
+                const real = allPlans().find((x) => x.id === p.id);
+                if (real) { real.status = 'Completed'; real.actualReturnTime = "'" + rt; }
+            } catch (e) { failed.push(p.id + ' (' + (e && e.message || e) + ')'); }
+        }
+        try { if (typeof renderDeliveryPlanTable === 'function') renderDeliveryPlanTable(d); } catch (e) { console.warn('TRUCKSHARE render', e); }
+        try { if (typeof populateVehicleDashboard === 'function') populateVehicleDashboard(); } catch (e) { }
+        if (failed.length) Swal.fire(t('errT'), t('errB') + failed.join(', '), 'error');
+        else toast({ icon: 'success', title: t('ok', { n: groups.length }), timer: 3000 });
+    }
+ 
+    // ---------- 3) หน้าตา: ป๊อบอัพปล่อยรถ + ป้ายบนการ์ด ----------
+    const css = document.createElement('style'); css.id = 'truckshare-css';
+    css.textContent = '.ts-tag{margin-top:6px;font-size:.72rem;font-weight:600;color:#6d28d9;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:3px 9px;line-height:1.4}.swal2-validation-message.ts-amber{background:#fffbeb!important;color:#92400e!important}.swal2-validation-message.ts-amber::before{background:#f59e0b!important}';
+    document.head.appendChild(css);
+ 
+    function fixPopup() {
+        const vm = document.querySelector('.swal2-validation-message');
+        if (vm && vm.querySelector('.ts-w') && !vm.classList.contains('ts-amber')) vm.classList.add('ts-amber');
+        if (!cur) return;
+        const pl = document.getElementById('swal-license-plate'), msg = document.getElementById('ppx-plate-msg');
+        if (!pl || !msg) return;
+        const gs = shareable(pl.value, cur.cust, cur.date);
+        if (gs && msg.querySelector('.bi-x-octagon-fill')) {         // ตัวป๊อบอัพใหม่เขียนข้อความแดง "ใช้ไม่ได้" → เปลี่ยนเป็นข้อความพ่วง
+            msg.className = 'ppx-msg y';
+            msg.innerHTML = t('info', { c: gs.map((g) => esc(g.cust)).join(', ') });
+            pl.classList.remove('bad');
+        } else if (!msg.innerHTML && msg.className !== 'ppx-msg r') msg.className = 'ppx-msg r';
+        const cb = document.getElementById('ppx-chips');
+        if (cb) cb.querySelectorAll('button[disabled]:not([data-ts])').forEach((b) => {
+            const key = b.dataset.k, hits = delivering().filter((p) => normP(p.licensePlate) === key);
+            if (!hits.length || !shareable(hits[0].licensePlate, cur.cust, cur.date)) return;
+            b.disabled = false; b.setAttribute('data-ts', '1'); b.dataset.v = str(hits[0].licensePlate);
+            const i = b.querySelector('i'); if (i) i.textContent = t('chip');
+        });
+    }
+    function tagCards() {
+        const board = document.getElementById('dpB-board'); if (!board) return;
+        const by = {};
+        board.querySelectorAll('.cd').forEach((cd) => {
+            const b = cd.querySelector('.rn b'); if (!b) return;
+            const key = normP(b.textContent); if (!key || key === '-') return;
+            const h = cd.querySelector('h3');
+            (by[key] = by[key] || []).push({ cd: cd, cust: h ? h.textContent.trim() : '' });
+        });
+        Object.keys(by).forEach((k) => by[k].forEach((x) => {
+            const others = by[k].filter((y) => y !== x).map((y) => y.cust);
+            const old = x.cd.querySelector('.ts-tag');
+            if (!others.length) { if (old) old.remove(); return; }
+            const txt = t('tag', { c: others.join(', ') });
+            if (old && old.textContent === txt) return;
+            if (old) old.remove();
+            const tag = document.createElement('div'); tag.className = 'ts-tag'; tag.textContent = txt;
+            const rn = x.cd.querySelector('.rn'); rn.parentNode.insertBefore(tag, rn.nextSibling);
+        }));
+    }
+    let raf = 0;
+    new MutationObserver(function () {
+        if (raf) return;
+        raf = requestAnimationFrame(function () { raf = 0; try { fixPopup(); tagCards(); } catch (e) { console.warn('TRUCKSHARE ui', e); } });
+    }).observe(document.body, { childList: true, subtree: true });
+})();
+// ===== จบ TRUCKSHARE =====
 (function () {
     if (window.__hsBwide) return; window.__hsBwide = true;
     const s = document.createElement('style'); s.id = 'hsB-wide-css';
