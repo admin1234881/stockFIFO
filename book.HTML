@@ -127,6 +127,7 @@ textarea.in{height:76px;padding:10px 13px;resize:vertical}
 @keyframes sp{to{transform:rotate(360deg)}}
 .hidden{display:none!important}
 </style>
+<style>.dp{background:#f1f5fb;border:1.5px dashed #bcd0ee;border-radius:14px;padding:12px 12px 10px}.dp label{display:flex;align-items:center;gap:6px}.dp label i{color:#1d6fe0}.opt{margin-left:auto;font-size:.68rem;font-weight:600;color:#64748b;background:#fff;border:1px solid #dbe3ef;border-radius:20px;padding:1px 8px}.dp .hint{margin-top:7px;font-size:.72rem;color:#64748b;display:flex;gap:5px;align-items:flex-start;line-height:1.35}a.tl{color:inherit;text-decoration:underline;text-underline-offset:2px}</style>
 </head>
 <body>
 <div class="wrap" id="app"></div>
@@ -153,7 +154,7 @@ th: {
   appName: 'ATECH · ขอใช้รถขนส่ง', title: 'จองรถขนส่ง', sub: 'กรอกข้อมูลสั้นๆ ทีมขนส่งจะตรวจสอบและตอบกลับในหน้านี้',
   editTitle: 'แก้ไขคำขอจองรถ', editSub: 'แก้ไขได้จนกว่าทีมขนส่งจะอนุมัติ · {c}', refreshTip: 'อัปเดตสถานะการจองและรถว่าง',
   cWho: 'ผู้จอง', cTrip: 'การเดินทาง', cDetail: 'รายละเอียด',
-  name: 'ชื่อ-นามสกุล', dept: 'แผนก', phone: 'เบอร์โทร', dest: 'ไปที่ไหน', destPh: 'ชื่อสถานที่ / ที่อยู่', date: 'วันที่', from: 'เวลาไป', to: 'เวลากลับ (โดยประมาณ)',
+  dPhone: 'เบอร์ติดต่อปลายทาง', optional: 'ไม่บังคับ', dContactPh: 'ชื่อผู้ติดต่อ (ถ้ามี)', dPhonePh: 'เช่น 038-123-456', dPhoneHint: 'เบอร์ของบริษัท/สถานที่ที่ต้องไปรับของ เพื่อให้คนขับโทรประสานได้', vDPhone: 'เบอร์ติดต่อปลายทางไม่ถูกต้อง (หรือเว้นว่างไว้)', dpL: 'เบอร์ปลายทาง', name: 'ชื่อ-นามสกุล', dept: 'แผนก', phone: 'เบอร์โทร', dest: 'ไปที่ไหน', destPh: 'ชื่อสถานที่ / ที่อยู่', date: 'วันที่', from: 'เวลาไป', to: 'เวลากลับ (โดยประมาณ)',
   purpose: 'ไปเพื่อ', detail: 'รายละเอียด / ของที่ขน', detailPh: 'เช่น กล่องตัวอย่าง 5 ลัง, ไปรับลูกค้า 3 คน',
   pDeliver: 'ส่งของ', pPick: 'รับของ', pPax: 'รับ-ส่งบุคคล', pOther: 'อื่นๆ',
   avT: 'รถว่างช่วงที่เลือก', avFree: 'ว่าง {n} จาก {m} คัน', avNone: 'ไม่มีรถว่าง', avLoad: 'กำลังโหลด...', avErr: 'ดูช่วงเวลารถไม่ว่างไม่ได้ในตอนนี้ (ยังส่งคำขอได้ตามปกติ)', avNoCar: 'ยังไม่มีข้อมูลรถในระบบ',
@@ -190,7 +191,7 @@ en: {
   appName: 'ATECH · Transport request', title: 'Book a vehicle', sub: 'Fill in a few details. The transport team will review and reply on this page',
   editTitle: 'Edit vehicle request', editSub: 'You can edit until the transport team approves · {c}', refreshTip: 'Update booking status and free vehicles',
   cWho: 'Requester', cTrip: 'Trip', cDetail: 'Details',
-  name: 'Full name', dept: 'Department', phone: 'Phone', dest: 'Destination', destPh: 'Place name / address', date: 'Date', from: 'Departure', to: 'Return (approx.)',
+  dPhone: 'Destination contact number', optional: 'optional', dContactPh: 'Contact person (if any)', dPhonePh: 'e.g. 038-123-456', dPhoneHint: 'Phone of the company / site where the goods are picked up, so the driver can call ahead', vDPhone: 'Destination contact number is not valid (or leave it blank)', dpL: 'Site phone', name: 'Full name', dept: 'Department', phone: 'Phone', dest: 'Destination', destPh: 'Place name / address', date: 'Date', from: 'Departure', to: 'Return (approx.)',
   purpose: 'Purpose', detail: 'Details / items to carry', detailPh: 'e.g. 5 boxes of samples, picking up 3 customers',
   pDeliver: 'Delivery', pPick: 'Pick-up', pPax: 'Passengers', pOther: 'Other',
   avT: 'Vehicles free in this window', avFree: '{n} of {m} free', avNone: 'None free', avLoad: 'Loading...', avErr: 'Cannot load vehicle availability right now (you can still send the request)', avNoCar: 'No vehicle data yet',
@@ -333,7 +334,7 @@ let busy = false;
 const resetAv = () => { avCache = { date: '', data: null, loading: false, err: '' }; };
 
 function newForm(src) {
-  return Object.assign({ requesterName: '', dept: '', phone: '', destination: '', date: '', startTime: '', endTime: '', purpose: 'ส่งของ', detail: '' }, src || {});
+  return Object.assign({ requesterName: '', dept: '', phone: '', destination: '', destContact: '', destPhone: '', date: '', startTime: '', endTime: '', purpose: 'ส่งของ', detail: '' }, src || {});
 }
 function rerender() {
   if (view === 'form') { try { Object.assign(form, readForm()); } catch (e) { } renderForm(); }
@@ -354,6 +355,7 @@ function renderForm() {
     '<div class="f"><label>' + esc(t('phone')) + ' <b>*</b></label><input class="in" name="phone" type="tel" inputmode="tel" autocomplete="off" maxlength="20" value="' + esc(form.phone) + '"></div></div></div>' +
     '<div class="card"><div class="ct"><i class="bi bi-geo-alt-fill"></i>' + esc(t('cTrip')) + '</div>' +
     '<div class="f"><label>' + esc(t('dest')) + ' <b>*</b></label><input class="in" name="destination" maxlength="200" placeholder="' + esc(t('destPh')) + '" value="' + esc(form.destination) + '"></div>' +
+    '<div class="f dp"><label><i class="bi bi-telephone-outbound-fill"></i> ' + esc(t('dPhone')) + ' <span class="opt">' + esc(t('optional')) + '</span></label><input class="in" name="destPhone" type="tel" inputmode="tel" autocomplete="off" maxlength="30" placeholder="' + esc(t('dPhonePh')) + '" value="' + esc(form.destPhone || '') + '"><input class="in" name="destContact" maxlength="60" style="margin-top:8px" placeholder="' + esc(t('dContactPh')) + '" value="' + esc(form.destContact || '') + '"><div class="hint"><i class="bi bi-info-circle"></i> ' + esc(t('dPhoneHint')) + '</div></div>' +
     '<div class="f"><label>' + esc(t('date')) + ' <b>*</b></label><input class="in" type="date" name="date" min="' + tdy + '" value="' + esc(form.date) + '"></div>' +
     '<div class="g2"><div class="f"><label>' + esc(t('from')) + ' <b>*</b></label><input class="in" type="time" name="startTime" value="' + esc(form.startTime) + '"></div>' +
     '<div class="f"><label>' + esc(t('to')) + ' <b>*</b></label><input class="in" type="time" name="endTime" value="' + esc(form.endTime) + '"></div></div>' +
@@ -361,12 +363,12 @@ function renderForm() {
     '<div class="f" style="margin-bottom:4px"><label>' + esc(t('detail')) + '</label><textarea class="in" name="detail" maxlength="400" placeholder="' + esc(t('detailPh')) + '">' + esc(form.detail) + '</textarea></div></div>' +
     '<div class="hp" aria-hidden="true"><label>website</label><input name="website" tabindex="-1" autocomplete="off"></div>' +
     '<div id="av"></div>' +
-    (!editCtx ? mineCard(mine) : '') +
     '<div id="fmsg"></div>' +
     '<div class="note">' + (editCtx ? '' : esc(t('note'))) + '</div>' +
     (editCtx ? '<div style="text-align:center"><button type="button" class="link" id="bk">' + esc(t('cancelEdit')) + '</button></div>' : '') +
-    '<div class="foot">' + esc(t('foot')) + '</div>' +
     '<div class="sbar"><div class="t" id="sbt"></div><button class="btn" id="go" type="submit"><i class="bi bi-send-fill"></i>' + esc(editCtx ? t('saveEdit') : t('send')) + '</button></div>' +
+    '<div style="height:14px"></div>' + (!editCtx ? mineCard(mine) : '') +
+    '<div class="foot">' + esc(t('foot')) + '</div>' +
     '</form>';
   bindForm(); bindLang(); drawAvailability(); updateBar();
   if (form.date) loadAvailability(form.date);
@@ -383,7 +385,7 @@ function updateBar() {
 }
 function readForm() {
   const f = document.getElementById('f'); const o = {};
-  ['requesterName', 'dept', 'phone', 'destination', 'date', 'startTime', 'endTime', 'detail'].forEach((k) => { o[k] = (f.elements[k].value || '').trim(); });
+  ['requesterName', 'dept', 'phone', 'destination', 'destContact', 'destPhone', 'date', 'startTime', 'endTime', 'detail'].forEach((k) => { o[k] = (f.elements[k].value || '').trim(); });
   o.purpose = form.purpose; o.website = f.elements.website.value;
   return o;
 }
@@ -490,6 +492,7 @@ function validate(o) {
   if (!o.dept) return bad('dept', 'vDept');
   if (o.phone.replace(/\D/g, '').length < 9) return bad('phone', 'vPhone');
   if (!o.destination) return bad('destination', 'vDest');
+  if (o.destPhone && (o.destPhone.replace(/\D/g, '').length < 5 || o.destPhone.replace(/\D/g, '').length > 20)) return bad('destPhone', 'vDPhone');
   if (!o.date) return bad('date', 'vDate');
   if (o.date < todayStr()) return bad('date', 'vPast');
   if (!o.startTime) return bad('startTime', 'vFrom');
@@ -609,6 +612,7 @@ function renderStatus() {
     '<div class="body"><div class="card"><div class="ref"><small>' + esc(t('ref')) + '</small><b>' + esc(r.code) + '</b></div>' + steps + chg + detail +
     '<div class="sum"><div><i class="bi bi-person"></i><span>' + esc(t('whoL')) + '</span><em>' + esc(r.requesterName) + ' · ' + esc(r.dept) + '</em></div>' +
     '<div><i class="bi bi-geo-alt"></i><span>' + esc(t('toL')) + '</span><em>' + esc(r.destination) + '</em></div>' +
+    (r.destPhone || r.destContact ? '<div><i class="bi bi-telephone-outbound"></i><span>' + esc(t('dpL')) + '</span><em>' + (r.destPhone ? '<a class="tl" href="tel:' + esc(String(r.destPhone).replace(/[^0-9+]/g, '')) + '">' + esc(r.destPhone) + '</a>' : '') + (r.destContact ? (r.destPhone ? ' · ' : '') + esc(r.destContact) : '') + '</em></div>' : '') +
     '<div><i class="bi bi-calendar-event"></i><span>' + esc(t('whenL')) + '</span><em>' + esc(fmtDate(r.date)) + '<br>' + esc(r.startTime) + ' – ' + esc(r.endTime) + esc(t('tsfx')) + '</em></div>' +
     '<div><i class="bi bi-flag"></i><span>' + esc(t('purL')) + '</span><em>' + esc(purposeLabel(r.purpose)) + (r.detail ? ' · ' + esc(r.detail) : '') + '</em></div></div></div>' +
     '<div class="card" style="padding-bottom:15px">' + acts + '</div>' +
@@ -620,8 +624,8 @@ function renderStatus() {
   if ($('home')) $('home').onclick = () => { stopRefresh(); cur = null; history.replaceState(null, '', location.pathname + location.search); form = newForm(); renderForm(); };
   if ($('rf')) $('rf').onclick = async () => { try { const x = await api('checkVehicleRequest', curToken ? { token: curToken } : { code: cur.code, phone: cur.phone }); cur = x.request; renderStatus(); toast(t('tRefreshed')); } catch (e) { if (e.key === 'eNotFound') gone(); else toast(e.message); } };
   if ($('cp')) $('cp').onclick = () => copyText(link);
-  if ($('ed')) $('ed').onclick = () => { editCtx = { token: curToken, code: cur.code }; form = newForm({ requesterName: cur.requesterName, dept: cur.dept, phone: cur.phone, destination: cur.destination, date: cur.date, startTime: cur.startTime, endTime: cur.endTime, purpose: cur.purpose, detail: cur.detail }); resetAv(); renderForm(); };
-  if ($('again')) $('again').onclick = () => { editCtx = null; form = newForm({ destination: cur.destination, startTime: cur.startTime, endTime: cur.endTime, purpose: cur.purpose, detail: cur.detail, requesterName: cur.requesterName, dept: cur.dept, phone: cur.phone }); resetAv(); history.replaceState(null, '', location.pathname + location.search); renderForm(); };
+  if ($('ed')) $('ed').onclick = () => { editCtx = { token: curToken, code: cur.code }; form = newForm({ requesterName: cur.requesterName, dept: cur.dept, phone: cur.phone, destination: cur.destination, destContact: cur.destContact || '', destPhone: cur.destPhone || '', date: cur.date, startTime: cur.startTime, endTime: cur.endTime, purpose: cur.purpose, detail: cur.detail }); resetAv(); renderForm(); };
+  if ($('again')) $('again').onclick = () => { editCtx = null; form = newForm({ destination: cur.destination, destContact: cur.destContact || '', destPhone: cur.destPhone || '', startTime: cur.startTime, endTime: cur.endTime, purpose: cur.purpose, detail: cur.detail, requesterName: cur.requesterName, dept: cur.dept, phone: cur.phone }); resetAv(); history.replaceState(null, '', location.pathname + location.search); renderForm(); };
   if ($('cx')) $('cx').onclick = async () => {
     if (!(await ask({ icon: 'trash3', danger: true, title: t('cxT'), text: t('cxP', { c: cur.code }), ok: t('cancelReq') }))) return;
     try { const x = await api('updateVehicleRequestByRequester', { token: curToken, code: cur.code, phone: cur.phone, op: 'cancel' }); showStatus(x.request, curToken); toast(t('tCancelled')); } catch (e) { toast(e.message); }
