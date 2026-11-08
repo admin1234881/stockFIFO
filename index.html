@@ -22788,13 +22788,14 @@ renderLGTagPrintWindow = function(tags, printWin) {
     #lgb-ov .al.ok{background:#dcfce7;color:#166534}#lgb-ov .al.er{background:#fee2e2;color:#991b1b}#lgb-ov .al.wn{background:#fef3c7;color:#92580a}
     #lgb-ov .empty{text-align:center;color:#8a97ab;padding:26px 0}`;
 
-    const S = { filter: 'all', q: '', sel: new Set(), form: false, busy: false, msg: '', fmsg: '', fv: { ri: '0', other: '', note: '', at: '', useOut: false, big: false } };
+    const S = { filter: 'all', q: '', date: '', sel: new Set(), form: false, busy: false, msg: '', fmsg: '', fv: { ri: '0', other: '', note: '', at: '', useOut: false, big: false } };
     let ov = null;
 
     function items(c) {
         const base = S.filter === 'stuck' ? c.stuck : S.filter === 'today' ? c.today : S.filter === 'old' ? c.old : S.filter === 'transit' ? c.scope : c.all;
         const words = S.q.toLowerCase().split(/\s+/).filter(Boolean);
         return base.filter(g => {
+            if (S.date && (!g.t || dayKey(g.t) !== S.date)) return false;
             if (!words.length) return true;
             const hay = [g.doc, g.wos.join(' '), g.part, g.by].join(' ').toLowerCase();
             return words.every(w => hay.indexOf(w) >= 0);
@@ -22841,7 +22842,10 @@ renderLGTagPrintWindow = function(tags, printWin) {
         const selDocs = selectedDocs(c);
         const selQty = selDocs.reduce((a, g) => a + g.qty, 0);
 
-        const chip = (k, label, n) => `<span class="fc ${S.filter === k ? 'on' : ''}" data-f="${k}">${label} ${n}</span>`;
+        const chip = (k, label, n) => {
+            if (S.date) { const a = k === 'stuck' ? c.stuck : k === 'today' ? c.today : k === 'old' ? c.old : k === 'transit' ? c.scope : c.all; n = a.filter(g => g.t && dayKey(g.t) === S.date).length; }
+            return `<span class="fc ${S.filter === k ? 'on' : ''}" data-f="${k}">${label} ${n}</span>`;
+        };
         const rows = list.slice(0, 200).map(g => {
             const stuck = g.t && c.now - g.t > STUCK_MS;
             const tOut = g.t ? (dayKey(g.t) === dayKey(c.now) ? hm(g.t) : dmhm(g.t)) : '-';
@@ -22878,6 +22882,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
               <span class="sum">ATECH สแกนออกแล้ว LG ยังไม่ได้รับ ${c.all.length} ใบ${c.old.length ? ` (เก่า ${c.old.length})` : ''}</span><button type="button" class="x" id="lgb-x" ${S.busy ? 'disabled' : ''}>✕</button></div>
             <div id="lgb-msg">${S.msg || ''}</div>
             <div class="tool"><input id="lgb-q" placeholder="ค้นหา เลขแท็ก / WO / พาร์ท" value="${esc(S.q)}" autocomplete="off">
+            <span style="display:inline-flex;align-items:center;gap:4px;flex:0 0 auto"><input type="date" id="lgb-date" value="${S.date}" max="${dayKey(Date.now())}" title="เลือกวันที่ ATECH สแกนออก" style="flex:0 0 auto;min-width:0;width:auto;border-radius:10px;padding:4px 8px">${S.date ? '<button type="button" class="rb g" id="lgb-dateclr" style="padding:5px 10px">ล้างวันที่</button>' : ''}</span>
               ${chip('all', 'ทั้งหมด', c.all.length)}${chip('transit', 'ระหว่างทาง', c.scope.length)}${chip('stuck', 'ค้างเกิน 3 ชม.', c.stuck.length)}${chip('today', 'วันนี้', c.today.length)}${c.old.length ? chip('old', 'แท็กเก่า (ก่อนเริ่มใช้ระบบรับ)', c.old.length) : ''}</div>
             <div class="list">${rows}</div>
             ${list.length > 200 ? `<div class="sub mt-1">แสดง 200 รายการแรก — ใช้ช่องค้นหาเพื่อกรอง</div>` : ''}
@@ -22897,6 +22902,8 @@ renderLGTagPrintWindow = function(tags, printWin) {
         const q = $('#lgb-q');
         q.oninput = () => { S.q = q.value; const pos = q.selectionStart; draw(false); const q2 = ov && ov.querySelector('#lgb-q'); if (q2) { q2.focus(); try { q2.setSelectionRange(pos, pos); } catch (e) {} } };
         ov.querySelectorAll('.fc').forEach(el => el.onclick = () => { S.filter = el.dataset.f; draw(false); });
+        const dt = $('#lgb-date'); if (dt) dt.onchange = () => { S.date = dt.value || ''; const c2 = compute(); Array.from(S.sel).forEach(d => { const g = c2.all.find(x => x.doc === d); if (S.date && (!g || !g.t || dayKey(g.t) !== S.date)) S.sel.delete(d); }); draw(false); };
+        const dc = $('#lgb-dateclr'); if (dc) dc.onclick = () => { S.date = ''; draw(false); };
         ov.querySelectorAll('input[data-d]').forEach(el => el.onchange = () => { el.checked ? S.sel.add(el.dataset.d) : S.sel.delete(el.dataset.d); draw(false); });
         ov.querySelectorAll('[data-one]').forEach(el => el.onclick = () => { S.sel = new Set([el.dataset.one]); S.form = true; S.fmsg = ''; draw(false); const r = ov && ov.querySelector('#lgb-reason'); if (r) r.focus(); });
         $('#lgb-all').onchange = (e) => { const c = compute(); items(c).forEach(g => e.target.checked ? S.sel.add(g.doc) : S.sel.delete(g.doc)); draw(false); };
@@ -23240,7 +23247,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
         if (!canBack()) return;
         if (!document.getElementById('lgb-style')) { const st = document.createElement('style'); st.id = 'lgb-style'; st.textContent = CSS; document.head.appendChild(st); }
         if (ov) ov.remove();
-        S.filter = 'all'; S.q = ''; S.sel = new Set(); S.form = false; S.busy = false; S.msg = ''; S.fmsg = ''; S.fv = { ri: '0', other: '', note: '', at: '' };
+        S.filter = 'all'; S.q = ''; S.date = ''; S.sel = new Set(); S.form = false; S.busy = false; S.msg = ''; S.fmsg = ''; S.fv = { ri: '0', other: '', note: '', at: '' };
         ov = document.createElement('div'); ov.id = 'lgb-ov';
         ov.addEventListener('mousedown', (e) => { if (e.target === ov && !S.busy) closeModal(); });
         document.body.appendChild(ov);
@@ -23287,7 +23294,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
                 <div class="sub">${esc(g.part)} · ${g.qty.toLocaleString('en-US')} ชิ้น · ATECH สแกนออก ${esc(tOut)}${g.by ? ' (' + esc(g.by) + ')' : ''}</div></div>
                 <span class="el ${stuck ? 'r' : ''}">${g.t ? 'ค้าง ' + esc(dur(g.t, c.now)) : 'ไม่ทราบเวลา'}</span>
                 <button type="button" class="rb" data-one="${esc(g.doc)}" ${S.busy ? 'disabled' : ''}><i class="bi bi-box-arrow-in-down"></i> รับย้อนหลัง</button></div>`;
-        }).join('') || `<div class="empty"><i class="bi bi-check2-circle" style="font-size:2rem;display:block;color:#16a34a"></i>${S.q || S.filter !== 'all' ? 'ไม่พบรายการที่ตรงกับตัวกรอง' : 'ไม่มีแท็กค้างรับ'}</div>`;
+        }).join('') || `<div class="empty"><i class="bi bi-check2-circle" style="font-size:2rem;display:block;color:#16a34a"></i>${S.q || S.date || S.filter !== 'all' ? 'ไม่พบรายการที่ตรงกับตัวกรอง' : 'ไม่มีแท็กค้างรับ'}</div>`;
 
         const dtMin = selDocs.reduce((m, g) => (g.t && g.t > m ? g.t : m), 0);
         const form = S.form && selDocs.length ? `
@@ -28688,7 +28695,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
 
     let selLine = '';
     try { selLine = localStorage.getItem(LSK) || ''; } catch (e) { }
-    let tab = 'pend';
+    let tab = 'pend'; let selDate = '';
 
     const parsedCache = new Map();
     function parsedOf(raw) {
@@ -28760,7 +28767,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
             g.rec = rec; g.isToday = isToday;
             g.pending = !rec && trackFrom !== null && (!g.t || g.t >= trackFrom);
             g.stuck = g.pending && g.t && (now - g.t) > STUCK_MS;
-            if (g.pending) pendAll.push(g);
+            if (g.pending && (!selDate || (g.t && dayKey(g.t) === selDate))) pendAll.push(g);
             if (isToday || g.pending) lineSet.add(g.line);
         });
         const recToday = [];
@@ -28771,6 +28778,9 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
         const okL = (g) => !selLine || g.line === selLine;
         const outToday = [], pend = pendAll.filter(okL), recL = recToday.filter(okL);
         outDocs.forEach(g => { if (g.isToday && okL(g)) outToday.push(g); });
+        const recDate = [];
+        if (selDate) outDocs.forEach(g => { if (g.rec && g.t && dayKey(g.t) === selDate && okL(g)) { const r = recDocs.get(g.doc); if (r) recDate.push(Object.assign({}, r, { line: g.line, wos: r.wos.length ? r.wos : g.wos, part: r.part || g.part, qty: r.qty || g.qty })); } });
+        recDate.sort((x, y) => (x.t || 0) - (y.t || 0));
         const outTodayRecv = outToday.filter(g => g.rec).length;
         pend.sort((a, b) => (a.t || 0) - (b.t || 0));
         recL.sort((a, b) => (b.t || 0) - (a.t || 0));
@@ -28782,7 +28792,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
         return {
             now, today, lines, perLine, trackFrom, pendAllN: pendAll.length,
             outN: outToday.length, outRecvN: outTodayRecv,
-            pend, pendN: pend.length, pendQty: pend.reduce((a, g) => a + g.qty, 0), stuckN: pend.filter(g => g.stuck).length, pendOld: pend.filter(g => !g.isToday).length,
+            recDate, pend, pendN: pend.length, pendQty: pend.reduce((a, g) => a + g.qty, 0), stuckN: pend.filter(g => g.stuck).length, pendOld: pend.filter(g => !g.isToday).length,
             recL, recN: recL.length, recQty: recL.reduce((a, g) => a + g.qty, 0), recWo: wos.size, noOut: recL.filter(g => g.flag).length, hours
         };
     }
@@ -28877,13 +28887,54 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
             <div class="rt"><span class="q">${num(g.qty)}<small> ชิ้น</small></span>${g.flag ? '<span class="fl"><i class="bi bi-exclamation-triangle-fill"></i> ไม่มีสแกนออก</span>' : ''}</div>
         </div>`;
     }
-
+     function dateBar(c) {
+        const yd = dayKey(c.now - 86400000);
+        const q = (d, t) => `<button type="button" class="lgr3-dq ${selDate === d ? 'on' : ''}" data-d="${d}">${t}</button>`;
+        const note = selDate ? `<div class="lgr3-datenote"><i class="bi bi-funnel-fill"></i> แสดงเฉพาะแท็กค้างรับที่ ATECH ยิงออกวันที่ <b>${esc(selDate.split('-').reverse().join('/'))}</b> · ค้างรับ ${c.pendN} · รับแล้ว ${c.recDate.length} แท็ก</div>` : '';
+        return `<div class="lgr3-date"><span class="lb"><i class="bi bi-calendar-event"></i> วันที่ ATECH ยิงออก</span>
+            <input type="date" id="lgr3-date" value="${esc(selDate)}" max="${c.today}">
+            ${q('', 'ทั้งหมด')}${q(c.today, 'วันนี้')}${q(yd, 'เมื่อวาน')}</div>${note}`;
+    }
+    (function () {
+        const st = document.createElement('style'); st.id = 'lgr3-date-style';
+        st.textContent = `
+        #lgr3 .lgr3-date{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:10px;background:#f1f5fa;border-radius:14px;padding:8px 10px}
+        #lgr3 .lgr3-date .lb{font-size:.72rem;font-weight:800;color:#4a5a70;margin-right:2px}
+        #lgr3 .lgr3-date input[type=date]{border:1.5px solid #d5dce8;border-radius:10px;padding:5px 8px;font-size:.85rem;font-weight:700;background:#fff;color:#0b1b33;min-width:0}
+        #lgr3 .lgr3-dq{border:1.5px solid #d5dce8;background:#fff;color:#1b2a41;border-radius:20px;padding:5px 12px;font-weight:800;font-size:.8rem;cursor:pointer}
+        #lgr3 .lgr3-dq.on{background:#16a34a;border-color:#16a34a;color:#fff}
+        #lgr3 .lgr3-datenote{background:#fff7e0;border:1px solid #f6d58a;color:#92580a;border-radius:12px;padding:6px 12px;font-size:.78rem;font-weight:700;margin:-2px 0 10px}
+        #lgr3 .lgr3-datenote ~ :not(.lgr3-lines):not(.lgr3-sec){display:none !important}`;
+        document.head.appendChild(st);
+        const pick = (d) => { selDate = d || ''; tab = 'pend'; render(true); };
+        document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('#lgr3 .lgr3-dq'); if (b) pick(b.getAttribute('data-d')); });
+        document.addEventListener('change', (e) => { if (e.target && e.target.id === 'lgr3-date') pick(e.target.value); });
+    })();
+    function dateBody(c) {
+        const sec = (cls, ic, title, n, rows, empty) => `<div class="lgr3-dsec ${cls}"><div class="lgr3-dh"><i class="bi ${ic}"></i> ${title}<em>${n}</em></div>${rows.length ? '<div class="lgr3-list">' + rows.join('') + '</div>' : '<div class="lgr3-empty">' + empty + '</div>'}</div>`;
+        const recRows = c.recDate.map(g => `<div class="lgr3-row"><div class="tm"><b>${g.t ? esc(hm(g.t)) : '-'}</b>${g.t && dayKey(g.t) !== selDate ? '<small>' + esc(dmy(g.t)) + '</small>' : ''}</div>
+            <div class="mid"><div class="wo">${esc(g.wos.join(', '))}</div><div class="pn">${esc(g.part)} · ไลน์ ${esc(g.line)}${g.by ? ' · <i class="bi bi-person-fill"></i> ' + esc(g.by) : ''}</div><div class="pn"><b style="color:#0b1b33">${esc(g.doc)}</b> · รับเมื่อ ${g.t ? esc(dmy(g.t) + ' ' + hm(g.t)) : '-'}</div></div>
+            <div class="rt"><span class="q">${num(g.qty)}<small> ชิ้น</small></span></div></div>`);
+        return sec('p', 'bi-hourglass-split', 'ค้างรับ', c.pendN, c.pend.map(g => pendRow(g, c.now)), 'ไม่มีแท็กค้างรับ')
+            + sec('r', 'bi-check2-circle', 'รับแล้ว', c.recDate.length, recRows, 'ยังไม่มีแท็กที่ LG รับแล้ว');
+    }
+    (function () {
+        const st = document.createElement('style'); st.id = 'lgr3-date-style2';
+        st.textContent = `
+        #lgr3 .lgr3-dsec{margin-bottom:12px}
+        #lgr3 .lgr3-dh{display:flex;align-items:center;gap:6px;font-weight:800;font-size:.82rem;margin-bottom:6px;color:#92580a}
+        #lgr3 .lgr3-dh em{font-style:normal;border-radius:10px;padding:0 8px;font-size:.72rem;background:#fef3c7;color:#92580a}
+        #lgr3 .lgr3-dsec.r .lgr3-dh{color:#15803d}
+        #lgr3 .lgr3-dsec.r .lgr3-dh em{background:#dcfce7;color:#15803d}
+        #lgr3 .lgr3-dsec .lgr3-list{max-height:260px}`;
+        document.head.appendChild(st);
+    })();
     let lastSig = '';
     function renderCore(force) {
         const box = document.getElementById('lgr3');
         if (!box) return;
         const c = compute();
-        const sig = [selLine, tab, c.lines.join(','), c.outN, c.outRecvN, c.pendN, c.stuckN, c.pendAllN, c.recN, c.recQty, c.noOut, Math.floor(c.now / 60000), JSON.stringify(c.perLine)].join('|');
+        const sig = [selLine, selDate, c.recDate.length, tab, c.lines.join(','), c.outN, c.outRecvN, c.pendN, c.stuckN, c.pendAllN, c.recN, c.recQty, c.noOut, Math.floor(c.now / 60000), JSON.stringify(c.perLine)].join('|');
         if (!force && sig === lastSig) return;
         lastSig = sig;
         const oldList = box.querySelector('.lgr3-list'), keepTop = oldList ? oldList.scrollTop : 0;
@@ -28913,7 +28964,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
             : `<div class="big">${c.recN}<small> แท็ก</small></div><div class="sub">${lbl} · ยังไม่มีแท็กที่ ATECH ยิงออกวันนี้ให้เทียบ %</div>`;
 
         let body;
-        if (tab === 'pend') {
+        if (selDate) { body = dateBody(c); } else if (tab === 'pend') {
             if (c.trackFrom === null) body = `<div class="lgr3-empty"><i class="bi bi-info-circle"></i>ระบบเริ่มนับ "ค้างรับ" ตั้งแต่วันที่ LG รับแท็กใบแรก<br><small>ยังไม่มีการรับ จึงยังไม่แสดงรายการ</small></div>`;
             else if (!c.pend.length) body = `<div class="lgr3-empty ok"><i class="bi bi-emoji-smile"></i>${lbl}: ไม่มีแท็กค้างรับ<br><small>ที่ ATECH ยิงออกมาแล้ว LG รับครบหมด</small></div>`;
             else body = `<div class="lgr3-list">${c.pend.map(g => pendRow(g, c.now)).join('')}</div>`;
@@ -28923,6 +28974,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
 
         box.innerHTML = `
         <div class="lgr3-head"><div class="ttl"><span class="ic"><i class="bi bi-box-arrow-in-down"></i></span>สถานะรับแท็ก LG</div><span class="live"><i></i>อัปเดตสด</span></div>
+         ${dateBar(c)}
         <div class="lgr3-lines" title="เลือกไลน์ที่ต้องการดู"><span class="lb"><i class="bi bi-funnel-fill"></i> ไลน์</span>${chips}</div>
         <div class="lgr3-hero">${ring(pct, done)}<div class="tx">${hero}<div class="chs">${chipsInfo.join('')}</div></div></div>
         ${tiles}
@@ -37683,7 +37735,75 @@ html.mnl-lock,html.mnl-lock body{overflow:visible!important;height:auto!importan
             rel: ['erp-in', 'export', 'history', 'count']
         });
 
-    ch('erp-in', 'stock', 'bi-diagram-3', '🏭', 'w', 3, [`รับเข้าสินค้าในระบบ ERP (UNIERP)`, `Receiving goods in the ERP (UNIERP)`],
+
+    // ===== MANUAL-NEW-FEATURES: บทใหม่ (LG เช็กแท็กค้างรับ + เลือกวันที่ / ปล่อยรถพ่วง / จองรถขนส่ง) =====
+    ch('vehicle-book', 'plan', 'bi-truck', '🚐', '*', 4, [`จองรถขนส่ง (แผนกอื่นขอใช้รถ)`, `Book a vehicle (other departments)`],
+        [`แผนกอื่นจองรถผ่าน **หน้าจองรถ** (ไม่ต้องมีรหัสผ่าน) ทีมขนส่งอนุมัติและจัดรถ-คนขับ แล้วผู้จองดูสถานะในหน้าเดิมได้เลย · ฝั่งทีมขนส่งอนุมัติที่ปุ่ม **คำขอจองรถ** ในหน้าแผนการจัดส่ง`, `Other departments book through the **booking page** (no password). The transport team approves and assigns the vehicle and driver, and the requester follows the status on the same page · the team approves with the **Vehicle requests** button on the Delivery Plan page.`],
+        {
+            need: [`ผู้จอง: ทุกคน (ไม่ต้องล็อกอิน) · ผู้อนุมัติ: จัดการแผนการจัดส่ง`, `Requester: anyone (no login) · Approver: manage delivery plan`], menu: [`หน้าล็อกอิน › จองรถขนส่ง · แผนการจัดส่ง › คำขอจองรถ`, `Login page › Book a vehicle · Delivery Plan › Vehicle requests`],
+            flow: [[`ผู้จองส่งคำขอ`, `Request sent`, '#64748b'], [`รออนุมัติ`, `Pending`, '#f59e0b'], [`อนุมัติ + จัดรถ`, `Approved`, '#10b981']],
+            flowNote: [`หรือจบที่ "ไม่อนุมัติ" (พร้อมเหตุผล) / "ยกเลิก" ผู้จองเห็นเหตุผลในหน้าจอง`, `Or it ends at "Rejected" (with a reason) / "Cancelled". The requester sees the reason on the booking page.`],
+            steps: [
+                [`เปิดหน้าจองรถ`, `Open the booking page`, `จากหน้าล็อกอิน กดปุ่ม [[b|จองรถขนส่ง]] หรือสแกน **QR** / เปิด **ลิงก์** ที่ทีมขนส่งส่งให้ ในหน้าจองมีปุ่มสลับ **ไทย / English** เอง`, `On the login page press [[b|Book a vehicle]], or scan the **QR** / open the **link** the transport team sent. The booking page has its own **Thai / English** switch.`, null, null],
+                [`กรอกข้อมูลการเดินทาง`, `Fill in the trip`, `กรอก **ชื่อ-นามสกุล · แผนก · เบอร์โทรผู้จอง · สถานที่ที่จะไป · วันที่ · เวลาไป-กลับ · ไปเพื่อ** (ส่งของ / รับของ / รับ-ส่งบุคคล / อื่นๆ) และรายละเอียด/ของที่ขน`, `Enter **name · department · your phone · destination · date · leave/return time · purpose** (deliver / pick up / people / other) and details of what is carried.`, null, null],
+                [`ใส่เบอร์ติดต่อปลายทาง (ไม่บังคับ)`, `Add a destination contact (optional)`, `ในกรอบเส้นประใต้ช่องสถานที่ ใส่ **เบอร์ติดต่อของบริษัท/สถานที่ที่ไปรับหรือส่งของ** และชื่อผู้ติดต่อ (ถ้ามี) คนขับและทีมขนส่งโทรหาปลายทางได้เลย เบอร์นี้ไปแสดงในรายการคำขอ ป๊อบอัพอนุมัติ และหมายเหตุของแผนส่งของ`, `In the dashed box under the destination, enter the **phone number of the company/place being visited** and a contact name (if any). The driver and the team can call it directly. It shows in the request list, the approval popup and the delivery-plan remark.`, null, [`y`, `ไม่กรอกก็ส่งคำขอได้ แต่ถ้ากรอกต้องเป็นเบอร์โทรที่ถูกต้อง`, `You can submit without it, but if you fill it in it must be a valid phone number.`]],
+                [`ดูรถว่างแล้วส่งคำขอ`, `Check free vehicles and submit`, `กล่อง **รถว่างช่วงที่เลือก** บอกว่าว่างกี่คันจากทั้งหมด ถ้ารถไม่ว่างยังส่งคำขอได้ ทีมขนส่งอาจปรับเวลาให้ กด [[g|ส่งคำขอจองรถ]] จะได้ **เลขอ้างอิง**`, `The **Free vehicles in your window** box shows how many are free. If none are free you can still submit and the team may adjust the time. Press [[g|Submit request]] to get a **reference number**.`, null, null],
+                [`ติดตามสถานะ`, `Follow the status`, `หน้านี้อัปเดตเอง: รออนุมัติ → อนุมัติแล้ว (แสดง **ทะเบียน คนขับ เวลาออก/กลับ**) หรือ ไม่อนุมัติ (แสดงเหตุผล) กด **คัดลอกลิงก์ส่วนตัว** เก็บไว้เปิดดูภายหลัง แก้ไขหรือยกเลิกคำขอได้จนกว่าทีมขนส่งจะอนุมัติ`, `The page updates itself: Pending → Approved (shows **plate, driver, leave/return time**) or Rejected (shows the reason). Press **Copy private link** to keep it. You can edit or cancel until the team approves.`, null, null],
+                [`ทีมขนส่ง: แจกลิงก์และ QR`, `Transport team: share the link and QR`, `ที่หน้าล็อกอิน มีปุ่ม **คัดลอกลิงก์** และ **QR** ข้างปุ่มจองรถ (ภาษาไทยเป็นค่าเริ่มต้น) ในหน้าแผนการจัดส่งก็มีปุ่ม **คัดลอกลิงก์หน้าจอง** และ **QR** เช่นกัน`, `The login page has **Copy link** and **QR** next to the booking button (Thai by default). The Delivery Plan page also has **Copy booking link** and **QR** buttons.`, null, null],
+                [`ทีมขนส่ง: อนุมัติ`, `Transport team: approve`, `ที่หน้าแผนการจัดส่ง กดปุ่ม [[b|คำขอจองรถ]] เลือกแท็บ **รายการ** หรือ **ปฏิทิน 30 วัน** กรองตาม รออนุมัติ / อนุมัติแล้ว / ไม่อนุมัติ-ยกเลิก กดอนุมัติ แล้วเลือก **รถ · คนขับ · เวลาออก/กลับ** ระบบเช็กว่าชนกับการจองอื่นไหม แล้วกด [[g|อนุมัติ และเพิ่มลงแผนส่งของ]] เบอร์ปลายทางกดโทรได้จากรายการและป๊อบอัพ`, `On the Delivery Plan page press [[b|Vehicle requests]], pick the **List** or **30-day calendar** tab, filter by Pending / Approved / Rejected-cancelled. Press Approve, choose **vehicle · driver · leave/return time**; the system checks clashes. Then press [[g|Approve and add to delivery plan]]. The destination phone is tap-to-call in the list and popup.`, null, [`y`, `เมื่ออนุมัติ ระบบเพิ่มแถว "อื่นๆ" ในแผนส่งของวันนั้นตามเวลาออก พร้อมหมายเหตุ "โทรปลายทาง เบอร์ (ชื่อ)" ปล่อยรถหรือยกเลิกจากบอร์ดได้ตามปกติ`, `On approval an "Other" row is added to that day's plan at the leave time, with a remark "Call destination: phone (name)". Release or cancel it from the board as usual.`]],
+                [`ไม่อนุมัติ หรือยกเลิก`, `Reject or cancel`, `กด [[r|ปฏิเสธ]] หรือ [[r|ยกเลิก]] (สำหรับที่อนุมัติไปแล้ว) แล้ว **ใส่เหตุผล** ผู้จองเห็นเหตุผลในหน้าจอง ถ้าแถวในแผนส่งของยังเป็น รอจัดส่ง ระบบยกเลิกให้ด้วย`, `Press [[r|Reject]] or [[r|Cancel]] (for approved ones) and **enter a reason**. The requester sees it on the booking page. If the delivery-plan row is still Pending it is cancelled too.`, null, null]
+            ],
+            faq: [
+                [`ผู้จองลืมเลขอ้างอิง`, `The requester lost the reference number`, `ที่หน้าจอง กด **ตรวจสอบสถานะด้วยเลขอ้างอิง** ใส่เลขอ้างอิงและเบอร์โทรที่ใช้จอง หรือเปิดจากรายการ "คำขอของคุณ (บนเครื่องนี้)" ถ้าใช้เครื่องเดิม`, `On the booking page press **Check status with a reference number** and enter the number and the phone used. On the same device the request is also listed under "Your requests (on this device)".`],
+                [`กดคำขอจองรถ แล้วขึ้นว่า Google Script ยังไม่อัปเดต`, `"Google Script not updated" when opening Vehicle requests`, `ต้องวางแพตช์ฝั่ง Google Script ของระบบจองรถ แล้ว Deploy เวอร์ชันใหม่ จึงจะใช้ได้ ติดต่อผู้ดูแลระบบ`, `The vehicle-booking patch must be pasted into the Google Script and a new version deployed. Contact the system admin.`],
+                [`แก้ไขคำขอหลังอนุมัติไม่ได้`, `I cannot edit after approval`, `ผู้จองแก้ไขได้จนกว่าทีมขนส่งจะอนุมัติ หลังจากนั้นให้ติดต่อทีมขนส่งโดยตรง หรือให้ทีมขนส่งยกเลิกแล้วส่งคำขอใหม่`, `Requesters can edit until approval. After that contact the transport team, or ask them to cancel and submit again.`]
+            ],
+            rel: ['plan-add', 'plan-release', 'login']
+        });
+ 
+    ch('truck-share', 'plan', 'bi-link-45deg', '🔗', 'o w a', 3, [`ปล่อยรถพ่วง 2 ลูกค้า (รถคันเดียวกัน)`, `One truck, two customers (shared trip)`],
+        [`รถคันเดียวกันขนของ **2 ลูกค้าในวันเดียวกัน** ได้ ปล่อยรถลูกค้าที่สองด้วยทะเบียนเดิมโดยไม่ต้องรอรถกลับ แล้วตอนรถกลับเลือกรับกลับ **ทั้งหมด** หรือ **ทีละลูกค้า**`, `One truck can carry **two customers on the same day**. Release the second customer with the same plate without waiting for the truck to return, then on return receive **all** at once or **one customer at a time**.`],
+        {
+            need: [`จัดการแผนการจัดส่ง`, `Manage delivery plan`], menu: [`แผนการจัดส่ง › การ์ดในช่อง รอจัดส่ง / กำลังวิ่ง`, `Delivery Plan › a card in Pending / In transit`],
+            cards: [
+                [`📅`, `วันที่ของงานต้องตรงกัน`, `Same date`, `พ่วงได้เฉพาะงานที่อยู่ในวันเดียวกัน ถ้าคนละวันระบบยังบล็อกทะเบียนที่กำลังวิ่งอยู่ตามปกติ`, `Only jobs on the same date can share. On different dates the plate stays blocked as usual.`],
+                [`👥`, `ต้องเป็นคนละลูกค้า`, `Different customers`, `ลูกค้ารายเดียวกันไม่พ่วงกัน`, `The same customer does not share with itself.`]
+            ],
+            steps: [
+                [`ปล่อยลูกค้าคนแรกตามปกติ`, `Release the first customer as usual`, `ทำตามบท [[n|ปล่อยรถ]] ปกติ การ์ดเที่ยวนั้นอยู่ในช่อง **กำลังวิ่ง**`, `Follow the normal Release a truck steps. That card sits in **In transit**.`, null, null],
+                [`ปล่อยลูกค้าคนที่สอง ใช้ทะเบียนเดิม`, `Release the second customer with the same plate`, `ที่การ์ดของลูกค้าที่สองในช่อง **รอจัดส่ง** กด [[b|🚚 ปล่อยรถ]] แล้วใส่ทะเบียนคันที่กำลังวิ่งอยู่ ชิปทะเบียนขึ้น **พ่วงได้** และมีข้อความสีเหลือง "รถคันนี้กำลังวิ่งงานของ ... อยู่ — ปล่อยต่อ = พ่วงไปด้วยกัน"`, `On the second customer's card in **Pending** press [[b|🚚 Release]] and enter the plate that is already out. The plate chip shows **can share** and a yellow note says "This truck is out for ... — releasing = shared trip".`, null, null],
+                [`กดปล่อยรถ 2 ครั้งเพื่อยืนยัน`, `Press Release twice to confirm`, `ครั้งแรกระบบถามยืนยัน กดปล่อยรถอีกครั้งเพื่อยืนยันการพ่วง ระบบตัดสต็อกของลูกค้าที่สองตามปกติ (FIFO)`, `The first press asks for confirmation; press Release again to confirm sharing. Stock for the second customer is deducted as usual (FIFO).`, null, null],
+                [`ดูบนบอร์ด`, `See it on the board`, `การ์ดทั้งสองใบอยู่ในช่อง **กำลังวิ่ง** และขึ้นป้าย **🔗 พ่วงกับ (ชื่อลูกค้าอีกราย)**`, `Both cards are in **In transit** and show **🔗 Shared with (the other customer)**.`, null, null],
+                [`รับรถกลับ`, `Receive the truck back`, `กด [[g|🏁 รถกลับถึงแล้ว]] ป๊อบอัพ "รถคันนี้พ่วงหลายลูกค้า" ให้เลือก **รับกลับทั้งหมด (2 ลูกค้า)** หรือ **เฉพาะลูกค้าที่เลือก**`, `Press [[g|🏁 Truck is back]]. The "This truck carries several customers" popup lets you choose **Receive all (2 customers)** or **Only the chosen customer**.`, null, [`y`, `ถ้ารถยังไม่กลับ ให้รับกลับเฉพาะลูกค้าที่ส่งเสร็จแล้ว ลูกค้าที่เหลือยังอยู่ในช่อง กำลังวิ่ง`, `If the truck is not fully back, receive only the customers that are done; the rest stay in In transit.`]]
+            ],
+            faq: [
+                [`ทำไมทะเบียนนี้ปล่อยไม่ได้ ขึ้นว่ากำลังวิ่งงานอยู่`, `Why is this plate refused as already out?`, `ไม่เข้าเงื่อนไขพ่วง: งานที่กำลังวิ่งอยู่เป็นคนละวันกับงานนี้ หรือเป็นลูกค้ารายเดียวกัน ให้รอรถกลับหรือใช้รถคันอื่น`, `The sharing conditions are not met: the running job is on a different date, or it is the same customer. Wait for the truck or use another truck.`],
+                [`ตอนรับรถกลับ ไม่ขึ้นตัวเลือกทั้งหมด/ทีละลูกค้า`, `No "all / one" choice when receiving the truck`, `ตัวเลือกนี้ขึ้นเฉพาะรถที่พ่วงหลายลูกค้าและยังไม่กลับ ถ้ารถวิ่งลูกค้าเดียวจะรับกลับตามปกติ`, `It appears only for a truck carrying several customers. A single-customer truck is received as usual.`]
+            ],
+            rel: ['plan-release', 'plan-back', 'plan-manage']
+        });
+ 
+    ch('lg-recv', 'plan', 'bi-box-arrow-in-down', '📥', 'l o a', 4, [`LG รับแท็ก และเช็กแท็กค้างรับ`, `LG tag receiving and pending-tag check`],
+        [`พนักงาน LG **สแกนรับแท็กที่ ATECH ส่งไปถึง** · หัวหน้าหรือแอดมินเปิด **เช็กแท็กค้างรับ** เพื่อดูแท็กที่ ATECH สแกนออกแล้วแต่ LG ยังไม่ได้สแกนรับ และ **เลือกวันที่** ดูเฉพาะแท็กของวันนั้นได้`, `LG staff **scan the tags that ATECH sent and that have arrived** · a supervisor or admin opens **Pending tag check** to see tags ATECH has scanned out but LG has not scanned in yet, and can **pick a date** to see only that day's tags.`],
+        {
+            need: [`สิทธิ์ "รับแท็ก LG" · ปุ่มเช็กแท็กค้างรับ/รับย้อนหลังต้องมีสิทธิ์ "รับแท็กย้อนหลัง" เพิ่ม`, `"Receive LG tags" permission · the Pending tag check / backdated receive also needs "Backdated receive"`], menu: [`เมนู › รับแท็ก LG`, `Menu › Receive LG tags`],
+            flow: [[`ATECH สแกนออก`, `ATECH scans out`, '#2563eb'], [`ระหว่างทาง`, `In transit`, '#f59e0b'], [`LG สแกนรับ`, `LG scans in`, '#10b981']],
+            flowNote: [`แท็กที่ ATECH สแกนออกแล้วแต่ LG ยังไม่สแกนรับ คือ "แท็กค้างรับ" ที่หน้าต่างเช็กแท็กค้างรับแสดง`, `A tag that ATECH has scanned out but LG has not scanned in is a "pending tag" — that is what the check window lists.`],
+            steps: [
+                [`สแกนรับแท็ก`, `Scan a tag in`, `ที่หน้า **รับแท็กเข้า LG** คลิกช่องสแกนแล้วยิงที่แท็ก หรือกด **สแกนด้วยกล้อง** ระบบบันทึกว่า LG รับแล้ว และแท็กนั้นจะหายจากรายการค้างรับ`, `On **Receive tags into LG**, click the scan box and scan the tag, or press **Scan with camera**. The system records that LG has received it and the tag leaves the pending list.`, null, null],
+                [`เปิดเช็กแท็กค้างรับ`, `Open Pending tag check`, `กดปุ่ม [[b|เช็กแท็กค้างรับ]] ที่หน้ารับแท็ก ตัวเลขบนปุ่ม: **แดง** = มีแท็กค้างเกิน 3 ชม. · **เหลือง** = มีค้างแต่ยังไม่เกิน 3 ชม. · **เทา** = ไม่มีค้าง`, `Press [[b|Pending tag check]] on the receive page. The number on the button: **red** = some tags pending over 3 h · **yellow** = pending but under 3 h · **grey** = none.`, null, null],
+                [`อ่านรายการ`, `Read the list`, `แต่ละแถวแสดง **เลขแท็ก · WO · Part · จำนวนชิ้น · เวลาที่ ATECH สแกนออก** และ "ค้าง ... ชม." (สีแดงเมื่อเกิน 3 ชม.) ปุ่มกรอง: ทั้งหมด · ระหว่างทาง · ค้างเกิน 3 ชม. · วันนี้ · แท็กเก่า (ก่อนเริ่มใช้ระบบรับ) ช่องค้นหาพิมพ์ เลขแท็ก / WO / พาร์ท ได้`, `Each row shows **tag no. · WO · Part · quantity · time ATECH scanned out** and "pending ... h" (red when over 3 h). Filters: All · In transit · Over 3 h · Today · Old tags (before receiving started). The search box takes a tag no. / WO / part.`, null, null],
+                [`เลือกวันที่`, `Pick a date`, `ข้างช่องค้นหามี **ช่องวันที่** เลือกวันที่ ATECH สแกนออก รายการและตัวเลขบนปุ่มกรองจะแสดงเฉพาะแท็กของวันนั้น ใช้ร่วมกับช่องค้นหาและปุ่มกรองได้ กดปุ่ม [[n|ล้างวันที่]] เพื่อกลับไปดูทั้งหมด เปิดหน้าต่างใหม่ทุกครั้งจะเริ่มที่ "ทั้งหมด"`, `Next to the search box is a **date field**. Pick the day ATECH scanned out: the list and the numbers on the filter buttons show only that day. It works together with search and filters. Press [[n|Clear date]] to see everything again. Opening the window again always starts at "All".`, null, [`y`, `ถ้าเปลี่ยนวันที่ ใบที่ติ๊กเลือกไว้แต่ไม่ตรงวันนั้นจะถูกเอาติ๊กออกอัตโนมัติ กันกดรับย้อนหลังใบที่มองไม่เห็นโดยไม่ตั้งใจ เลือกวันในอนาคตไม่ได้`, `If you change the date, ticked tags that are not on that day are un-ticked automatically, so you never receive a tag you cannot see. Future dates cannot be picked.`]],
+                [`รับย้อนหลัง`, `Receive retroactively`, `ถ้าของถึง LG แล้วจริงแต่ลืมสแกน กด [[g|รับย้อนหลัง]] ที่แถวนั้น หรือติ๊กหลายใบแล้วกด [[g|รับย้อนหลังที่เลือก]] เลือก **เหตุผล** และ **เวลาที่รับจริง** (หรือติ๊กใช้เวลาเดียวกับที่ ATECH สแกนออก) ใส่หมายเหตุได้ แล้วกด [[g|บันทึกรับย้อนหลัง]] เลือกเกิน 20 ใบต้องติ๊กยืนยันอีกชั้น`, `If the goods really arrived at LG but nobody scanned, press [[g|Receive retroactively]] on the row, or tick several and press [[g|Receive selected]]. Choose a **reason** and the **actual receive time** (or tick "use the time ATECH scanned out"), add a note if you like, then press [[g|Save]]. Selecting more than 20 needs an extra confirmation tick.`, null, [`r`, `ใช้เมื่อมั่นใจว่าของถึง LG แล้วจริงเท่านั้น การรับย้อนหลังจำนวนมากแก้กลับยาก ระบบบันทึกชื่อผู้กดไว้ในประวัติ`, `Use it only when you are sure the goods reached LG. A large backdated receive is hard to undo. Your name is saved in the history.`]]
+            ],
+            faq: [
+                [`เลือกวันที่แล้วไม่เห็นแท็ก`, `I picked a date and see no tags`, `ช่องวันที่กรองตาม **วันที่ ATECH สแกนออก** ไม่ใช่วันที่ผลิตหรือวันที่แพลน ลองกด [[n|ล้างวันที่]] หรือเลือกวันก่อนหน้า ถ้าแท็กใบนั้นถูก LG สแกนรับแล้วก็จะไม่อยู่ในรายการนี้`, `The date field filters by **the day ATECH scanned out**, not the production or plan date. Try Clear date or an earlier day. A tag that LG has already scanned in is not listed here.`],
+                [`ไม่เห็นปุ่มเช็กแท็กค้างรับ`, `I cannot see the Pending tag check button`, `ปุ่มนี้ขึ้นเฉพาะผู้ที่แอดมินเปิดสิทธิ์ "รับแท็กย้อนหลัง" (และต้องมีสิทธิ์ "รับแท็ก LG" ด้วย) ที่เมนู จัดการผู้ใช้ แล้วให้ผู้ใช้ออกจากระบบและเข้าใหม่`, `Only users whose admin switched on "Backdated receive" (and also "Receive LG tags") see it, in Manage Users. The user must log out and in again.`],
+                [`ตัวเลขบนปุ่มไม่เท่ากับ "ทั้งหมด" ในหน้าต่าง`, `The number on the button differs from "All" in the window`, `ตัวเลขบนปุ่มนับเฉพาะแท็กที่อยู่ในช่วงที่ระบบรับใช้งานแล้ว ส่วน "ทั้งหมด" ในหน้าต่างรวม **แท็กเก่า** (ก่อนเริ่มใช้ระบบรับ) ด้วย`, `The button counts only tags from after receiving started. "All" in the window also includes **old tags** from before that.`]
+            ],
+            rel: ['lg', 'users', 'history']
+        });
+        ch('erp-in', 'stock', 'bi-diagram-3', '🏭', 'w', 3, [`รับเข้าสินค้าในระบบ ERP (UNIERP)`, `Receiving goods in the ERP (UNIERP)`],
         [`หลังรับของจากฝ่าย INJ ให้ **บันทึกรับเข้าใน ERP** ด้วยการยิงบาร์โค้ดบนเอกสารรับเข้าจาก INJ เข้าหน้า Stock transfer registration`, `After taking goods from INJ, **record the receipt in the ERP** by scanning the barcode on the INJ receipt document into the Stock transfer registration screen.`],
         {
             need: [`User/Password ERP จากผู้รับผิดชอบ`, `ERP User/Password from the person in charge`], menu: [`โปรแกรม UNIERP 5.5 Client บนเดสก์ท็อป`, `UNIERP 5.5 Client on the desktop`], demo: 'erp',
