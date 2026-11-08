@@ -2036,7 +2036,66 @@
                         </div>
                         <button type="submit" class="atx-btn">เข้าสู่ระบบ <i class="bi bi-arrow-right ms-1"></i></button>
                     </form>
-
+                            <!-- ===== LOGIN-BOOK: ปุ่มจองรถขนส่ง + คัดลอกลิงก์ + QR (หน้าล็อกอิน) ===== -->
+<style>
+#login-page .atx-bk{margin:14px 0 4px}
+#login-page .atx-bk-or{display:flex;align-items:center;gap:10px;margin:0 0 10px;color:#94a3b8;font-size:12px}
+#login-page .atx-bk-or::before,#login-page .atx-bk-or::after{content:'';flex:1;height:1px;background:#e2e8f0}
+#login-page .atx-bk-main{display:flex;align-items:center;justify-content:center;gap:10px;height:52px;border-radius:14px;border:1.5px solid #cbd5e1;background:#fff;color:#0f172a;font-weight:700;text-decoration:none;transition:border-color .15s,box-shadow .15s,transform .15s}
+#login-page .atx-bk-main:hover{border-color:#f59e0b;box-shadow:0 8px 20px rgba(245,158,11,.18);transform:translateY(-1px);color:#0f172a}
+#login-page .atx-bk-ic{width:30px;height:30px;border-radius:9px;background:#f59e0b;color:#fff;display:flex;align-items:center;justify-content:center}
+#login-page .atx-bk-main small{font-weight:500;color:#64748b;margin-left:2px}
+#login-page .atx-bk-row{display:flex;gap:8px;margin-top:8px}
+#login-page .atx-bk-row button{flex:1;height:38px;border-radius:11px;border:1px solid #e2e8f0;background:#f8fafc;color:#334155;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;transition:background .15s}
+#login-page .atx-bk-row button:hover{background:#eef2f7}
+#login-page .atx-bk-row button.ok{background:#ecfdf5;border-color:#a7f3d0;color:#047857}
+.atx-bk-pop .atx-bk-qr{display:inline-block;padding:12px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;margin:6px 0 10px}
+.atx-bk-pop .atx-bk-url{font-size:12.5px;color:#475569;word-break:break-all;background:#f1f5f9;border-radius:10px;padding:8px 10px}
+</style>
+<div class="atx-bk">
+    <div class="atx-bk-or">หรือ</div>
+    <a class="atx-bk-main" href="https://admin1234881.github.io/stockFIFO/book.HTML" target="_blank" rel="noopener"><span class="atx-bk-ic"><i class="bi bi-truck"></i></span>จองรถขนส่ง<small>ไม่ต้องล็อกอิน</small></a>
+    <div class="atx-bk-row">
+        <button type="button" id="atx-bk-copy"><i class="bi bi-link-45deg"></i><span>คัดลอกลิงก์</span></button>
+        <button type="button" id="atx-bk-qr"><i class="bi bi-qr-code"></i><span>QR Code</span></button>
+    </div>
+</div>
+<script>
+(function () {
+    const URL_BOOK = 'https://admin1234881.github.io/stockFIFO/book.HTML';   // ลิงก์หน้าจองรถ (ถ้าย้ายเว็บ แก้บรรทัดนี้ + href ของปุ่มด้านบน)
+    function copyText(txt) {
+        if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(txt);
+        return new Promise(function (ok, no) {
+            try { const t = document.createElement('textarea'); t.value = txt; t.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(t); t.select(); const r = document.execCommand('copy'); t.remove(); r ? ok() : no(); } catch (e) { no(e); }
+        });
+    }
+    function flash(btn, txt) { const s = btn.querySelector('span'), old = s.textContent; s.textContent = txt; btn.classList.add('ok'); setTimeout(function () { s.textContent = old; btn.classList.remove('ok'); }, 1800); }
+    function bind() {
+        const c = document.getElementById('atx-bk-copy'), q = document.getElementById('atx-bk-qr');
+        if (!c || !q) return;
+        c.addEventListener('click', function () { copyText(URL_BOOK).then(function () { flash(c, 'คัดลอกแล้ว ✓'); }, function () { window.prompt('คัดลอกลิงก์นี้', URL_BOOK); }); });
+        q.addEventListener('click', function () {
+            if (typeof Swal === 'undefined') { window.prompt('ลิงก์จองรถ', URL_BOOK); return; }
+            Swal.fire({
+                title: 'สแกนเพื่อจองรถ', customClass: { popup: 'atx-bk-pop' },
+                html: '<div class="atx-bk-qr" id="atx-bk-qrbox"></div><div class="atx-bk-url">' + URL_BOOK + '</div>',
+                showCancelButton: true, confirmButtonText: 'คัดลอกลิงก์', cancelButtonText: 'ปิด', confirmButtonColor: '#c8102e', reverseButtons: true,
+                didOpen: function () {
+                    const box = document.getElementById('atx-bk-qrbox');
+                    try { if (typeof QRCode === 'undefined') throw new Error('no qr'); new QRCode(box, { text: URL_BOOK, width: 220, height: 220, correctLevel: QRCode.CorrectLevel ? QRCode.CorrectLevel.M : 0 }); }
+                    catch (e) { box.textContent = 'สร้าง QR ไม่สำเร็จ — ใช้ลิงก์ด้านล่างแทน'; }
+                },
+                preConfirm: function () {
+                    copyText(URL_BOOK).then(function () { const b = Swal.getConfirmButton(); if (b) { b.textContent = 'คัดลอกแล้ว ✓'; setTimeout(function () { try { b.textContent = 'คัดลอกลิงก์'; } catch (e) { } }, 1800); } });
+                    return false;   // ไม่ปิดป๊อบอัพ
+                }
+            });
+        });
+    }
+    bind();
+})();
+</script>
+<!-- ===== จบ LOGIN-BOOK ===== -->
                     <div class="atx-help">มีปัญหาในการเข้าใช้งาน? ติดต่อผู้ดูแลระบบ · Kraiwich C. 063-313-8036</div>
                 </div>
             </div>
