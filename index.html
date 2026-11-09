@@ -24418,7 +24418,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
         if (!u) return false;
         if (u.username === 'admin' || u.role === 'admin') return true;
         const v = u[K[kind]];
-        if (v === undefined || v === null || v === '') return LEGACY_ALLOW;   // ยังไม่เคยตั้งค่า
+        if (v === undefined || v === null || v === '') return kind === 'upload' ? false : LEGACY_ALLOW;
         return isTrue(v);
     }
     window.lgPlanAllowed = allowed;
@@ -24434,6 +24434,8 @@ renderLGTagPrintWindow = function(tags, printWin) {
         const file = pane.querySelector('input[type=file][onchange*="handleLGPlanFileUpload"]');
         setHide(file ? file.closest('label') : null, !allowed('upload'));
         setHide(pane.querySelector('button[onclick*="downloadLGPlanTemplate"]'), !allowed('upload'));
+        setHide(document.getElementById('nav-lg-matching-item'), !allowed('upload'));   // ซ่อนเมนู LG Matching ทั้งเมนู ถ้าไม่มีสิทธิ์อัปโหลดแพลน
+        if (!allowed('upload') && pane.classList.contains('active')) { const d0 = document.getElementById('pills-dashboard-tab'); if (d0) d0.click(); }
         setHide(pane.querySelector('button[onclick*="printLGPlanSheet"]'), !allowed('printPlan'));
         setHide(pane.querySelector('button[onclick*="printLGTags"]'), !allowed('printTags'));
         const mf = pane.querySelector('#lg-manual-form');
@@ -29106,7 +29108,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
     ];
     const EXTRA_KEYS = ['canReceiveLG', 'canBackdateLGReceive', 'canReturnLGTag', 'canLGPrintTags', 'canLGUploadPlan', 'canLGManualPlan', 'canLGPrintPlan', 'canLGEditPlan', 'canManageArchive'];
     CATS[CATS.length - 1].items.push(['canManageArchive', 'จัดการ Archive ประวัติเก่า', 'ย้ายล็อตที่ปิดจบแล้วไปเก็บใน Archive', 'archive']);
-    const LEGACY_KEYS = ['canLGPrintTags', 'canLGUploadPlan', 'canLGManualPlan', 'canLGPrintPlan'];
+    const LEGACY_KEYS = ['canLGPrintTags', 'canLGManualPlan', 'canLGPrintPlan'];
     const onOf = (u, k) => {
         const v = u ? u[k] : undefined;
         if (LEGACY_KEYS.indexOf(k) >= 0 && window.__lgPlanPermLegacy && u && u.username && (v === undefined || v === null || v === '')) return true;
@@ -39750,7 +39752,7 @@ window.pkFilter = window.pkFilter || 'all';
         canLGPrintTags: 'ปริ้นแท็ก LG', canLGUploadPlan: 'อัปโหลดแพลน LG', canLGManualPlan: 'เพิ่มแพลน LG ด้วยมือ', canLGPrintPlan: 'ปริ้นแพลน LG', canLGEditPlan: 'แก้ไขยอด / ยกเลิกแพลน LG',
         canManageProducts: 'จัดการสินค้า', canForecast: 'อัปโหลด Forecast', canManageUsers: 'จัดการผู้ใช้', canManageAnnouncements: 'จัดการประกาศ', canManageSupport: 'ดูรายการแจ้งปัญหา', canManageArchive: 'จัดการ Archive ประวัติเก่า'
     };
-    const LEGACY_ON = ['canLGPrintTags', 'canLGUploadPlan', 'canLGManualPlan', 'canLGPrintPlan'];   // ยังไม่เคยตั้งค่า = เปิดอยู่ (ตามแพตช์ LG เดิม)
+    const LEGACY_ON = ['canLGPrintTags', 'canLGManualPlan', 'canLGPrintPlan'];   // ยังไม่เคยตั้งค่า = เปิดอยู่ (ตามแพตช์ LG เดิม)
     const BASE_KEYS = ['canImport', 'canExport', 'canViewHistory', 'canCountStock', 'canManageProducts', 'canManageUsers', 'canManageAnnouncements', 'canManageDeliveryPlan', 'canConvertPart', 'canManageRack', 'canForecast', 'canManageLotHold', 'canManageSupport', 'canCheckLGTags'];
     let dlg = null, busy = false;
  
