@@ -26364,7 +26364,8 @@ renderLGTagPrintWindow = function(tags, printWin) {
     // ---------- ช่องสแกน: ไม่เด้งคีย์บอร์ด + เคอร์เซอร์อยู่ในช่องตลอด ----------
     function applyInput() {
         const i = $('lgr-input'); if (!i) return;
-        i.setAttribute('inputmode', kbOn ? 'text' : 'none');
+        i.setAttribute('inputmode', 'text');
+         if (!i.__qk) { i.__qk = 1; i.addEventListener('focus', () => { if (kbOn) return; i.readOnly = true; setTimeout(() => { i.readOnly = false; }, 50); }); }   // PDA-KEY
         i.setAttribute('autocomplete', 'off'); i.setAttribute('autocapitalize', 'off'); i.setAttribute('autocorrect', 'off');
         i.setAttribute('spellcheck', 'false'); i.setAttribute('enterkeyhint', 'done');
         i.placeholder = L('🔦 ยิงแท็กได้เลย', '🔦 Scan a tag');
