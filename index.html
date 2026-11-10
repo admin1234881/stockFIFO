@@ -20534,9 +20534,10 @@ renderLGTagPrintWindow = function(tags, printWin) {
     async function receive(raw) {
         raw = String(raw || '').trim();
         if (!raw) return;
+        if (window.lgRackHook && await window.lgRackHook(raw, { card, esc, db, callAppsScript, parse: parseLGBarcode, me: (typeof currentUser !== 'undefined' && currentUser) ? currentUser.username : '' })) return;   // LG-RACK-SCAN
         const p = parseLGBarcode(raw);
         if (!p || !p.docNumber || !p.groups || !p.groups.length) {
-            card('err', '❌ อ่านบาร์โค้ดไม่ได้', '<div class="lgr-note">ลองสแกนใหม่อีกครั้ง</div>');
+            card('err', '❌ อ่านบาร์โค้ดไม่ได้', '<div class="lgr-note">ลองสแกนใหม่อีกครั้ง</div><div class="lgr-note" style="font-size:12px;word-break:break-all">[ตรวจ] ยาว ' + raw.length + ' ตัว · ตัวคั่น ¿ = ' + (raw.split('¿').length - 1) + ' · ตัวควบคุม = ' + (raw.match(/[\x00-\x1F]/g) || []).length + '<br>' + esc(raw.replace(/[^\x20-\x7E]/g, function (c) { return '‹' + c.charCodeAt(0).toString(16) + '›'; })) + '</div>');
             return;
         }
         const doc = String(p.docNumber).trim().toUpperCase();
@@ -22806,7 +22807,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
         if (!canBack()) return;
         if (!document.getElementById('lgb-style')) { const st = document.createElement('style'); st.id = 'lgb-style'; st.textContent = CSS; document.head.appendChild(st); }
         if (ov) ov.remove();
-        S.filter = 'all'; S.q = ''; S.sel = new Set(); S.form = false; S.busy = false; S.msg = ''; S.fmsg = ''; S.fv = { ri: '0', other: '', note: '', at: '', useOut: false, big: false };
+        S.filter = 'all'; S.q = ''; S.date = ''; S.sel = new Set(); S.form = false; S.busy = false; S.msg = ''; S.fmsg = ''; S.fv = { ri: '0', other: '', note: '', at: '', useOut: false, big: false };
         ov = document.createElement('div'); ov.id = 'lgb-ov';
         ov.addEventListener('mousedown', (e) => { if (e.target === ov && !S.busy) closeModal(); });
         document.body.appendChild(ov);
@@ -27718,7 +27719,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
     const hh = (h) => (Math.round(h * 10) / 10).toFixed(1);
     const fullSent = (st) => st.rows.length > 0 && st.unsent <= 0;
 
-    // ---------- ข้อมูล UHT ----------
+    // ---------- ข้อมูล UPH ----------
     function allRows() {
         try { if (db && Array.isArray(db.lgLineUHT) && db.lgLineUHT.length) return db.lgLineUHT; } catch (e) { }
         try { return JSON.parse(localStorage.getItem(LSK) || '[]') || []; } catch (e) { return []; }
@@ -27907,16 +27908,16 @@ renderLGTagPrintWindow = function(tags, printWin) {
     const THAI = /[฀-๿]/;
     // [ไทย, อังกฤษ] เรียงจากวลียาวไปสั้น (ตัวสั้นๆ ที่เป็นปุ่มล้วนใช้ ^...$)
     const TT = [
-        [/ระบบเอา "ยอดชิ้น ÷ UHT" = อยู่ได้กี่ชั่วโมง เช่น UHT 400 ส่งเข้า 800 ชิ้น = 2\.0 ชม\. ถ้าต่ำกว่าขั้นต่ำจะเตือนที่แดชบอร์ด หน้าแพลน ตอนปริ้นแท็ก และหน้ารับแท็ก \(เว้นว่าง = ไม่ตั้ง ไม่เตือน\)/g, 'The system divides pieces by UHT to get how many hours the work lasts, e.g. UHT 400 with 800 pcs sent = 2.0 h. Below the minimum it warns on the dashboard, plan page, when printing tags and on the receive page (blank = not set, no warning).'],
-        [/Google Script ยังไม่ได้อัปเดต \(ยังไม่รู้จักคำสั่งบันทึก UHT\) ให้วางไฟล์ Google Script ตัวใหม่แล้ว Deploy เวอร์ชันใหม่ก่อน/g, 'Google Script is not updated yet (it does not know the save-UHT command). Paste the new Google Script file and deploy a new version first.'],
+        [/ระบบเอา "ยอดชิ้น ÷ UPH" = อยู่ได้กี่ชั่วโมง เช่น UPH 400 ส่งเข้า 800 ชิ้น = 2\.0 ชม\. ถ้าต่ำกว่าขั้นต่ำจะเตือนที่แดชบอร์ด หน้าแพลน ตอนปริ้นแท็ก และหน้ารับแท็ก \(เว้นว่าง = ไม่ตั้ง ไม่เตือน\)/g, 'The system divides pieces by UPH to get how many hours the work lasts, e.g. UPH 400 with 800 pcs sent = 2.0 h. Below the minimum it warns on the dashboard, plan page, when printing tags and on the receive page (blank = not set, no warning).'],
+        [/Google Script ยังไม่ได้อัปเดต \(ยังไม่รู้จักคำสั่งบันทึก UPH\) ให้วางไฟล์ Google Script ตัวใหม่แล้ว Deploy เวอร์ชันใหม่ก่อน/g, 'Google Script is not updated yet (it does not know the save-UPH command). Paste the new Google Script file and deploy a new version first.'],
         [/Google Script ยังไม่ได้อัปเดต \(ยังไม่รู้จักคำสั่งบันทึกความคืบหน้า\) ให้วางไฟล์ Google Script ตัวใหม่แล้ว Deploy เวอร์ชันใหม่ก่อน/g, 'Google Script is not updated yet (it does not know the save-progress command). Paste the new Google Script file and deploy a new version first.'],
-        [/ต้องมีสิทธิ์ "แก้ไขยอด \/ ยกเลิกแพลน LG" ถึงจะตั้งค่า UHT ได้/g, 'You need the "edit qty / cancel LG plan" permission to set UHT.'],
+        [/ต้องมีสิทธิ์ "แก้ไขยอด \/ ยกเลิกแพลน LG" ถึงจะตั้งค่า UPH ได้/g, 'You need the "edit qty / cancel LG plan" permission to set UPH.'],
         [/ต้องเป็นผู้ดูแล หรือมีสิทธิ์รับแท็ก LG \/ แก้ไขแพลน LG ถึงจะอัปเดตได้/g, 'Only admins or users allowed to receive LG tags / edit LG plans can update this.'],
-        [/ยังไม่ได้ตั้ง UHT ของไลน์นี้ จึงยังคำนวณชั่วโมงไม่ได้/g, 'UHT is not set for this line, so hours cannot be calculated'],
+        [/ยังไม่ได้ตั้ง UPH ของไลน์นี้ จึงยังคำนวณชั่วโมงไม่ได้/g, 'UPH is not set for this line, so hours cannot be calculated'],
         [/ยังไม่ได้เปลี่ยนอะไร ติ๊ก WO ที่ผลิตครบก่อน/g, 'Nothing changed yet. Tick the fully produced WOs first.'],
         [/ยังไม่มีไลน์ในแพลน เพิ่มชื่อไลน์ด้านล่างได้เลย/g, 'No lines in the plan yet. Add a line name below.'],
         [/ถ้ายอดนี้ถูกต้องแล้ว กด "ปริ้นต่อ" ได้เลย/g, 'If this quantity is correct, press "Print anyway".'],
-        [/UHT = จำนวนชิ้นที่ไลน์รันได้ต่อชั่วโมง/g, 'UHT = pieces per hour the line can run'],
+        [/UPH = จำนวนชิ้นที่ไลน์รันได้ต่อชั่วโมง/g, 'UPH = pieces per hour the line can run'],
         [/กด Shift ค้างแล้วติ๊ก = ติ๊กเป็นช่วง/g, 'Hold Shift and tick = tick a range'],
         [/ติ๊ก WO ที่ผลิตครบ \(ติ๊กได้หลายอัน\)/g, 'tick the WOs that are fully produced (several allowed)'],
         [/บันทึกความคืบหน้าการผลิต (\d+) ไลน์/g, 'Production progress saved for $1 line(s)'],
@@ -27924,36 +27925,36 @@ renderLGTagPrintWindow = function(tags, printWin) {
         [/งานที่เหลือที่ LG อยู่ได้ต่ำกว่า /g, 'LG’s remaining work lasts less than '],
         [/แพลนที่เหลืออยู่ได้ \(ขั้นต่ำ /g, 'Plan remaining lasts (min '],
         [/งานในแพลนอยู่ได้ไม่ถึง /g, 'Plan work lasts less than '],
-        [/ยังไม่ได้ตั้ง UHT ของไลน์ใดเลย/g, 'No line has a UHT set yet'],
+        [/ยังไม่ได้ตั้ง UPH ของไลน์ใดเลย/g, 'No line has a UPH set yet'],
         [/ยังไม่มีแพลนของวันที่เลือก/g, 'No plan for the selected date'],
         [/ยังไม่มีแพลนของไลน์ใดเลย/g, 'has no plan for any line'],
         [/ยังไม่ระบุว่า LG ผลิตถึงไหน/g, 'LG production progress not specified'],
         [/ยังไม่ระบุว่าผลิตถึงไหน/g, 'progress not specified'],
         [/แพลนที่ LG ยังไม่ได้ผลิต/g, 'Plan not yet produced by LG'],
         [/WO ไหนที่ LG ผลิตแล้ว\?/g, 'Which WOs has LG produced?'],
-        [/ตั้งค่า UHT ของแต่ละไลน์/g, 'UHT settings per line'],
+        [/ตั้งค่า UPH ของแต่ละไลน์/g, 'UPH settings per line'],
         [/เพิ่มไลน์ใหม่ เช่น A7/g, 'Add a new line, e.g. A7'],
         [/ขั้นต่ำต้องมากกว่า 0 ชั่วโมง/g, 'Minimum must be greater than 0 hours'],
         [/รอสักครู่ อย่าเพิ่งปิดหน้านี้/g, 'Please wait, do not close this page'],
         [/กำลังบันทึกความคืบหน้า\.\.\./g, 'Saving progress...'],
-        [/กำลังบันทึก UHT\.\.\./g, 'Saving UHT...'],
+        [/กำลังบันทึก UPH\.\.\./g, 'Saving UPH...'],
         [/กำลังบันทึก\.\.\./g, 'Saving...'],
         [/ตรวจสอบก่อนปริ้นแท็ก/g, 'Check before printing tags'],
         [/กลับไปเพิ่มยอดแพลน/g, 'Back to add plan qty'],
         [/ติ๊ก WO ที่ LG ผลิตแล้ว/g, 'Tick WOs LG has produced'],
         [/ขั้นต่ำที่ต้องอยู่ได้/g, 'Minimum it must last'],
         [/\(ให้หัวหน้าตั้งค่าให้\)/g, '(ask your supervisor to set it)'],
-        [/ — กด "ตั้งค่า UHT"/g, ' — press "UHT settings"'],
+        [/ — กด "ตั้งค่า UPH"/g, ' — press "UPH settings"'],
         [/เหลืองานอยู่ได้ /g, 'Remaining work lasts '],
         [/อัปเดตนานแล้ว/g, 'Not updated for'],
         [/ไลน์นี้ไม่มี WO/g, 'No WOs on this line'],
         [/ติ๊กครบทุก WO/g, 'Tick all WOs'],
         [/แพลนวันที่ /g, 'Plan date '],
         [/ยังไม่เริ่มผลิต/g, 'Not started'],
-        [/ยังไม่ตั้ง UHT/g, 'UHT not set'],
+        [/ยังไม่ตั้ง UPH/g, 'UPH not set'],
         [/ยังไม่มีแพลน/g, 'No plan'],
         [/บันทึกไม่สำเร็จ/g, 'Save failed'],
-        [/บันทึก UHT แล้ว/g, 'UHT saved'],
+        [/บันทึก UPH แล้ว/g, 'UPH saved'],
         [/เหลืองาน /g, 'Remaining '],
         [/ล้างทั้งหมด/g, 'Clear all'],
         [/กำลังผลิต /g, 'in production '],
@@ -27976,7 +27977,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
         [/ไม่มีสิทธิ์/g, 'No permission'],
         [/\+ เพิ่ม/g, '+ Add'],
         [/เช่น 400/g, 'e.g. 400'],
-        [/ตั้งค่า UHT/g, 'UHT settings'],
+        [/ตั้งค่า UPH/g, 'UPH settings'],
         [/^\s*อัปเดตแล้ว\s*$/g, 'Updated'],
         [/^\s*อัปเดตผลิต\s*$/g, 'Update production'],
         [/^\s*อัปเดต\s*$/g, 'Update'],
@@ -28036,9 +28037,9 @@ renderLGTagPrintWindow = function(tags, printWin) {
     }
     function chipHtml(line, qty, label) {
         const u = uhtOf(line);
-        if (!u) return `<span class="lgu-chip lgu-none">ไลน์ ${esc(line)} <small>ยังไม่ตั้ง UHT</small></span>`;
+        if (!u) return `<span class="lgu-chip lgu-none">ไลน์ ${esc(line)} <small>ยังไม่ตั้ง UPH</small></span>`;
         const h = qty / u, s = status(h);
-        return `<span class="lgu-chip lgu-${s}" title="${esc(label || '')} ${num(qty)} ÷ UHT ${num(u)} ต่อชม.">ไลน์ ${esc(line)} <b>${hh(h)} ชม.</b> <small>${num(qty)} / ${num(u)}</small></span>`;
+        return `<span class="lgu-chip lgu-${s}" title="${esc(label || '')} ${num(qty)} ÷ UPH ${num(u)} ต่อชม.">ไลน์ ${esc(line)} <b>${hh(h)} ชม.</b> <small>${num(qty)} / ${num(u)}</small></span>`;
     }
 
 
@@ -28056,18 +28057,18 @@ renderLGTagPrintWindow = function(tags, printWin) {
             html: `<div class="lgu-hd warn"><div class="ic"><i class="bi bi-x-octagon-fill"></i></div><div><h3>บันทึกไม่สำเร็จ</h3></div></div><div class="lgu-bd" style="padding-bottom:10px;font-size:.88rem;color:#475569">${esc(m)}</div>` });
     }
 
-    // ---------- หน้าต่างตั้งค่า UHT ----------
+    // ---------- หน้าต่างตั้งค่า UPH ----------
     async function openSettings() {
-        if (!canEdit()) { Swal.fire(tr('ไม่มีสิทธิ์'), tr('ต้องมีสิทธิ์ "แก้ไขยอด / ยกเลิกแพลน LG" ถึงจะตั้งค่า UHT ได้'), 'warning'); return; }
+        if (!canEdit()) { Swal.fire(tr('ไม่มีสิทธิ์'), tr('ต้องมีสิทธิ์ "แก้ไขยอด / ยกเลิกแพลน LG" ถึงจะตั้งค่า UPH ได้'), 'warning'); return; }
         const lines = planLines();
         const row = (l) => `<tr data-l="${esc(l)}"><td style="font-weight:800">ไลน์ ${esc(l)}</td><td style="width:42%"><input type="number" min="0" step="1" inputmode="numeric" placeholder="เช่น 400" value="${uhtOf(l) || ''}"></td><td style="color:#64748b;font-size:.78rem">ชิ้น/ชม.</td></tr>`;
         const res = await Swal.fire({
             customClass: { popup: 'lgu-pop' }, showCancelButton: true, confirmButtonText: tr('บันทึก'), cancelButtonText: tr('ยกเลิก'), buttonsStyling: true,
-            html: `<div class="lgu-hd"><div class="ic"><i class="bi bi-speedometer2"></i></div><div><h3>ตั้งค่า UHT ของแต่ละไลน์</h3><p>UHT = จำนวนชิ้นที่ไลน์รันได้ต่อชั่วโมง</p></div></div>
-            <div class="lgu-bd"><table class="lgu-tb"><thead><tr><th>ไลน์</th><th style="text-align:right">UHT</th><th></th></tr></thead><tbody id="lgu-rows">${lines.map(row).join('') || '<tr><td colspan="3" style="color:#8a97ab;padding:12px 6px">ยังไม่มีไลน์ในแพลน เพิ่มชื่อไลน์ด้านล่างได้เลย</td></tr>'}</tbody></table>
+            html: `<div class="lgu-hd"><div class="ic"><i class="bi bi-speedometer2"></i></div><div><h3>ตั้งค่า UPH ของแต่ละไลน์</h3><p>UPH = จำนวนชิ้นที่ไลน์รันได้ต่อชั่วโมง</p></div></div>
+            <div class="lgu-bd"><table class="lgu-tb"><thead><tr><th>ไลน์</th><th style="text-align:right">UPH</th><th></th></tr></thead><tbody id="lgu-rows">${lines.map(row).join('') || '<tr><td colspan="3" style="color:#8a97ab;padding:12px 6px">ยังไม่มีไลน์ในแพลน เพิ่มชื่อไลน์ด้านล่างได้เลย</td></tr>'}</tbody></table>
             <div class="lgu-add"><input id="lgu-new" placeholder="เพิ่มไลน์ใหม่ เช่น A7"><button type="button" id="lgu-addbtn">+ เพิ่ม</button></div>
             <table class="lgu-tb" style="margin-top:12px"><tbody><tr><td style="font-weight:800">ขั้นต่ำที่ต้องอยู่ได้</td><td style="width:42%"><input id="lgu-min" type="number" min="0.5" step="0.5" value="${minH()}"></td><td style="color:#64748b;font-size:.78rem">ชั่วโมง</td></tr></tbody></table>
-            <p class="lgu-note">ระบบเอา "ยอดชิ้น ÷ UHT" = อยู่ได้กี่ชั่วโมง เช่น UHT 400 ส่งเข้า 800 ชิ้น = 2.0 ชม. ถ้าต่ำกว่าขั้นต่ำจะเตือนที่แดชบอร์ด หน้าแพลน ตอนปริ้นแท็ก และหน้ารับแท็ก (เว้นว่าง = ไม่ตั้ง ไม่เตือน)</p></div>`,
+            <p class="lgu-note">ระบบเอา "ยอดชิ้น ÷ UPH" = อยู่ได้กี่ชั่วโมง เช่น UPH 400 ส่งเข้า 800 ชิ้น = 2.0 ชม. ถ้าต่ำกว่าขั้นต่ำจะเตือนที่แดชบอร์ด หน้าแพลน ตอนปริ้นแท็ก และหน้ารับแท็ก (เว้นว่าง = ไม่ตั้ง ไม่เตือน)</p></div>`,
             didOpen: () => {
                 const tb = document.getElementById('lgu-rows');
                 document.getElementById('lgu-addbtn').addEventListener('click', () => {
@@ -28089,16 +28090,16 @@ renderLGTagPrintWindow = function(tags, printWin) {
         });
         if (!res.isConfirmed || !res.value) return;
         try {
-            popSaving('กำลังบันทึก UHT...');
+            popSaving('กำลังบันทึก UPH...');
             const by = (typeof currentUser !== 'undefined' && currentUser && currentUser.username) || '';
             await callAppsScript('saveLGLineUHT', { rows: res.value, by });
             db.lgLineUHT = res.value.map(r => ({ line: r.line, uht: r.uht, updatedBy: by, updatedAt: new Date().toISOString() }));
             try { localStorage.setItem(LSK, JSON.stringify(db.lgLineUHT)); } catch (e) { }
-            popDone('บันทึก UHT แล้ว', 'ขั้นต่ำที่ต้องอยู่ได้ ' + res.value.find(x => x.line === MINKEY).uht + ' ชั่วโมง', res.value.filter(x => x.line !== MINKEY).map(x => `<div class="lgu-rs none"><span class="nm">ไลน์ ${esc(x.line)}</span><span class="hr">${num(x.uht)} <small style="display:inline">ชิ้น/ชม.</small></span></div>`).join(''));
+            popDone('บันทึก UPH แล้ว', 'ขั้นต่ำที่ต้องอยู่ได้ ' + res.value.find(x => x.line === MINKEY).uht + ' ชั่วโมง', res.value.filter(x => x.line !== MINKEY).map(x => `<div class="lgu-rs none"><span class="nm">ไลน์ ${esc(x.line)}</span><span class="hr">${num(x.uht)} <small style="display:inline">ชิ้น/ชม.</small></span></div>`).join(''));
             refreshAll();
         } catch (e) {
             const m = String((e && e.message) || e);
-            popErr(/ไม่รู้จัก|unknown|Invalid action|action/i.test(m) ? 'Google Script ยังไม่ได้อัปเดต (ยังไม่รู้จักคำสั่งบันทึก UHT) ให้วางไฟล์ Google Script ตัวใหม่แล้ว Deploy เวอร์ชันใหม่ก่อน' : m);
+            popErr(/ไม่รู้จัก|unknown|Invalid action|action/i.test(m) ? 'Google Script ยังไม่ได้อัปเดต (ยังไม่รู้จักคำสั่งบันทึก UPH) ให้วางไฟล์ Google Script ตัวใหม่แล้ว Deploy เวอร์ชันใหม่ก่อน' : m);
         }
     }
     window.lgUhtSettings = openSettings;
@@ -28151,10 +28152,10 @@ renderLGTagPrintWindow = function(tags, printWin) {
                     const pv = document.getElementById('lgu-pv'), pg = toPg(cur), st = lineState(cur, date, pg), u = uhtOf(cur);
                      if (st.complete) { pv.className = 'lgu-pv lgu-ok'; pv.innerHTML = `ผลิตครบ ${st.doneN}/${st.rows.length} WO<small>ส่งเข้า ${num(st.sent)} · LG ผลิตแล้ว ${num(st.produced)}</small>`; return; }
                      if (fullSent(st)) { pv.className = 'lgu-pv lgu-ok'; pv.innerHTML = `ส่งครบแพลน 100%<small>ส่งเข้า ${num(st.sent)} · LG ผลิตแล้ว ${num(st.produced)} · ไม่มีแพลนค้างส่งแล้ว</small>`; return; }
-                    if (!u) { pv.className = 'lgu-pv lgu-none'; pv.innerHTML = `ผลิตครบ ${st.doneN}/${st.rows.length} WO · ส่งเข้า ${num(st.sent)} · เหลือ ${num(st.rem)} ชิ้น<small>ยังไม่ได้ตั้ง UHT ของไลน์นี้ จึงยังคำนวณชั่วโมงไม่ได้</small>`; return; }
+                    if (!u) { pv.className = 'lgu-pv lgu-none'; pv.innerHTML = `ผลิตครบ ${st.doneN}/${st.rows.length} WO · ส่งเข้า ${num(st.sent)} · เหลือ ${num(st.rem)} ชิ้น<small>ยังไม่ได้ตั้ง UPH ของไลน์นี้ จึงยังคำนวณชั่วโมงไม่ได้</small>`; return; }
                     const h = st.rem / u, s = status(h);
                     pv.className = 'lgu-pv lgu-' + s;
-                    pv.innerHTML = `เหลืองานอยู่ได้ ${hh(h)} ชม.<small>ส่งเข้า ${num(st.sent)} − LG ผลิตแล้ว ${num(st.produced)} = เหลือ ${num(st.rem)} ชิ้น ÷ UHT ${num(u)}</small>`;
+                    pv.innerHTML = `เหลืองานอยู่ได้ ${hh(h)} ชม.<small>ส่งเข้า ${num(st.sent)} − LG ผลิตแล้ว ${num(st.produced)} = เหลือ ${num(st.rem)} ชิ้น ÷ UPH ${num(u)}</small>`;
                 }
                 wos.addEventListener('click', (e) => {
                     const ck = e.target.closest && e.target.closest('input.ck'), tx = e.target.closest && e.target.closest('.tx');
@@ -28200,7 +28201,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
             try { localStorage.setItem(PLSK, JSON.stringify(db.lgLineProgress)); } catch (e) { }
             const body = list.map(v => {
                 const st = lineState(v.line, date), u = uhtOf(v.line), full = fullSent(st), h = u ? st.rem / u : 0, s = full ? 'ok' : (u ? status(h) : 'none');
-                return `<div class="lgu-rs ${s}"><span class="nm">ไลน์ ${esc(v.line)}</span><span style="font-size:.78rem;color:#475569;flex:1">ผลิตครบ <b>${st.doneN}/${st.rows.length}</b> WO<small>เหลือ ${num(st.rem)} ชิ้น${u ? ' ÷ UHT ' + num(u) : ''}</small></span><span class="hr">${full ? '100%' : (u ? hh(h) + ' ชม.' : 'ยังไม่ตั้ง UHT')}</span></div>`;
+                return `<div class="lgu-rs ${s}"><span class="nm">ไลน์ ${esc(v.line)}</span><span style="font-size:.78rem;color:#475569;flex:1">ผลิตครบ <b>${st.doneN}/${st.rows.length}</b> WO<small>เหลือ ${num(st.rem)} ชิ้น${u ? ' ÷ UPH ' + num(u) : ''}</small></span><span class="hr">${full ? '100%' : (u ? hh(h) + ' ชม.' : 'ยังไม่ตั้ง UPH')}</span></div>`;
             }).join('');
             popDone('อัปเดตแล้ว', 'บันทึกความคืบหน้าการผลิต ' + list.length + ' ไลน์', body);
             refreshAll();
@@ -28229,7 +28230,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
         }
         const date = planDateNow();
         const L = planLineStates(date);
-        const btn = (canEdit() ? `<button type="button" class="btn btn-sm btn-outline-primary fw-bold" id="lgu-set-btn"><i class="bi bi-gear-fill me-1"></i>ตั้งค่า UHT</button>` : '')
+        const btn = (canEdit() ? `<button type="button" class="btn btn-sm btn-outline-primary fw-bold" id="lgu-set-btn"><i class="bi bi-gear-fill me-1"></i>ตั้งค่า UPH</button>` : '')
             + (canProg() && L.length ? ` <button type="button" class="btn btn-sm btn-outline-success fw-bold" id="lgu-prog-btn"><i class="bi bi-check2-square me-1"></i>ติ๊ก WO ที่ LG ผลิตแล้ว</button>` : '');
 const sig = date + '|' + L.map(x => x.line + ':' + x.st.planLeft + ':' + x.st.planTotal + ':' + x.st.unsent + ':' + uhtOf(x.line) + ':' + (x.st.hasProg ? x.st.produced : 'n')).join(',') + '|' + minH() + '|' + btn.length;
         if (strip.getAttribute('data-sig') === sig) return;
@@ -28256,12 +28257,12 @@ const sig = date + '|' + L.map(x => x.line + ':' + x.st.planLeft + ':' + x.st.pl
                     const r = await Swal.fire({
                         customClass: { popup: 'lgu-pop' }, showCancelButton: true, confirmButtonText: tr('ปริ้นต่อ'), cancelButtonText: tr('กลับไปเพิ่มยอดแพลน'), reverseButtons: true,
                         html: `<div class="lgu-hd warn"><div class="ic"><i class="bi bi-exclamation-triangle-fill"></i></div><div><h3>งานในแพลนอยู่ได้ไม่ถึง ${minH()} ชั่วโมง</h3><p>ตรวจสอบก่อนปริ้นแท็ก</p></div></div>
-                        <div class="lgu-bd">${w.map(x => `<div class="lgu-wl"><span>ไลน์ <b>${esc(x.line)}</b> · ${x.prog ? 'แพลนที่ LG ยังไม่ได้ผลิต ' : ''}${num(x.qty)} ÷ UHT ${num(x.uht)}</span><span><b>${hh(x.h)} ชม.</b> · ควรเพิ่มอีก ~${num(x.need)} ชิ้น</span></div>`).join('')}
+                        <div class="lgu-bd">${w.map(x => `<div class="lgu-wl"><span>ไลน์ <b>${esc(x.line)}</b> · ${x.prog ? 'แพลนที่ LG ยังไม่ได้ผลิต ' : ''}${num(x.qty)} ÷ UPH ${num(x.uht)}</span><span><b>${hh(x.h)} ชม.</b> · ควรเพิ่มอีก ~${num(x.need)} ชิ้น</span></div>`).join('')}
                         <p class="lgu-note">ถ้ายอดนี้ถูกต้องแล้ว กด "ปริ้นต่อ" ได้เลย</p></div>`
                     });
                     if (!r.isConfirmed) return;
                 }
-            } catch (e) { console.warn('LG-UHT print check', e); }
+            } catch (e) { console.warn('LG-UPH print check', e); }
 return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
         };
         if (_acc) {
@@ -28287,14 +28288,14 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
             let html;
              if (st.complete) html = `<div class="lgu-ln ok"><i class="bi bi-check-circle-fill"></i> ผลิตครบ <b>${st.doneN}/${st.rows.length}</b> WO</div>`;
              else if (fullSent(st)) html = `<div class="lgu-ln ok"><i class="bi bi-check-circle-fill"></i> <b>ส่งครบแพลน 100%</b> <span style="opacity:.75">(ส่งเข้า ${num(st.sent)} / แพลน ${num(st.planTotal)})</span></div>`;
-            else if (!u) html = `<div class="lgu-ln none"><i class="bi bi-speedometer2"></i> ยังไม่ตั้ง UHT</div>`;
+            else if (!u) html = `<div class="lgu-ln none"><i class="bi bi-speedometer2"></i> ยังไม่ตั้ง UPH</div>`;
             else {
                 const h = st.rem / u, s = (st.sent > 0 || st.hasProg) ? status(h) : 'none';
                 const age = st.hasProg ? agoMin(st.pg.updatedAt) : null;
                 const where = whereHtml(st);
                 const stale = age !== null && age > 60 ? ` <span class="lgu-stale">· อัปเดตนานแล้ว ${Math.floor(age / 60)} ชม.</span>` : '';
                 const upd = st.hasProg && st.pg.updatedAt ? ` · อัปเดต ${hm2(st.pg.updatedAt)}` : '';
-                html = `<div class="lgu-ln ${s}"><i class="bi bi-speedometer2"></i> เหลืองานอยู่ได้ <b>${hh(h)} ชม.</b> <span style="opacity:.75">(ส่งเข้า ${num(st.sent)} − LG ผลิตแล้ว ${num(st.produced)} = ${num(st.rem)} ÷ UHT ${num(u)}${where ? ' · ' + where : ' · ยังไม่ระบุว่าผลิตถึงไหน'}${upd})</span>${stale}${canProg() ? ` <button type="button" class="lgu-mini" data-lgu-prog="${esc(l)}">อัปเดต</button>` : ''}</div>`;
+                html = `<div class="lgu-ln ${s}"><i class="bi bi-speedometer2"></i> เหลืองานอยู่ได้ <b>${hh(h)} ชม.</b> <span style="opacity:.75">(ส่งเข้า ${num(st.sent)} − LG ผลิตแล้ว ${num(st.produced)} = ${num(st.rem)} ÷ UPH ${num(u)}${where ? ' · ' + where : ' · ยังไม่ระบุว่าผลิตถึงไหน'}${upd})</span>${stale}${canProg() ? ` <button type="button" class="lgu-mini" data-lgu-prog="${esc(l)}">อัปเดต</button>` : ''}</div>`;
                 if ((st.sent > 0 || st.hasProg) && h < minH()) low.push({ l, h, need: Math.min(st.unsent, Math.ceil(minH() * u - st.rem)) });
             }
             const bar = ln.querySelector('.lgd-bar');
@@ -28309,7 +28310,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
         const _rd = window.renderLGDashboard;
         window.renderLGDashboard = function () {
             const x = _rd.apply(this, arguments);
-            try { decorateDash(); } catch (e) { console.warn('LG-UHT dash', e); }
+            try { decorateDash(); } catch (e) { console.warn('LG-UPH dash', e); }
             return x;
         };
     }
@@ -28330,7 +28331,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
             const u = uhtOf(l), st = lineState(l, date);
             if (st.complete) return `<div class="r"><span class="nm">ไลน์ ${esc(l)}</span><span class="lgu-chip lgu-ok"><i class="bi bi-check-circle-fill"></i> ผลิตครบ <b>${st.doneN}/${st.rows.length}</b> WO</span></div>`;
             if (fullSent(st)) return `<div class="r"><span class="nm">ไลน์ ${esc(l)}</span><span class="lgu-chip lgu-ok"><i class="bi bi-check-circle-fill"></i> ส่งครบแพลน <b>100%</b> <small>${num(st.sent)} / ${num(st.planTotal)}</small></span></div>`;
-            if (!u) return `<div class="r"><span class="nm">ไลน์ ${esc(l)}</span><span class="lgu-chip lgu-none">ยังไม่ตั้ง UHT</span></div>`;
+            if (!u) return `<div class="r"><span class="nm">ไลน์ ${esc(l)}</span><span class="lgu-chip lgu-none">ยังไม่ตั้ง UPH</span></div>`;
             const h = st.rem / u, s = (st.sent > 0 || st.hasProg) ? status(h) : 'none';
             const age = st.hasProg ? agoMin(st.pg.updatedAt) : null;
             const where = whereHtml(st) || 'ยังไม่ระบุว่า LG ผลิตถึงไหน';
@@ -28338,12 +28339,12 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
             return `<div class="r"><span class="nm">ไลน์ ${esc(l)}</span>
                 <span class="lgu-chip lgu-${s}" title="ส่งเข้า ${num(st.sent)} − ผลิตแล้ว ${num(st.produced)}">เหลืองาน <b>${hh(h)} ชม.</b> <small>${num(st.rem)} ชิ้น</small></span>
                 <span style="font-size:.74rem;color:#475569">${where}</span>${stale}
-                <span style="font-size:.7rem;color:#8a97ab">ส่งเข้า ${num(st.sent)} · UHT ${num(u)}/ชม.</span>
+                <span style="font-size:.7rem;color:#8a97ab">ส่งเข้า ${num(st.sent)} · UPH ${num(u)}/ชม.</span>
                 ${canProg() ? `<button type="button" class="lgu-mini" data-lgu-prog="${esc(l)}">อัปเดตผลิต</button>` : ''}</div>`;
-        }).join('') || `<div class="hint">ยังไม่ได้ตั้ง UHT ของไลน์ใดเลย${canEdit() ? ' — กด "ตั้งค่า UHT"' : ' (ให้หัวหน้าตั้งค่าให้)'}</div>`;
+        }).join('') || `<div class="hint">ยังไม่ได้ตั้ง UPH ของไลน์ใดเลย${canEdit() ? ' — กด "ตั้งค่า UPH"' : ' (ให้หัวหน้าตั้งค่าให้)'}</div>`;
         const div = document.createElement('div');
         div.className = 'lgu-recv';
-        div.innerHTML = `<div class="h"><i class="bi bi-speedometer2"></i> งานที่เหลือที่ LG อยู่ได้กี่ชั่วโมง (ขั้นต่ำ ${minH()} ชม.)${canEdit() ? '<button type="button" data-lgu-set="1">ตั้งค่า UHT</button>' : ''}</div>${rows}`;
+        div.innerHTML = `<div class="h"><i class="bi bi-speedometer2"></i> งานที่เหลือที่ LG อยู่ได้กี่ชั่วโมง (ขั้นต่ำ ${minH()} ชม.)${canEdit() ? '<button type="button" data-lgu-set="1">ตั้งค่า UPH</button>' : ''}</div>${rows}`;
         hero.insertAdjacentElement('afterend', div);
         const b = div.querySelector('[data-lgu-set]'); if (b) b.addEventListener('click', openSettings);
         div.querySelectorAll('[data-lgu-prog]').forEach(x => x.addEventListener('click', () => openProgress(x.getAttribute('data-lgu-prog'), date)));
@@ -28353,7 +28354,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
         const box = document.getElementById('lgr3');
         if (!box || moRecv === box) return;
         moRecv = box;
-        new MutationObserver(() => { try { decorateRecv(); } catch (e) { console.warn('LG-UHT recv', e); } }).observe(box, { childList: true });
+        new MutationObserver(() => { try { decorateRecv(); } catch (e) { console.warn('LG-UPH recv', e); } }).observe(box, { childList: true });
         try { decorateRecv(); } catch (e) { }
     }
 
@@ -28374,7 +28375,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
     }
     setInterval(() => { try { if (lastLang !== isEn()) { lastLang = isEn(); refreshAll(); } drawPlanStrip(); watchRecv(); } catch (e) { } }, 1500);
 })();
-// ===== จบ LG-UHT =====
+// ===== จบ LG-UPH =====
 (function () {
     if (window.__lgUht) return; window.__lgUht = true;
 
@@ -28390,7 +28391,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
     const msOf = (v) => { if (!v) return null; const t = new Date(String(v)).getTime(); return isNaN(t) ? null : t; };
     const hh = (h) => (Math.round(h * 10) / 10).toFixed(1);
 
-    // ---------- ข้อมูล UHT ----------
+    // ---------- ข้อมูล UPH ----------
     function allRows() {
         try { if (db && Array.isArray(db.lgLineUHT) && db.lgLineUHT.length) return db.lgLineUHT; } catch (e) { }
         try { return JSON.parse(localStorage.getItem(LSK) || '[]') || []; } catch (e) { return []; }
@@ -28477,23 +28478,23 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
     }
     function chipHtml(line, qty, label) {
         const u = uhtOf(line);
-        if (!u) return `<span class="lgu-chip lgu-none">ไลน์ ${esc(line)} <small>ยังไม่ตั้ง UHT</small></span>`;
+        if (!u) return `<span class="lgu-chip lgu-none">ไลน์ ${esc(line)} <small>ยังไม่ตั้ง UPH</small></span>`;
         const h = qty / u, s = status(h);
-        return `<span class="lgu-chip lgu-${s}" title="${esc(label || '')} ${num(qty)} ÷ UHT ${num(u)} ต่อชม.">ไลน์ ${esc(line)} <b>${hh(h)} ชม.</b> <small>${num(qty)} / ${num(u)}</small></span>`;
+        return `<span class="lgu-chip lgu-${s}" title="${esc(label || '')} ${num(qty)} ÷ UPH ${num(u)} ต่อชม.">ไลน์ ${esc(line)} <b>${hh(h)} ชม.</b> <small>${num(qty)} / ${num(u)}</small></span>`;
     }
 
-    // ---------- หน้าต่างตั้งค่า UHT ----------
+    // ---------- หน้าต่างตั้งค่า UPH ----------
     async function openSettings() {
-        if (!canEdit()) { Swal.fire('ไม่มีสิทธิ์', 'ต้องมีสิทธิ์ "แก้ไขยอด / ยกเลิกแพลน LG" ถึงจะตั้งค่า UHT ได้', 'warning'); return; }
+        if (!canEdit()) { Swal.fire('ไม่มีสิทธิ์', 'ต้องมีสิทธิ์ "แก้ไขยอด / ยกเลิกแพลน LG" ถึงจะตั้งค่า UPH ได้', 'warning'); return; }
         const lines = planLines();
         const row = (l) => `<tr data-l="${esc(l)}"><td style="font-weight:800">ไลน์ ${esc(l)}</td><td style="width:42%"><input type="number" min="0" step="1" inputmode="numeric" placeholder="เช่น 400" value="${uhtOf(l) || ''}"></td><td style="color:#64748b;font-size:.78rem">ชิ้น/ชม.</td></tr>`;
         const res = await Swal.fire({
             customClass: { popup: 'lgu-pop' }, showCancelButton: true, confirmButtonText: 'บันทึก', cancelButtonText: 'ยกเลิก', buttonsStyling: true,
-            html: `<div class="lgu-hd"><div class="ic"><i class="bi bi-speedometer2"></i></div><div><h3>ตั้งค่า UHT ของแต่ละไลน์</h3><p>UHT = จำนวนชิ้นที่ไลน์รันได้ต่อชั่วโมง</p></div></div>
-            <div class="lgu-bd"><table class="lgu-tb"><thead><tr><th>ไลน์</th><th style="text-align:right">UHT</th><th></th></tr></thead><tbody id="lgu-rows">${lines.map(row).join('') || '<tr><td colspan="3" style="color:#8a97ab;padding:12px 6px">ยังไม่มีไลน์ในแพลน เพิ่มชื่อไลน์ด้านล่างได้เลย</td></tr>'}</tbody></table>
+            html: `<div class="lgu-hd"><div class="ic"><i class="bi bi-speedometer2"></i></div><div><h3>ตั้งค่า UPH ของแต่ละไลน์</h3><p>UPH = จำนวนชิ้นที่ไลน์รันได้ต่อชั่วโมง</p></div></div>
+            <div class="lgu-bd"><table class="lgu-tb"><thead><tr><th>ไลน์</th><th style="text-align:right">UPH</th><th></th></tr></thead><tbody id="lgu-rows">${lines.map(row).join('') || '<tr><td colspan="3" style="color:#8a97ab;padding:12px 6px">ยังไม่มีไลน์ในแพลน เพิ่มชื่อไลน์ด้านล่างได้เลย</td></tr>'}</tbody></table>
             <div class="lgu-add"><input id="lgu-new" placeholder="เพิ่มไลน์ใหม่ เช่น A7"><button type="button" id="lgu-addbtn">+ เพิ่ม</button></div>
             <table class="lgu-tb" style="margin-top:12px"><tbody><tr><td style="font-weight:800">ขั้นต่ำที่ต้องอยู่ได้</td><td style="width:42%"><input id="lgu-min" type="number" min="0.5" step="0.5" value="${minH()}"></td><td style="color:#64748b;font-size:.78rem">ชั่วโมง</td></tr></tbody></table>
-            <p class="lgu-note">ระบบเอา "ยอดชิ้น ÷ UHT" = อยู่ได้กี่ชั่วโมง เช่น UHT 400 ส่งเข้า 800 ชิ้น = 2.0 ชม. ถ้าต่ำกว่าขั้นต่ำจะเตือนที่แดชบอร์ด หน้าแพลน ตอนปริ้นแท็ก และหน้ารับแท็ก (เว้นว่าง = ไม่ตั้ง ไม่เตือน)</p></div>`,
+            <p class="lgu-note">ระบบเอา "ยอดชิ้น ÷ UPH" = อยู่ได้กี่ชั่วโมง เช่น UPH 400 ส่งเข้า 800 ชิ้น = 2.0 ชม. ถ้าต่ำกว่าขั้นต่ำจะเตือนที่แดชบอร์ด หน้าแพลน ตอนปริ้นแท็ก และหน้ารับแท็ก (เว้นว่าง = ไม่ตั้ง ไม่เตือน)</p></div>`,
             didOpen: () => {
                 const tb = document.getElementById('lgu-rows');
                 document.getElementById('lgu-addbtn').addEventListener('click', () => {
@@ -28520,11 +28521,11 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
             await callAppsScript('saveLGLineUHT', { rows: res.value, by });
             db.lgLineUHT = res.value.map(r => ({ line: r.line, uht: r.uht, updatedBy: by, updatedAt: new Date().toISOString() }));
             try { localStorage.setItem(LSK, JSON.stringify(db.lgLineUHT)); } catch (e) { }
-            Swal.fire({ icon: 'success', title: 'บันทึก UHT แล้ว', timer: 1200, showConfirmButton: false });
+            Swal.fire({ icon: 'success', title: 'บันทึก UPH แล้ว', timer: 1200, showConfirmButton: false });
             refreshAll();
         } catch (e) {
             const m = String((e && e.message) || e);
-            Swal.fire('บันทึกไม่สำเร็จ', /ไม่รู้จัก|unknown|Invalid action|action/i.test(m) ? 'Google Script ยังไม่ได้อัปเดต (ยังไม่รู้จักคำสั่งบันทึก UHT) ให้วางแพตช์ฝั่ง Google Script แล้ว Deploy เวอร์ชันใหม่ก่อน' : m, 'error');
+            Swal.fire('บันทึกไม่สำเร็จ', /ไม่รู้จัก|unknown|Invalid action|action/i.test(m) ? 'Google Script ยังไม่ได้อัปเดต (ยังไม่รู้จักคำสั่งบันทึก UPH) ให้วางแพตช์ฝั่ง Google Script แล้ว Deploy เวอร์ชันใหม่ก่อน' : m, 'error');
         }
     }
     window.lgUhtSettings = openSettings;
@@ -28543,7 +28544,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
         const m = {};
         (db.lgPlan || []).forEach(p => { if (p && !p.planCancelledAt && lgPlanDateOf(p) === date) { const l = lineOfPlan(p); m[l] = (m[l] || 0) + (parseFloat(p.orderQty) || 0); } });
         const lines = Object.keys(m).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-        const btn = canEdit() ? `<button type="button" class="btn btn-sm btn-outline-primary fw-bold" id="lgu-set-btn"><i class="bi bi-gear-fill me-1"></i>ตั้งค่า UHT</button>` : '';
+        const btn = canEdit() ? `<button type="button" class="btn btn-sm btn-outline-primary fw-bold" id="lgu-set-btn"><i class="bi bi-gear-fill me-1"></i>ตั้งค่า UPH</button>` : '';
         const sig = date + '|' + lines.map(l => l + ':' + m[l] + ':' + uhtOf(l)).join(',') + '|' + minH() + '|' + (btn ? 1 : 0);
         if (strip.getAttribute('data-sig') === sig) return;
         strip.setAttribute('data-sig', sig);
@@ -28570,12 +28571,12 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
                     const r = await Swal.fire({
                         customClass: { popup: 'lgu-pop' }, showCancelButton: true, confirmButtonText: 'ปริ้นต่อ', cancelButtonText: 'กลับไปเพิ่มยอดแพลน', reverseButtons: true,
                         html: `<div class="lgu-hd warn"><div class="ic"><i class="bi bi-exclamation-triangle-fill"></i></div><div><h3>ยอดแพลนอยู่ได้ไม่ถึง ${minH()} ชั่วโมง</h3><p>ตรวจสอบก่อนปริ้นแท็ก</p></div></div>
-                        <div class="lgu-bd">${w.map(x => `<div class="lgu-wl"><span>ไลน์ <b>${esc(x.line)}</b> · ${num(x.qty)} ÷ UHT ${num(x.uht)}</span><span><b>${hh(x.h)} ชม.</b> · ควรเพิ่มอีก ~${num(x.need)} ชิ้น</span></div>`).join('')}
+                        <div class="lgu-bd">${w.map(x => `<div class="lgu-wl"><span>ไลน์ <b>${esc(x.line)}</b> · ${num(x.qty)} ÷ UPH ${num(x.uht)}</span><span><b>${hh(x.h)} ชม.</b> · ควรเพิ่มอีก ~${num(x.need)} ชิ้น</span></div>`).join('')}
                         <p class="lgu-note">ถ้ายอดนี้ถูกต้องแล้ว กด "ปริ้นต่อ" ได้เลย</p></div>`
                     });
                     if (!r.isConfirmed) return;
                 }
-            } catch (e) { console.warn('LG-UHT print check', e); }
+            } catch (e) { console.warn('LG-UPH print check', e); }
             return _pt.apply(this, arguments);
         };
     }
@@ -28597,10 +28598,10 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
             if (!mm) return;
             const l = mm[1].trim(), o = m[l] || { plan: 0, sent: 0 }, u = uhtOf(l);
             let html;
-            if (!u) html = `<div class="lgu-ln none"><i class="bi bi-speedometer2"></i> ยังไม่ตั้ง UHT</div>`;
+            if (!u) html = `<div class="lgu-ln none"><i class="bi bi-speedometer2"></i> ยังไม่ตั้ง UPH</div>`;
             else {
                 const h = o.sent / u, s = o.sent > 0 ? status(h) : 'none';
-                html = `<div class="lgu-ln ${s}"><i class="bi bi-speedometer2"></i> ส่งแล้วอยู่ได้ <b>${hh(h)} ชม.</b> <span style="opacity:.7">(${num(o.sent)} ÷ UHT ${num(u)}${s === 'bad' || s === 'warn' ? ` · ขั้นต่ำ ${minH()} ชม.` : ''})</span></div>`;
+                html = `<div class="lgu-ln ${s}"><i class="bi bi-speedometer2"></i> ส่งแล้วอยู่ได้ <b>${hh(h)} ชม.</b> <span style="opacity:.7">(${num(o.sent)} ÷ UPH ${num(u)}${s === 'bad' || s === 'warn' ? ` · ขั้นต่ำ ${minH()} ชม.` : ''})</span></div>`;
                 if (o.sent > 0 && h < minH()) low.push({ l, h, need: Math.ceil(minH() * u - o.sent) });
             }
             const bar = ln.querySelector('.lgd-bar');
@@ -28614,7 +28615,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
         const _rd = window.renderLGDashboard;
         window.renderLGDashboard = function () {
             const x = _rd.apply(this, arguments);
-            try { decorateDash(); } catch (e) { console.warn('LG-UHT dash', e); }
+            try { decorateDash(); } catch (e) { console.warn('LG-UPH dash', e); }
             return x;
         };
     }
@@ -28635,16 +28636,16 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
         let lines = sel ? [sel] : planLines().filter(l => uhtOf(l) > 0 || sent[l] || recv[l]);
         const rows = lines.map(l => {
             const u = uhtOf(l);
-            if (!u) return `<div class="r"><span class="nm">ไลน์ ${esc(l)}</span><span class="lgu-chip lgu-none">ยังไม่ตั้ง UHT</span></div>`;
+            if (!u) return `<div class="r"><span class="nm">ไลน์ ${esc(l)}</span><span class="lgu-chip lgu-none">ยังไม่ตั้ง UPH</span></div>`;
             const hs = (sent[l] || 0) / u, hr = (recv[l] || 0) / u;
             return `<div class="r"><span class="nm">ไลน์ ${esc(l)}</span>
                 <span class="lgu-chip lgu-${(sent[l] || 0) > 0 ? status(hs) : 'none'}" title="ยิงออกวันนี้ ${num(sent[l] || 0)} ชิ้น">ยิงออก <b>${hh(hs)} ชม.</b> <small>${num(sent[l] || 0)} ชิ้น</small></span>
                 <span class="lgu-chip lgu-${(recv[l] || 0) > 0 ? status(hr) : 'none'}" title="LG รับแล้ววันนี้ ${num(recv[l] || 0)} ชิ้น">LG รับแล้ว <b>${hh(hr)} ชม.</b> <small>${num(recv[l] || 0)} ชิ้น</small></span>
-                <span style="font-size:.7rem;color:#8a97ab">UHT ${num(u)}/ชม.</span></div>`;
-        }).join('') || `<div class="hint">ยังไม่ได้ตั้ง UHT ของไลน์ใดเลย${canEdit() ? ' — กด "ตั้งค่า UHT"' : ' (ให้หัวหน้าตั้งค่าให้)'}</div>`;
+                <span style="font-size:.7rem;color:#8a97ab">UPH ${num(u)}/ชม.</span></div>`;
+        }).join('') || `<div class="hint">ยังไม่ได้ตั้ง UPH ของไลน์ใดเลย${canEdit() ? ' — กด "ตั้งค่า UPH"' : ' (ให้หัวหน้าตั้งค่าให้)'}</div>`;
         const div = document.createElement('div');
         div.className = 'lgu-recv';
-        div.innerHTML = `<div class="h"><i class="bi bi-speedometer2"></i> ของวันนี้ อยู่ได้กี่ชั่วโมง (ขั้นต่ำ ${minH()} ชม.)${canEdit() ? '<button type="button" data-lgu-set="1">ตั้งค่า UHT</button>' : ''}</div>${rows}`;
+        div.innerHTML = `<div class="h"><i class="bi bi-speedometer2"></i> ของวันนี้ อยู่ได้กี่ชั่วโมง (ขั้นต่ำ ${minH()} ชม.)${canEdit() ? '<button type="button" data-lgu-set="1">ตั้งค่า UPH</button>' : ''}</div>${rows}`;
         hero.insertAdjacentElement('afterend', div);
         const b = div.querySelector('[data-lgu-set]'); if (b) b.addEventListener('click', openSettings);
     }
@@ -28653,7 +28654,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
         const box = document.getElementById('lgr3');
         if (!box || moRecv === box) return;
         moRecv = box;
-        new MutationObserver(() => { try { decorateRecv(); } catch (e) { console.warn('LG-UHT recv', e); } }).observe(box, { childList: true });
+        new MutationObserver(() => { try { decorateRecv(); } catch (e) { console.warn('LG-UPH recv', e); } }).observe(box, { childList: true });
         try { decorateRecv(); } catch (e) { }
     }
 
@@ -28669,7 +28670,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
     }
     setInterval(() => { try { drawPlanStrip(); watchRecv(); } catch (e) { } }, 1500);
 })();
-// ===== จบ LG-UHT =====
+// ===== จบ LG-UPH =====
 (function () {
     if (window.__lgRecvLine) return; window.__lgRecvLine = true;
 
@@ -35349,7 +35350,7 @@ html.lgx .lgx-tbl-card td:last-child .btn.lgep-cancel{color:#dc2626}
 html.lgx #lgm-scroll-note{color:var(--mut)!important;font-size:.76rem}
 html.lgx .lgx-empty td{padding:34px 12px!important}
  
-/* ---- หน้าต่าง: เลือกล็อต / เช็คแท็ก / UHT / ติ๊ก WO / คืนแท็ก ---- */
+/* ---- หน้าต่าง: เลือกล็อต / เช็คแท็ก / UPH / ติ๊ก WO / คืนแท็ก ---- */
 html.lgx .swal2-popup:has(#lg-pick-all),html.lgx .swal2-popup:has(#lgtc-date){padding:0!important;border-radius:22px!important;overflow:hidden;text-align:left;box-shadow:0 30px 70px rgba(15,23,42,.45)!important}
 html.lgx .swal2-popup:has(#lg-pick-all) .swal2-title,html.lgx .swal2-popup:has(#lgtc-date) .swal2-title{margin:0!important;padding:18px 24px!important;background:var(--hd);color:#fff!important;font-size:1.15rem!important;font-weight:800!important;text-align:left;justify-content:flex-start;width:100%;box-sizing:border-box}
 html.lgx .swal2-popup:has(#lg-pick-all) .swal2-html-container,html.lgx .swal2-popup:has(#lgtc-date) .swal2-html-container{margin:0!important;padding:16px 24px 6px!important;text-align:left!important}
@@ -39396,6 +39397,674 @@ async function populateSalesDashboard(startDate, endDate) {
                         console.error('Error saving rack history to sheet:', error);
                     }
                 });
+                (function () {
+    return; /* v1 ปิดแล้ว — ใช้ PK-HISTORY-V2 แทน */
+    const WARN_DAYS = 3;   // แร็คอยู่ที่ลูกค้าเกินกี่วันให้เตือนสีเหลือง (แก้เลขตรงนี้ได้)
+    const PER = 50;        // แถวต่อหน้า
+    const U = (s) => String(s == null ? '' : s).trim();
+    const pad = (n) => String(n).padStart(2, '0');
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const L = (th, en) => (typeof currentLanguage !== 'undefined' && currentLanguage === 'en') ? en : th;
+    const LOC = {
+        WH_EMPTY: { th: 'WH กล่องเปล่า', en: 'WH empty', c: 'e' },
+        WH_FILLED: { th: 'WH กล่องมีงาน', en: 'WH filled', c: 'f' },
+        CUSTOMER: { th: 'อยู่ที่ลูกค้า', en: 'At customer', c: 'c' },
+        OUT: { th: 'ชำรุด (OUT)', en: 'Damaged (OUT)', c: 'o' },
+        NEW: { th: 'ใหม่', en: 'New', c: 'n' }
+    };
+    const locName = (k) => LOC[k] ? L(LOC[k].th, LOC[k].en) : (k || '-');
+    const pill = (k) => `<span class="pkh-p ${LOC[k] ? LOC[k].c : 'n'}">${esc(locName(k))}</span>`;
+    const dayK = (t) => { const d = new Date(t); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+    const hm = (t) => { const d = new Date(t); return t ? pad(d.getHours()) + ':' + pad(d.getMinutes()) : '-'; };
+    const dm = (t) => { const d = new Date(t); return t ? pad(d.getDate()) + '/' + pad(d.getMonth() + 1) : ''; };
+    const dmhm = (t) => dm(t) + ' ' + hm(t);
+    const isLG = (a) => String(a || '').indexOf('LG_RECEIVE') === 0;
+    const srcName = (a) => isLG(a) ? L('ยิงที่ LG', 'Scanned at LG') : L('โอนย้ายปกติ', 'Normal transfer');
+ 
+    const S = { tab: 'main', range: 'today', from: '', to: '', dest: 'all', user: '', src: '', q: '', page: 1 };
+    let sig = '';
+ 
+    // ---------- ข้อมูล ----------
+    function rows() {
+        return (db.rackHistory || []).map((r) => {
+            const d = new Date(r.date);
+            return { t: isNaN(d) ? 0 : d.getTime(), code: U(r.erpCode), name: U(r.name), from: U(r.from), to: U(r.to), qty: parseFloat(r.quantity) || 1, user: U(r.user), act: U(r.actionType) };
+        }).filter((r) => r.code).reverse().sort((a, b) => b.t - a.t);   // ใหม่ → เก่า (ถ้าเวลาเท่ากัน อันที่บันทึกทีหลังขึ้นก่อน)
+    }
+    function inRange(t) {
+        const now = new Date(), td = dayK(now);
+        if (S.range === 'all') return true;
+        if (!t) return false;
+        if (S.range === 'today') return dayK(t) === td;
+        if (S.range === '7') { const s = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6).getTime(); return t >= s; }
+        if (S.range === 'month') { const d = new Date(t); return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth(); }
+        if (S.range === 'custom') { const k = dayK(t); return (!S.from || k >= S.from) && (!S.to || k <= S.to); }
+        return true;
+    }
+    function rangeLabel() {
+        return ({ today: L('วันนี้', 'Today'), '7': L('7 วันล่าสุด', 'Last 7 days'), month: L('เดือนนี้', 'This month'), all: L('ทั้งหมด', 'All time'), custom: L('ช่วงที่เลือก', 'Selected range') })[S.range];
+    }
+    function filtered(base) {
+        const q = S.q.toUpperCase();
+        return base.filter((r) =>
+            (S.dest === 'all' || r.to === S.dest) &&
+            (!S.user || r.user === S.user) &&
+            (!S.src || (S.src === 'lg' ? isLG(r.act) : !isLG(r.act))) &&
+            (!q || r.code.toUpperCase().indexOf(q) >= 0 || r.name.toUpperCase().indexOf(q) >= 0));
+    }
+    // แร็คที่ตอนนี้อยู่ที่ลูกค้า และอยู่เกินกำหนด (ดูจากรายการล่าสุดของแต่ละใบ)
+    function stale(base) {
+        const seen = {}, out = [], now = Date.now();
+        base.forEach((r) => {
+            const k = r.code.toUpperCase(); if (seen[k]) return; seen[k] = 1;
+            if (r.to === 'CUSTOMER' && r.t && (now - r.t) / 864e5 >= WARN_DAYS) out.push({ code: r.code, name: r.name, days: Math.floor((now - r.t) / 864e5), t: r.t });
+        });
+        return out.sort((a, b) => b.days - a.days);
+    }
+ 
+    // ---------- หน้าจอ ----------
+    function css() {
+        if (document.getElementById('pkh-css')) return;
+        const st = document.createElement('style'); st.id = 'pkh-css';
+        st.textContent = `
+#pkh-tabs{display:flex;gap:8px;flex-wrap:wrap}
+#pkh-tabs button{height:42px;padding:0 20px;border:0;border-radius:12px;font-size:.875rem;font-weight:700;background:#F1F5F9;color:#475569;cursor:pointer}
+#pkh-tabs button.on{background:#0F172A;color:#fff}
+#pkh-pane{display:none}
+#pkh-pane .pkh-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+#pkh-pane .pkh-k{border:1px solid #E2E8F0;border-radius:14px;padding:10px 14px;background:#F8FAFC}
+#pkh-pane .pkh-k .l{font-size:.75rem;color:#64748B;font-weight:600}
+#pkh-pane .pkh-k .v{font-size:1.7rem;font-weight:800;line-height:1.15;color:#0F172A}
+#pkh-pane .pkh-k .s{font-size:.72rem;color:#64748B}
+#pkh-pane .pkh-k.am{background:#FFFBEB;border-color:#FCD34D}#pkh-pane .pkh-k.am .v{color:#B45309}
+#pkh-pane .pkh-k.click{cursor:pointer}
+#pkh-pane .pkh-in{height:36px;border:1px solid #CBD5E1;border-radius:10px;padding:0 10px;font-size:.8125rem;background:#fff}
+#pkh-pane .pkh-btn{height:38px;border:0;border-radius:10px;background:#1E40AF;color:#fff;font-size:.8125rem;font-weight:700;padding:0 16px;cursor:pointer}
+#pkh-pane .pkh-grid{display:grid;grid-template-columns:90px minmax(170px,1.6fr) minmax(230px,2fr) 54px minmax(110px,1fr) 118px;column-gap:14px;row-gap:10px;align-items:center;padding:10px 16px;min-width:800px}
+#pkh-pane .pkh-grid.h{position:sticky;top:0;z-index:2;background:#F1F5F9;font-size:.75rem;font-weight:600;color:#334155}
+#pkh-pane .pkh-grid.r{border-top:1px solid #E2E8F0;background:#fff;font-size:.8125rem}
+#pkh-pane .pkh-grid.r:hover{background:#F8FAFF}
+#pkh-pane .pkh-grid small,.pkh-tl small{display:block;color:#64748B;font-size:.72rem;margin-top:1px}
+#pkh-pane .pkh-code,.pkh-code{font-weight:700;color:#1E40AF;cursor:pointer;text-decoration:underline;text-underline-offset:2px;word-break:break-all}
+.pkh-p{display:inline-flex;align-items:center;border-radius:999px;padding:2px 10px;font-size:.72rem;font-weight:700;border:1px solid;white-space:nowrap}
+.pkh-p.e{background:#F1F5F9;border-color:#CBD5E1;color:#475569}.pkh-p.f{background:#DBEAFE;border-color:#93C5FD;color:#1E40AF}.pkh-p.c{background:#FEF3C7;border-color:#FCD34D;color:#B45309}.pkh-p.o{background:#FEE2E2;border-color:#FCA5A5;color:#B91C1C}.pkh-p.n{background:#E2E8F0;border-color:#CBD5E1;color:#475569}
+.pkh-ar{color:#94A3B8;margin:0 4px;font-weight:800}
+.pkh-src{font-size:.7rem;font-weight:800;border-radius:8px;padding:3px 8px;white-space:nowrap}.pkh-src.a{background:#EEF2FF;color:#4338CA}.pkh-src.b{background:#DCFCE7;color:#15803D}
+#pkh-pane .pkh-pg{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center;font-size:.8rem;color:#64748B}
+#pkh-pane .pkh-pg button{height:34px;border:1px solid #CBD5E1;border-radius:10px;background:#fff;padding:0 14px;font-weight:700;cursor:pointer}
+#pkh-pane .pkh-pg button:disabled{opacity:.4;cursor:default}
+#pkh-pane .pkh-none{padding:36px 18px;text-align:center;color:#64748B;font-size:.875rem;border-top:1px solid #E2E8F0}
+.pkh-hero{border-radius:14px;padding:10px 14px;margin:10px 0 12px;text-align:left;border:1.5px solid #CBD5E1;background:#F8FAFC}
+.pkh-hero .v{font-size:1.6rem;font-weight:800}.pkh-hero .l{font-size:.78rem;font-weight:700;color:#475569}.pkh-hero .s{font-size:.74rem;color:#64748B}
+.pkh-hero.w{background:#FFFBEB;border-color:#FCD34D}.pkh-hero.w .v,.pkh-hero.w .l{color:#B45309}
+.pkh-tlw{max-height:320px;overflow:auto;padding:4px 4px 0 12px;text-align:left}
+.pkh-tl{margin:2px 0 4px 6px;border-left:3px solid #CBD5E1;padding-left:18px;text-align:left}
+.pkh-ev{position:relative;margin-bottom:13px;font-size:.85rem}
+.pkh-ev:before{content:"";position:absolute;left:-27px;top:4px;width:13px;height:13px;border-radius:50%;background:#fff;border:3px solid #2563EB}
+.pkh-ev.c:before{border-color:#F59E0B}.pkh-ev.e:before{border-color:#94A3B8}.pkh-ev.o:before{border-color:#DC2626}
+.pkh-sum{margin-top:10px;text-align:left;background:#F8FAFC;border:1px dashed #CBD5E1;border-radius:12px;padding:9px 12px;font-size:.8rem;color:#334155}
+`;
+        document.head.appendChild(st);
+    }
+ 
+    function build() {
+        const wrap = document.querySelector('#pills-rack .pk-wrap');
+        if (!wrap || document.getElementById('pkh-pane')) return !!wrap;
+        css();
+        const head = wrap.querySelector('.pk-head');
+        const tabs = document.createElement('div'); tabs.id = 'pkh-tabs';
+        tabs.innerHTML = '<button type="button" data-t="main" class="on"></button><button type="button" data-t="hist"></button>';
+        (head ? head.insertAdjacentElement('afterend', tabs) : wrap.insertAdjacentElement('afterbegin', tabs));
+        const pane = document.createElement('div'); pane.id = 'pkh-pane';
+        pane.innerHTML = `<div class="pk-card">
+            <div class="pkh-kpis" id="pkh-kpis"></div>
+            <div class="pk-tools"><div class="pk-chips" id="pkh-range"></div>
+                <div id="pkh-custom" style="display:none;gap:6px;align-items:center"><input type="date" class="pkh-in" id="pkh-from"> – <input type="date" class="pkh-in" id="pkh-to"></div>
+                <label class="pk-search m-0"><i class="bi bi-search text-muted"></i><input type="text" id="pkh-q" autocomplete="off"></label></div>
+            <div class="pk-tools"><div class="pk-chips" id="pkh-dest"></div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><select class="pkh-in" id="pkh-user"></select><select class="pkh-in" id="pkh-src"></select><button type="button" class="pkh-btn" id="pkh-csv"></button></div></div>
+            <div class="pk-tablebox"><div class="pkh-grid h" id="pkh-head"></div><div id="pkh-rows"></div></div>
+            <div class="pkh-pg" id="pkh-pg"></div></div>`;
+        wrap.appendChild(pane);
+ 
+        tabs.addEventListener('click', (e) => { const b = e.target.closest('button[data-t]'); if (b) setTab(b.getAttribute('data-t')); });
+        pane.addEventListener('click', (e) => {
+            const t = e.target;
+            let el = t.closest('[data-range]'); if (el) { S.range = el.getAttribute('data-range'); S.page = 1; render(true); return; }
+            el = t.closest('[data-dest]'); if (el) { S.dest = el.getAttribute('data-dest'); S.page = 1; render(true); return; }
+            el = t.closest('[data-code]'); if (el) { showRack(el.getAttribute('data-code')); return; }
+            el = t.closest('[data-pg]'); if (el && !el.disabled) { S.page += parseInt(el.getAttribute('data-pg'), 10); render(true); return; }
+            if (t.closest('#pkh-csv')) { csv(); return; }
+            if (t.closest('#pkh-stale')) { showStale(); return; }
+        });
+        pane.addEventListener('input', (e) => {
+            if (e.target.id === 'pkh-q') { S.q = e.target.value.trim(); S.page = 1; render(true); }
+            else if (e.target.id === 'pkh-from') { S.from = e.target.value; S.page = 1; render(true); }
+            else if (e.target.id === 'pkh-to') { S.to = e.target.value; S.page = 1; render(true); }
+        });
+        pane.addEventListener('change', (e) => {
+            if (e.target.id === 'pkh-user') { S.user = e.target.value; S.page = 1; render(true); }
+            else if (e.target.id === 'pkh-src') { S.src = e.target.value; S.page = 1; render(true); }
+        });
+        return true;
+    }
+ 
+    function setTab(t) {
+        S.tab = t;
+        const wrap = document.querySelector('#pills-rack .pk-wrap'); if (!wrap) return;
+        ['.pk-kpis', '.pk-cols'].forEach((s) => { const el = wrap.querySelector(s); if (el) el.style.display = t === 'hist' ? 'none' : ''; });
+        const pane = document.getElementById('pkh-pane'); if (pane) pane.style.display = t === 'hist' ? 'block' : 'none';
+        if (t === 'hist') { pane.style.display = 'flex'; pane.style.flexDirection = 'column'; }
+        render(true);
+    }
+ 
+    function render(force) {
+        if (!build()) return;
+        const tabs = document.querySelectorAll('#pkh-tabs button');
+        tabs[0].textContent = L('โอนย้าย & สรุปสถานะ', 'Transfer & summary');
+        tabs[1].textContent = '🕘 ' + L('ประวัติการโอนย้าย', 'Transfer history');
+        tabs.forEach((b) => b.classList.toggle('on', b.getAttribute('data-t') === S.tab));
+        if (S.tab !== 'hist') return;
+ 
+        const base = rows();
+        const h = (db.rackHistory || []);
+        const nsig = [h.length, h.length ? (h[h.length - 1].id || '') : '', S.range, S.from, S.to, S.dest, S.user, S.src, S.q, S.page, (typeof currentLanguage !== 'undefined' ? currentLanguage : '')].join('|');
+        if (!force && nsig === sig) return;
+        sig = nsig;
+ 
+        const inR = base.filter((r) => inRange(r.t));
+        const stl = stale(base);
+        const toC = inR.filter((r) => r.to === 'CUSTOMER').length, fromC = inR.filter((r) => r.from === 'CUSTOMER' && r.to !== 'CUSTOMER').length, toO = inR.filter((r) => r.to === 'OUT').length;
+        const models = {}; inR.forEach((r) => { models[r.name || r.code] = 1; });
+        document.getElementById('pkh-kpis').innerHTML =
+            `<div class="pkh-k"><div class="l">${esc(rangeLabel())} ${L('โอนย้าย', 'moved')}</div><div class="v">${inR.length}</div><div class="s">${L('รายการ', 'moves')} · ${Object.keys(models).length} ${L('รุ่น', 'models')}</div></div>` +
+            `<div class="pkh-k"><div class="l">${L('ส่งไปลูกค้า', 'Sent to customer')}</div><div class="v">${toC}</div><div class="s">${esc(rangeLabel())}</div></div>` +
+            `<div class="pkh-k"><div class="l">${L('กลับจากลูกค้า', 'Back from customer')}</div><div class="v">${fromC}</div><div class="s">${esc(rangeLabel())}</div></div>` +
+            `<div class="pkh-k"><div class="l">${L('ชำรุด (OUT)', 'Damaged (OUT)')}</div><div class="v">${toO}</div><div class="s">${esc(rangeLabel())}</div></div>` +
+            `<div class="pkh-k am click" id="pkh-stale" title="${esc(L('กดเพื่อดูรายชื่อ', 'Click for list'))}"><div class="l">${L('ค้างที่ลูกค้าเกิน', 'At customer over')} ${WARN_DAYS} ${L('วัน', 'days')}</div><div class="v">${stl.length}</div><div class="s">${L('ใบ (ตอนนี้) · กดดูรายชื่อ', 'racks now · click')}</div></div>`;
+ 
+        const rg = document.getElementById('pkh-range');
+        rg.innerHTML = [['today', L('วันนี้', 'Today')], ['7', L('7 วัน', '7 days')], ['month', L('เดือนนี้', 'This month')], ['all', L('ทั้งหมด', 'All')], ['custom', L('เลือกวันที่…', 'Pick dates…')]]
+            .map((a) => `<button type="button" class="pk-chip${S.range === a[0] ? ' on' : ''}" data-range="${a[0]}">${a[1]}</button>`).join('');
+        const cu = document.getElementById('pkh-custom'); cu.style.display = S.range === 'custom' ? 'inline-flex' : 'none';
+        const fi = document.getElementById('pkh-from'), ti = document.getElementById('pkh-to');
+        if (fi.value !== S.from) fi.value = S.from; if (ti.value !== S.to) ti.value = S.to;
+        const qi = document.getElementById('pkh-q'); qi.placeholder = L('ค้นหา รหัสแร็ค, ชื่อรุ่น...', 'Search rack code, model...'); if (qi.value !== S.q && document.activeElement !== qi) qi.value = S.q;
+        document.getElementById('pkh-dest').innerHTML = [['all', L('ทุกปลายทาง', 'All destinations')], ['WH_EMPTY', locName('WH_EMPTY')], ['WH_FILLED', locName('WH_FILLED')], ['CUSTOMER', locName('CUSTOMER')], ['OUT', locName('OUT')]]
+            .map((a) => `<button type="button" class="pk-chip${S.dest === a[0] ? ' on' : ''}" data-dest="${a[0]}">${a[1]}</button>`).join('');
+        const users = Array.from(new Set(base.map((r) => r.user).filter(Boolean))).sort();
+        const us = document.getElementById('pkh-user');
+        us.innerHTML = `<option value="">${esc(L('ผู้ทำรายการ: ทั้งหมด', 'User: all'))}</option>` + users.map((u) => `<option value="${esc(u)}"${S.user === u ? ' selected' : ''}>${esc(u)}</option>`).join('');
+        const sc = document.getElementById('pkh-src');
+        sc.innerHTML = `<option value="">${esc(L('ที่มา: ทั้งหมด', 'Source: all'))}</option><option value="n"${S.src === 'n' ? ' selected' : ''}>${esc(L('โอนย้ายปกติ', 'Normal transfer'))}</option><option value="lg"${S.src === 'lg' ? ' selected' : ''}>${esc(L('ยิงที่ LG', 'Scanned at LG'))}</option>`;
+        document.getElementById('pkh-csv').innerHTML = '⬇ ' + L('ดาวน์โหลด CSV', 'Download CSV');
+        document.getElementById('pkh-head').innerHTML = `<div>${L('เวลา', 'Time')}</div><div>${L('รหัสแร็ค / ชื่อ', 'Rack / name')}</div><div>${L('จาก → ไป', 'From → To')}</div><div style="text-align:right">${L('จำนวน', 'Qty')}</div><div>${L('ผู้ทำรายการ', 'By')}</div><div>${L('ที่มา', 'Source')}</div>`;
+ 
+        const list = filtered(inR);
+        const pages = Math.max(1, Math.ceil(list.length / PER)); if (S.page > pages) S.page = pages; if (S.page < 1) S.page = 1;
+        const from = (S.page - 1) * PER, part = list.slice(from, from + PER);
+        document.getElementById('pkh-rows').innerHTML = part.length ? part.map((r) =>
+            `<div class="pkh-grid r"><div><b>${hm(r.t)}</b><small>${dm(r.t)}</small></div>` +
+            `<div><a class="pkh-code" data-code="${esc(r.code)}">${esc(r.code)}</a><small>${esc(r.name)}</small></div>` +
+            `<div>${pill(r.from)}<span class="pkh-ar">➜</span>${pill(r.to)}</div><div style="text-align:right">${r.qty}</div><div>${esc(r.user || '-')}</div>` +
+            `<div><span class="pkh-src ${isLG(r.act) ? 'b' : 'a'}">${esc(srcName(r.act))}</span></div></div>`).join('')
+            : `<div class="pkh-none">${esc(L('ไม่พบรายการในช่วง/ตัวกรองที่เลือก', 'No records for this range / filter'))}</div>`;
+        document.getElementById('pkh-pg').innerHTML =
+            `<span>${list.length ? L('แสดง', 'Showing') + ' ' + (from + 1) + '–' + (from + part.length) + ' ' + L('จาก', 'of') + ' ' + list.length + ' ' + L('รายการ', 'records') : ''}</span>` +
+            `<span><button type="button" data-pg="-1"${S.page <= 1 ? ' disabled' : ''}>◀</button> &nbsp;${S.page} / ${pages}&nbsp; <button type="button" data-pg="1"${S.page >= pages ? ' disabled' : ''}>▶</button></span>`;
+    }
+ 
+    // ---------- เส้นทางของแร็คใบเดียว ----------
+    function evInfo(r) {
+        if (r.to === 'CUSTOMER') return { c: 'c', t: L('ส่งไปลูกค้า', 'Sent to customer') };
+        if (r.from === 'CUSTOMER') return { c: 'e', t: L('กลับจากลูกค้า', 'Back from customer') };
+        if (r.to === 'WH_FILLED') return { c: '', t: L('ใส่ชิ้นงานแล้ว', 'Filled with parts') };
+        if (r.to === 'WH_EMPTY') return { c: 'e', t: L('เป็นกล่องเปล่า', 'Now empty') };
+        if (r.to === 'OUT') return { c: 'o', t: L('ตั้งเป็นชำรุด', 'Marked damaged') };
+        return { c: '', t: L('ย้ายตำแหน่ง', 'Moved') };
+    }
+    const dur = (ms) => { const d = Math.floor(ms / 864e5); if (d >= 1) return d + ' ' + L('วัน', 'days'); const h = Math.floor(ms / 36e5); return h >= 1 ? h + ' ' + L('ชม.', 'h') : L('ไม่ถึง 1 ชม.', '< 1 h'); };
+    function showRack(code) {
+        const key = U(code).toUpperCase();
+        const desc = rows().filter((r) => r.code.toUpperCase() === key); if (!desc.length) return;
+        const asc = desc.slice().reverse();
+        let start = 0, trips = 0, lastStay = null;
+        asc.forEach((r) => {
+            if (r.to === 'CUSTOMER' && r.from !== 'CUSTOMER') { start = r.t; trips++; }
+            else if (r.from === 'CUSTOMER' && r.to !== 'CUSTOMER' && start && r.t) { lastStay = { ms: r.t - start, a: start, b: r.t }; start = 0; }
+        });
+        const cur = desc[0], atC = cur.to === 'CUSTOMER';
+        let hero = '';
+        if (atC && start) {
+            const ms = Date.now() - start, over = ms / 864e5 >= WARN_DAYS;
+            hero = `<div class="pkh-hero${over ? ' w' : ''}"><div class="l">${esc(L('อยู่ที่ลูกค้ามาแล้ว', 'At customer for'))}</div><div class="v">${esc(dur(ms))}</div><div class="s">${esc(L('ตั้งแต่', 'since'))} ${esc(dmhm(start))}${over ? ' · ⚠️ ' + esc(L('เกิน ' + WARN_DAYS + ' วัน', 'over ' + WARN_DAYS + ' days')) : ''}</div></div>`;
+        }
+        const ev = desc.map((r) => { const i = evInfo(r); return `<div class="pkh-ev ${i.c}"><b>${esc(i.t)}</b><small>${esc(dmhm(r.t))} · ${esc(locName(r.from))} ➜ ${esc(locName(r.to))} · ${esc(r.user || '-')} · ${esc(srcName(r.act))}</small></div>`; }).join('');
+        const sum = `<div class="pkh-sum"><b>${esc(L('สรุป', 'Summary'))}:</b> ${esc(L('ส่งไปลูกค้า', 'Sent to customer'))} ${trips} ${esc(L('รอบ', 'times'))}${lastStay ? ' · ' + esc(L('รอบล่าสุดที่กลับมาแล้วอยู่ที่ลูกค้า', 'last completed stay at customer')) + ' ' + esc(dur(lastStay.ms)) + ' (' + esc(dm(lastStay.a)) + ' → ' + esc(dm(lastStay.b)) + ')' : ''}</div>`;
+        const html = `<div style="text-align:left"><div style="font-weight:800;font-size:1.05rem;word-break:break-all">${esc(cur.code)}</div><div style="font-size:.8rem;color:#64748B">${esc(cur.name)} · ${esc(L('ตอนนี้', 'now'))} ${pill(cur.to)}</div>${hero}<div class="pkh-tlw"><div class="pkh-tl">${ev}</div></div>${sum}</div>`;
+        if (typeof Swal !== 'undefined') Swal.fire({ title: L('เส้นทางของแร็คใบนี้', 'Rack journey'), html, width: 560, showConfirmButton: false, showCloseButton: true });
+    }
+    function showStale() {
+        const stl = stale(rows());
+        const html = stl.length ? `<div style="text-align:left;max-height:340px;overflow:auto">` + stl.map((r) => `<div style="display:flex;justify-content:space-between;gap:10px;border-top:1px solid #E2E8F0;padding:8px 2px"><span><a class="pkh-code" data-c2="${esc(r.code)}">${esc(r.code)}</a><small style="display:block;color:#64748B;font-size:.72rem">${esc(r.name)} · ${esc(L('ตั้งแต่', 'since'))} ${esc(dmhm(r.t))}</small></span><b style="color:#B45309;white-space:nowrap">${r.days} ${esc(L('วัน', 'days'))}</b></div>`).join('') + `</div>`
+            : `<div style="color:#64748B">${esc(L('ไม่มีแร็คค้างที่ลูกค้าเกินกำหนด', 'No racks over the limit'))}</div>`;
+        if (typeof Swal !== 'undefined') Swal.fire({ title: L('ค้างที่ลูกค้าเกิน ', 'At customer over ') + WARN_DAYS + L(' วัน', ' days') + ' (' + stl.length + ')', html, width: 520, showConfirmButton: false, showCloseButton: true,
+            didOpen: (el) => { el.addEventListener('click', (e) => { const a = e.target.closest('[data-c2]'); if (a) showRack(a.getAttribute('data-c2')); }); } });
+    }
+ 
+    // ---------- CSV ----------
+    function csv() {
+        const list = filtered(rows().filter((r) => inRange(r.t)));
+        if (!list.length) { if (typeof Swal !== 'undefined') Swal.fire(L('ไม่มีข้อมูล', 'No data'), L('ไม่มีรายการให้ดาวน์โหลดในตัวกรองนี้', 'Nothing to download for this filter'), 'info'); return; }
+        const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+        const dt = (t) => { const d = new Date(t); return t ? d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) : ''; };
+        const lines = [['เวลา', 'รหัสแร็ค', 'ชื่อ', 'จาก', 'ไป', 'จำนวน', 'ผู้ทำรายการ', 'ที่มา'].map(q).join(',')].concat(
+            list.map((r) => [dt(r.t), r.code, r.name, locName(r.from), locName(r.to), r.qty, r.user, srcName(r.act)].map(q).join(',')));
+        const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+        const n = new Date(); a.download = 'rack-history-' + n.getFullYear() + pad(n.getMonth() + 1) + pad(n.getDate()) + '.csv';
+        document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    }
+ 
+    // เตรียมแท็บให้พร้อม และรีเฟรชอัตโนมัติเมื่อมีการโอนย้ายใหม่ (เฉพาะตอนเปิดแท็บประวัติอยู่)
+    function boot() { try { build(); render(true); } catch (e) { console.warn('PK-HISTORY', e); } }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+    setInterval(() => { try { const p = document.getElementById('pills-rack'); if (S.tab === 'hist' && p && p.classList.contains('active')) render(false); else if (!document.getElementById('pkh-pane')) build() && render(true); } catch (e) { } }, 3000);
+})();
+/* ===== จบ PK-HISTORY ===== */
+(function () {
+    if (window.__pkHist2) return; window.__pkHist2 = true;
+    const WARN_DAYS = 3;   // แร็คอยู่ที่ลูกค้าเกินกี่วันให้เตือนสีเหลือง (แก้เลขตรงนี้ได้)
+    const PER = 50;        // แถวต่อหน้า
+    const U = (s) => String(s == null ? '' : s).trim();
+    const pad = (n) => String(n).padStart(2, '0');
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const L = (th, en) => (typeof currentLanguage !== 'undefined' && currentLanguage === 'en') ? en : th;
+    const LOC = {
+        WH_EMPTY: { th: 'WH กล่องเปล่า', en: 'WH empty', c: 'e' },
+        WH_FILLED: { th: 'WH กล่องมีงาน', en: 'WH filled', c: 'f' },
+        CUSTOMER: { th: 'อยู่ที่ลูกค้า', en: 'At customer', c: 'c' },
+        OUT: { th: 'ชำรุด (OUT)', en: 'Damaged (OUT)', c: 'o' },
+        NEW: { th: 'ใหม่', en: 'New', c: 'n' }
+    };
+    const locName = (k) => LOC[k] ? L(LOC[k].th, LOC[k].en) : (k || '-');
+    const pill = (k) => `<span class="pkh-p ${LOC[k] ? LOC[k].c : 'n'}">${esc(locName(k))}</span>`;
+    const dayK = (t) => { const d = new Date(t); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+    const hm = (t) => { const d = new Date(t); return t ? pad(d.getHours()) + ':' + pad(d.getMinutes()) : '-'; };
+    const dm = (t) => { const d = new Date(t); return t ? pad(d.getDate()) + '/' + pad(d.getMonth() + 1) : ''; };
+    const dmhm = (t) => dm(t) + ' ' + hm(t);
+    const isLG = (a) => String(a || '').indexOf('LG_RECEIVE') === 0;
+    const srcName = (a) => isLG(a) ? L('ยิงที่ LG', 'Scanned at LG') : L('โอนย้ายปกติ', 'Normal transfer');
+ 
+    const S = { tab: 'main', range: 'today', from: '', to: '', dest: 'all', user: '', src: '', q: '', page: 1 };
+    let sig = '';
+ 
+    // ---------- ข้อมูล ----------
+    function rows() {
+        return (db.rackHistory || []).map((r) => {
+            const d = new Date(r.date);
+            return { t: isNaN(d) ? 0 : d.getTime(), code: U(r.erpCode), name: U(r.name), from: U(r.from), to: U(r.to), qty: parseFloat(r.quantity) || 1, user: U(r.user), act: U(r.actionType) };
+        }).filter((r) => r.code).reverse().sort((a, b) => b.t - a.t);   // ใหม่ → เก่า (ถ้าเวลาเท่ากัน อันที่บันทึกทีหลังขึ้นก่อน)
+    }
+    function inRange(t) {
+        const now = new Date(), td = dayK(now);
+        if (S.range === 'all') return true;
+        if (!t) return false;
+        if (S.range === 'today') return dayK(t) === td;
+        if (S.range === '7') { const s = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6).getTime(); return t >= s; }
+        if (S.range === 'month') { const d = new Date(t); return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth(); }
+        if (S.range === 'custom') { const k = dayK(t); return (!S.from || k >= S.from) && (!S.to || k <= S.to); }
+        return true;
+    }
+    function rangeLabel() {
+        return ({ today: L('วันนี้', 'Today'), '7': L('7 วันล่าสุด', 'Last 7 days'), month: L('เดือนนี้', 'This month'), all: L('ทั้งหมด', 'All time'), custom: L('ช่วงที่เลือก', 'Selected range') })[S.range];
+    }
+    function filtered(base) {
+        const q = S.q.toUpperCase();
+        return base.filter((r) =>
+            (S.dest === 'all' || r.to === S.dest) &&
+            (!S.user || r.user === S.user) &&
+            (!S.src || (S.src === 'lg' ? isLG(r.act) : !isLG(r.act))) &&
+            (!q || r.code.toUpperCase().indexOf(q) >= 0 || r.name.toUpperCase().indexOf(q) >= 0));
+    }
+    // แร็คที่ "ไม่เคลื่อนไหว" เกินกำหนด — นับทุกตำแหน่ง (WH เปล่า / WH มีงาน / ที่ลูกค้า) ยกเว้นที่ชำรุด (OUT)
+    // วัดจากรายการล่าสุดของแร็คแต่ละใบ (กติกาเดียวกับแดชบอร์ดแร็ค "ค้างเกิน 3 วัน")
+    function stale(base) {
+        const seen = {}, out = [], now = Date.now();
+        base.forEach((r) => {
+            const k = r.code.toUpperCase(); if (seen[k]) return; seen[k] = 1;
+            if (r.to === 'OUT' || !r.t) return;
+            const d = Math.floor((now - r.t) / 864e5);
+            if (d >= WARN_DAYS) out.push({ code: r.code, name: r.name, loc: r.to, days: d, t: r.t });
+        });
+        return out.sort((a, b) => b.days - a.days);
+    }
+    const SEV = (d) => d >= 14 ? '#c0392b' : d >= 7 ? '#d25a1f' : '#ca7a00';
+    function buckets(l) { return [l.filter((x) => x.days < 7).length, l.filter((x) => x.days >= 7 && x.days < 14).length, l.filter((x) => x.days >= 14).length]; }
+ 
+    // ---------- หน้าจอ ----------
+    function css() {
+        if (document.getElementById('pkh-css')) return;
+        const st = document.createElement('style'); st.id = 'pkh-css';
+        st.textContent = `
+#pkh-tabs{display:flex;gap:8px;flex-wrap:wrap}
+#pkh-tabs button{height:42px;padding:0 20px;border:0;border-radius:12px;font-size:.875rem;font-weight:700;background:#F1F5F9;color:#475569;cursor:pointer}
+#pkh-tabs button.on{background:#0F172A;color:#fff}
+#pkh-pane{display:none}
+#pkh-pane .pkh-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+#pkh-pane .pkh-k{border:1px solid #E2E8F0;border-radius:14px;padding:10px 14px;background:#F8FAFC}
+#pkh-pane .pkh-k .l{font-size:.75rem;color:#64748B;font-weight:600}
+#pkh-pane .pkh-k .v{font-size:1.7rem;font-weight:800;line-height:1.15;color:#0F172A}
+#pkh-pane .pkh-k .s{font-size:.72rem;color:#64748B}
+#pkh-pane .pkh-k.am{background:#FFFBEB;border-color:#FCD34D}#pkh-pane .pkh-k.am .v{color:#B45309}
+#pkh-pane .pkh-k.click{cursor:pointer}
+#pkh-pane .pkh-in{height:36px;border:1px solid #CBD5E1;border-radius:10px;padding:0 10px;font-size:.8125rem;background:#fff}
+#pkh-pane .pkh-btn{height:38px;border:0;border-radius:10px;background:#1E40AF;color:#fff;font-size:.8125rem;font-weight:700;padding:0 16px;cursor:pointer}
+#pkh-pane .pkh-grid{display:grid;grid-template-columns:90px minmax(170px,1.6fr) minmax(230px,2fr) 54px minmax(110px,1fr) 118px;column-gap:14px;row-gap:10px;align-items:center;padding:10px 16px;min-width:800px}
+#pkh-pane .pkh-grid.h{position:sticky;top:0;z-index:2;background:#F1F5F9;font-size:.75rem;font-weight:600;color:#334155}
+#pkh-pane .pkh-grid.r{border-top:1px solid #E2E8F0;background:#fff;font-size:.8125rem}
+#pkh-pane .pkh-grid.r:hover{background:#F8FAFF}
+#pkh-pane .pkh-grid small,.pkh-tl small{display:block;color:#64748B;font-size:.72rem;margin-top:1px}
+#pkh-pane .pkh-code,.pkh-code{font-weight:700;color:#1E40AF;cursor:pointer;text-decoration:underline;text-underline-offset:2px;word-break:break-all}
+.pkh-p{display:inline-flex;align-items:center;border-radius:999px;padding:2px 10px;font-size:.72rem;font-weight:700;border:1px solid;white-space:nowrap}
+.pkh-p.e{background:#F1F5F9;border-color:#CBD5E1;color:#475569}.pkh-p.f{background:#DBEAFE;border-color:#93C5FD;color:#1E40AF}.pkh-p.c{background:#FEF3C7;border-color:#FCD34D;color:#B45309}.pkh-p.o{background:#FEE2E2;border-color:#FCA5A5;color:#B91C1C}.pkh-p.n{background:#E2E8F0;border-color:#CBD5E1;color:#475569}
+.pkh-ar{color:#94A3B8;margin:0 4px;font-weight:800}
+.pkh-src{font-size:.7rem;font-weight:800;border-radius:8px;padding:3px 8px;white-space:nowrap}.pkh-src.a{background:#EEF2FF;color:#4338CA}.pkh-src.b{background:#DCFCE7;color:#15803D}
+#pkh-pane .pkh-pg{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center;font-size:.8rem;color:#64748B}
+#pkh-pane .pkh-pg button{height:34px;border:1px solid #CBD5E1;border-radius:10px;background:#fff;padding:0 14px;font-weight:700;cursor:pointer}
+#pkh-pane .pkh-pg button:disabled{opacity:.4;cursor:default}
+#pkh-pane .pkh-none{padding:36px 18px;text-align:center;color:#64748B;font-size:.875rem;border-top:1px solid #E2E8F0}
+.pkh-hero{border-radius:14px;padding:10px 14px;margin:10px 0 12px;text-align:left;border:1.5px solid #CBD5E1;background:#F8FAFC}
+.pkh-hero .v{font-size:1.6rem;font-weight:800}.pkh-hero .l{font-size:.78rem;font-weight:700;color:#475569}.pkh-hero .s{font-size:.74rem;color:#64748B}
+.pkh-hero.w{background:#FFFBEB;border-color:#FCD34D}.pkh-hero.w .v,.pkh-hero.w .l{color:#B45309}
+.pkh-tlw{max-height:320px;overflow:auto;padding:4px 4px 0 12px;text-align:left}
+.pkh-tl{margin:2px 0 4px 6px;border-left:3px solid #CBD5E1;padding-left:18px;text-align:left}
+.pkh-ev{position:relative;margin-bottom:13px;font-size:.85rem}
+.pkh-ev:before{content:"";position:absolute;left:-27px;top:4px;width:13px;height:13px;border-radius:50%;background:#fff;border:3px solid #2563EB}
+.pkh-ev.c:before{border-color:#F59E0B}.pkh-ev.e:before{border-color:#94A3B8}.pkh-ev.o:before{border-color:#DC2626}
+.pkh-bk{display:flex;gap:10px}.pkh-bk>div{flex:1;border:1px solid #E2E8F0;border-radius:12px;padding:8px 10px;background:#F8FAFC;text-align:center}.pkh-bk b{display:block;font-size:1.4rem;line-height:1.2}.pkh-bk span{font-size:.72rem;color:#64748B}
+.pkh-li{display:flex;justify-content:space-between;align-items:center;gap:10px;border-top:1px solid #E2E8F0;padding:8px 2px}
+#pkh-exp{margin-left:auto;display:flex;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.14)}
+#pkh-exp button{height:42px;border:0;border-right:1px solid #E2E8F0;background:#fff;color:#0b1b33;font-size:.82rem;font-weight:800;padding:0 14px;cursor:pointer;white-space:nowrap}
+#pkh-exp button:last-child{border-right:0}#pkh-exp button:hover{background:#eef2f8}#pkh-exp button.main{background:#0b1b33;color:#fff}#pkh-exp button.main:hover{background:#17305a}
+.pkh-sum{margin-top:10px;text-align:left;background:#F8FAFC;border:1px dashed #CBD5E1;border-radius:12px;padding:9px 12px;font-size:.8rem;color:#334155}
+`;
+        document.head.appendChild(st);
+    }
+ 
+    function build() {
+        const wrap = document.querySelector('#pills-rack .pk-wrap');
+        if (!wrap || document.getElementById('pkh-pane')) return !!wrap;
+        css();
+        const head = wrap.querySelector('.pk-head');
+        const tabs = document.createElement('div'); tabs.id = 'pkh-tabs';
+        tabs.innerHTML = '<button type="button" data-t="main" class="on"></button><button type="button" data-t="hist"></button>' +
+            '<div id="pkh-exp"><button type="button" class="main" data-x="img"></button><button type="button" data-x="copy"></button><button type="button" data-x="pdf"></button></div>';
+        (head ? head.insertAdjacentElement('afterend', tabs) : wrap.insertAdjacentElement('afterbegin', tabs));
+        const pane = document.createElement('div'); pane.id = 'pkh-pane';
+        pane.innerHTML = `<div class="pk-card">
+            <div class="pkh-kpis" id="pkh-kpis"></div>
+            <div class="pk-tools"><div class="pk-chips" id="pkh-range"></div>
+                <div id="pkh-custom" style="display:none;gap:6px;align-items:center"><input type="date" class="pkh-in" id="pkh-from"> – <input type="date" class="pkh-in" id="pkh-to"></div>
+                <label class="pk-search m-0"><i class="bi bi-search text-muted"></i><input type="text" id="pkh-q" autocomplete="off"></label></div>
+            <div class="pk-tools"><div class="pk-chips" id="pkh-dest"></div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><select class="pkh-in" id="pkh-user"></select><select class="pkh-in" id="pkh-src"></select><button type="button" class="pkh-btn" id="pkh-csv"></button></div></div>
+            <div class="pk-tablebox"><div class="pkh-grid h" id="pkh-head"></div><div id="pkh-rows"></div></div>
+            <div class="pkh-pg" id="pkh-pg"></div></div>`;
+        wrap.appendChild(pane);
+ 
+        tabs.addEventListener('click', (e) => {
+            const x = e.target.closest('button[data-x]'); if (x) { exportDo(x.getAttribute('data-x')); return; }
+            const b = e.target.closest('button[data-t]'); if (b) setTab(b.getAttribute('data-t'));
+        });
+        pane.addEventListener('click', (e) => {
+            const t = e.target;
+            let el = t.closest('[data-range]'); if (el) { S.range = el.getAttribute('data-range'); S.page = 1; render(true); return; }
+            el = t.closest('[data-dest]'); if (el) { S.dest = el.getAttribute('data-dest'); S.page = 1; render(true); return; }
+            el = t.closest('[data-code]'); if (el) { showRack(el.getAttribute('data-code')); return; }
+            el = t.closest('[data-pg]'); if (el && !el.disabled) { S.page += parseInt(el.getAttribute('data-pg'), 10); render(true); return; }
+            if (t.closest('#pkh-csv')) { csv(); return; }
+            if (t.closest('#pkh-stale')) { showStale(); return; }
+        });
+        pane.addEventListener('input', (e) => {
+            if (e.target.id === 'pkh-q') { S.q = e.target.value.trim(); S.page = 1; render(true); }
+            else if (e.target.id === 'pkh-from') { S.from = e.target.value; S.page = 1; render(true); }
+            else if (e.target.id === 'pkh-to') { S.to = e.target.value; S.page = 1; render(true); }
+        });
+        pane.addEventListener('change', (e) => {
+            if (e.target.id === 'pkh-user') { S.user = e.target.value; S.page = 1; render(true); }
+            else if (e.target.id === 'pkh-src') { S.src = e.target.value; S.page = 1; render(true); }
+        });
+        return true;
+    }
+ 
+    function setTab(t) {
+        S.tab = t;
+        const wrap = document.querySelector('#pills-rack .pk-wrap'); if (!wrap) return;
+        ['.pk-kpis', '.pk-cols'].forEach((s) => { const el = wrap.querySelector(s); if (el) el.style.display = t === 'hist' ? 'none' : ''; });
+        const pane = document.getElementById('pkh-pane'); if (pane) pane.style.display = t === 'hist' ? 'block' : 'none';
+        if (t === 'hist') { pane.style.display = 'flex'; pane.style.flexDirection = 'column'; }
+        render(true);
+    }
+ 
+    function render(force) {
+        if (!build()) return;
+        const tabs = document.querySelectorAll('#pkh-tabs button[data-t]');
+        const xb = document.querySelectorAll('#pkh-exp button');
+        if (xb.length === 3) { xb[0].innerHTML = '🖼 ' + L('บันทึกภาพ', 'Save image'); xb[1].innerHTML = '📋 ' + L('คัดลอกภาพ', 'Copy image'); xb[2].innerHTML = '📄 PDF'; }
+        tabs[0].textContent = L('โอนย้าย & สรุปสถานะ', 'Transfer & summary');
+        tabs[1].textContent = '🕘 ' + L('ประวัติการโอนย้าย', 'Transfer history');
+        tabs.forEach((b) => b.classList.toggle('on', b.getAttribute('data-t') === S.tab));
+        if (S.tab !== 'hist') return;
+ 
+        const base = rows();
+        const h = (db.rackHistory || []);
+        const nsig = [h.length, h.length ? (h[h.length - 1].id || '') : '', S.range, S.from, S.to, S.dest, S.user, S.src, S.q, S.page, (typeof currentLanguage !== 'undefined' ? currentLanguage : '')].join('|');
+        if (!force && nsig === sig) return;
+        sig = nsig;
+ 
+        const inR = base.filter((r) => inRange(r.t));
+        const stl = stale(base);
+        const toC = inR.filter((r) => r.to === 'CUSTOMER').length, fromC = inR.filter((r) => r.from === 'CUSTOMER' && r.to !== 'CUSTOMER').length, toO = inR.filter((r) => r.to === 'OUT').length;
+        const models = {}; inR.forEach((r) => { models[r.name || r.code] = 1; });
+        document.getElementById('pkh-kpis').innerHTML =
+            `<div class="pkh-k"><div class="l">${esc(rangeLabel())} ${L('โอนย้าย', 'moved')}</div><div class="v">${inR.length}</div><div class="s">${L('รายการ', 'moves')} · ${Object.keys(models).length} ${L('รุ่น', 'models')}</div></div>` +
+            `<div class="pkh-k"><div class="l">${L('ส่งไปลูกค้า', 'Sent to customer')}</div><div class="v">${toC}</div><div class="s">${esc(rangeLabel())}</div></div>` +
+            `<div class="pkh-k"><div class="l">${L('กลับจากลูกค้า', 'Back from customer')}</div><div class="v">${fromC}</div><div class="s">${esc(rangeLabel())}</div></div>` +
+            `<div class="pkh-k"><div class="l">${L('ชำรุด (OUT)', 'Damaged (OUT)')}</div><div class="v">${toO}</div><div class="s">${esc(rangeLabel())}</div></div>` +
+            `<div class="pkh-k am click" id="pkh-stale" title="${esc(L('กดเพื่อดูรายชื่อ', 'Click for list'))}"><div class="l">${L('ไม่เคลื่อนไหวเกิน', 'Idle over')} ${WARN_DAYS} ${L('วัน', 'days')}</div><div class="v">${stl.length}</div><div class="s">${L('เปล่า', 'empty')} ${stl.filter((x) => x.loc === 'WH_EMPTY').length} · ${L('มีงาน', 'filled')} ${stl.filter((x) => x.loc === 'WH_FILLED').length} · ${L('ลูกค้า', 'cust.')} ${stl.filter((x) => x.loc === 'CUSTOMER').length}</div></div>`;
+ 
+        const rg = document.getElementById('pkh-range');
+        rg.innerHTML = [['today', L('วันนี้', 'Today')], ['7', L('7 วัน', '7 days')], ['month', L('เดือนนี้', 'This month')], ['all', L('ทั้งหมด', 'All')], ['custom', L('เลือกวันที่…', 'Pick dates…')]]
+            .map((a) => `<button type="button" class="pk-chip${S.range === a[0] ? ' on' : ''}" data-range="${a[0]}">${a[1]}</button>`).join('');
+        const cu = document.getElementById('pkh-custom'); cu.style.display = S.range === 'custom' ? 'inline-flex' : 'none';
+        const fi = document.getElementById('pkh-from'), ti = document.getElementById('pkh-to');
+        if (fi.value !== S.from) fi.value = S.from; if (ti.value !== S.to) ti.value = S.to;
+        const qi = document.getElementById('pkh-q'); qi.placeholder = L('ค้นหา รหัสแร็ค, ชื่อรุ่น...', 'Search rack code, model...'); if (qi.value !== S.q && document.activeElement !== qi) qi.value = S.q;
+        document.getElementById('pkh-dest').innerHTML = [['all', L('ทุกปลายทาง', 'All destinations')], ['WH_EMPTY', locName('WH_EMPTY')], ['WH_FILLED', locName('WH_FILLED')], ['CUSTOMER', locName('CUSTOMER')], ['OUT', locName('OUT')]]
+            .map((a) => `<button type="button" class="pk-chip${S.dest === a[0] ? ' on' : ''}" data-dest="${a[0]}">${a[1]}</button>`).join('');
+        const users = Array.from(new Set(base.map((r) => r.user).filter(Boolean))).sort();
+        const us = document.getElementById('pkh-user');
+        us.innerHTML = `<option value="">${esc(L('ผู้ทำรายการ: ทั้งหมด', 'User: all'))}</option>` + users.map((u) => `<option value="${esc(u)}"${S.user === u ? ' selected' : ''}>${esc(u)}</option>`).join('');
+        const sc = document.getElementById('pkh-src');
+        sc.innerHTML = `<option value="">${esc(L('ที่มา: ทั้งหมด', 'Source: all'))}</option><option value="n"${S.src === 'n' ? ' selected' : ''}>${esc(L('โอนย้ายปกติ', 'Normal transfer'))}</option><option value="lg"${S.src === 'lg' ? ' selected' : ''}>${esc(L('ยิงที่ LG', 'Scanned at LG'))}</option>`;
+        document.getElementById('pkh-csv').innerHTML = '⬇ ' + L('ดาวน์โหลด CSV', 'Download CSV');
+        document.getElementById('pkh-head').innerHTML = `<div>${L('เวลา', 'Time')}</div><div>${L('รหัสแร็ค / ชื่อ', 'Rack / name')}</div><div>${L('จาก → ไป', 'From → To')}</div><div style="text-align:right">${L('จำนวน', 'Qty')}</div><div>${L('ผู้ทำรายการ', 'By')}</div><div>${L('ที่มา', 'Source')}</div>`;
+ 
+        const list = filtered(inR);
+        const pages = Math.max(1, Math.ceil(list.length / PER)); if (S.page > pages) S.page = pages; if (S.page < 1) S.page = 1;
+        const from = (S.page - 1) * PER, part = list.slice(from, from + PER);
+        document.getElementById('pkh-rows').innerHTML = part.length ? part.map((r) =>
+            `<div class="pkh-grid r"><div><b>${hm(r.t)}</b><small>${dm(r.t)}</small></div>` +
+            `<div><a class="pkh-code" data-code="${esc(r.code)}">${esc(r.code)}</a><small>${esc(r.name)}</small></div>` +
+            `<div>${pill(r.from)}<span class="pkh-ar">➜</span>${pill(r.to)}</div><div style="text-align:right">${r.qty}</div><div>${esc(r.user || '-')}</div>` +
+            `<div><span class="pkh-src ${isLG(r.act) ? 'b' : 'a'}">${esc(srcName(r.act))}</span></div></div>`).join('')
+            : `<div class="pkh-none">${esc(L('ไม่พบรายการในช่วง/ตัวกรองที่เลือก', 'No records for this range / filter'))}</div>`;
+        document.getElementById('pkh-pg').innerHTML =
+            `<span>${list.length ? L('แสดง', 'Showing') + ' ' + (from + 1) + '–' + (from + part.length) + ' ' + L('จาก', 'of') + ' ' + list.length + ' ' + L('รายการ', 'records') : ''}</span>` +
+            `<span><button type="button" data-pg="-1"${S.page <= 1 ? ' disabled' : ''}>◀</button> &nbsp;${S.page} / ${pages}&nbsp; <button type="button" data-pg="1"${S.page >= pages ? ' disabled' : ''}>▶</button></span>`;
+    }
+ 
+    // ---------- เส้นทางของแร็คใบเดียว ----------
+    function evInfo(r) {
+        if (r.to === 'CUSTOMER') return { c: 'c', t: L('ส่งไปลูกค้า', 'Sent to customer') };
+        if (r.from === 'CUSTOMER') return { c: 'e', t: L('กลับจากลูกค้า', 'Back from customer') };
+        if (r.to === 'WH_FILLED') return { c: '', t: L('ใส่ชิ้นงานแล้ว', 'Filled with parts') };
+        if (r.to === 'WH_EMPTY') return { c: 'e', t: L('เป็นกล่องเปล่า', 'Now empty') };
+        if (r.to === 'OUT') return { c: 'o', t: L('ตั้งเป็นชำรุด', 'Marked damaged') };
+        return { c: '', t: L('ย้ายตำแหน่ง', 'Moved') };
+    }
+    const dur = (ms) => { const d = Math.floor(ms / 864e5); if (d >= 1) return d + ' ' + L('วัน', 'days'); const h = Math.floor(ms / 36e5); return h >= 1 ? h + ' ' + L('ชม.', 'h') : L('ไม่ถึง 1 ชม.', '< 1 h'); };
+    function showRack(code) {
+        const key = U(code).toUpperCase();
+        const desc = rows().filter((r) => r.code.toUpperCase() === key); if (!desc.length) return;
+        const asc = desc.slice().reverse();
+        let start = 0, trips = 0, lastStay = null;
+        asc.forEach((r) => {
+            if (r.to === 'CUSTOMER' && r.from !== 'CUSTOMER') { start = r.t; trips++; }
+            else if (r.from === 'CUSTOMER' && r.to !== 'CUSTOMER' && start && r.t) { lastStay = { ms: r.t - start, a: start, b: r.t }; start = 0; }
+        });
+        const cur = desc[0];
+        let hero = '';
+        if (cur.t) {
+            const ms = Date.now() - cur.t, over = cur.to !== 'OUT' && ms / 864e5 >= WARN_DAYS;
+            hero = `<div class="pkh-hero${over ? ' w' : ''}"><div class="l">${esc(L('อยู่ที่', 'At'))} ${pill(cur.to)} ${esc(L('มาแล้ว (ไม่เคลื่อนไหว)', 'for (no movement)'))}</div><div class="v">${esc(dur(ms))}</div><div class="s">${esc(L('ตั้งแต่', 'since'))} ${esc(dmhm(cur.t))}${over ? ' · ⚠️ ' + esc(L('เกิน ' + WARN_DAYS + ' วัน', 'over ' + WARN_DAYS + ' days')) : ''}</div></div>`;
+        }
+        const ev = desc.map((r) => { const i = evInfo(r); return `<div class="pkh-ev ${i.c}"><b>${esc(i.t)}</b><small>${esc(dmhm(r.t))} · ${esc(locName(r.from))} ➜ ${esc(locName(r.to))} · ${esc(r.user || '-')} · ${esc(srcName(r.act))}</small></div>`; }).join('');
+        const sum = `<div class="pkh-sum"><b>${esc(L('สรุป', 'Summary'))}:</b> ${esc(L('ส่งไปลูกค้า', 'Sent to customer'))} ${trips} ${esc(L('รอบ', 'times'))}${lastStay ? ' · ' + esc(L('รอบล่าสุดที่กลับมาแล้วอยู่ที่ลูกค้า', 'last completed stay at customer')) + ' ' + esc(dur(lastStay.ms)) + ' (' + esc(dm(lastStay.a)) + ' → ' + esc(dm(lastStay.b)) + ')' : ''}</div>`;
+        const html = `<div style="text-align:left"><div style="font-weight:800;font-size:1.05rem;word-break:break-all">${esc(cur.code)}</div><div style="font-size:.8rem;color:#64748B">${esc(cur.name)} · ${esc(L('ตอนนี้', 'now'))} ${pill(cur.to)}</div>${hero}<div class="pkh-tlw"><div class="pkh-tl">${ev}</div></div>${sum}</div>`;
+        if (typeof Swal !== 'undefined') Swal.fire({ title: L('เส้นทางของแร็คใบนี้', 'Rack journey'), html, width: 560, showConfirmButton: false, showCloseButton: true });
+    }
+    function showStale() {
+        if (typeof Swal === 'undefined') return;
+        let loc = 'all';
+        const paint = (box) => {
+            const all = stale(rows()), list = loc === 'all' ? all : all.filter((x) => x.loc === loc), bk = buckets(all);
+            const chips = [['all', L('ทั้งหมด', 'All')], ['WH_EMPTY', locName('WH_EMPTY')], ['WH_FILLED', locName('WH_FILLED')], ['CUSTOMER', locName('CUSTOMER')]]
+                .map((a) => `<button type="button" class="pk-chip${loc === a[0] ? ' on' : ''}" data-sl="${a[0]}">${esc(a[1])} ${a[0] === 'all' ? all.length : all.filter((x) => x.loc === a[0]).length}</button>`).join('');
+            box.innerHTML = `<div class="pkh-bk"><div><b style="color:#ca7a00">${bk[0]}</b><span>${WARN_DAYS}–6 ${esc(L('วัน', 'd'))}</span></div><div><b style="color:#d25a1f">${bk[1]}</b><span>7–13 ${esc(L('วัน', 'd'))}</span></div><div><b style="color:#c0392b">${bk[2]}</b><span>14+ ${esc(L('วัน', 'd'))}</span></div></div>` +
+                `<div class="pk-chips" style="margin:10px 0">${chips}</div>` +
+                (list.length ? `<div style="max-height:330px;overflow:auto">` + list.map((r) => `<div class="pkh-li" data-c2="${esc(r.code)}"><span style="min-width:0"><a class="pkh-code">${esc(r.code)}</a><small>${esc(r.name)} · ${esc(L('ตั้งแต่', 'since'))} ${esc(dmhm(r.t))}</small></span><span>${pill(r.loc)}</span><b style="color:${SEV(r.days)};white-space:nowrap">${r.days} ${esc(L('วัน', 'd'))}</b></div>`).join('') + `</div>`
+                    : `<div style="color:#0f6a49;background:#f0faf5;border-radius:10px;padding:14px">${esc(L('ไม่มีแร็คค้าง 🎉', 'No idle racks 🎉'))}</div>`);
+            const f = box.querySelector('[data-sl="' + loc + '"]'); if (f) f.focus();   // คืนโฟกัสให้ปุ่มที่เพิ่งกด เพื่อให้กด Esc ปิดหน้าต่างได้
+        };
+        Swal.fire({ title: L('ไม่เคลื่อนไหวเกิน ', 'No movement over ') + WARN_DAYS + L(' วัน (ทุกตำแหน่ง)', ' days (all locations)'), html: '<div id="pkh-sw" style="text-align:left"></div>', width: 600, showConfirmButton: false, showCloseButton: true,
+            didOpen: (el) => {
+                const box = el.querySelector('#pkh-sw'); paint(box);
+                el.addEventListener('click', (e) => {
+                    const c = e.target.closest('[data-sl]'); if (c) { loc = c.getAttribute('data-sl'); paint(box); return; }
+                    const a = e.target.closest('[data-c2]'); if (a) showRack(a.getAttribute('data-c2'));
+                });
+            } });
+    }
+ 
+    // ---------- CSV ----------
+    function csv() {
+        const list = filtered(rows().filter((r) => inRange(r.t)));
+        if (!list.length) { if (typeof Swal !== 'undefined') Swal.fire(L('ไม่มีข้อมูล', 'No data'), L('ไม่มีรายการให้ดาวน์โหลดในตัวกรองนี้', 'Nothing to download for this filter'), 'info'); return; }
+        const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+        const dt = (t) => { const d = new Date(t); return t ? d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) : ''; };
+        const lines = [['เวลา', 'รหัสแร็ค', 'ชื่อ', 'จาก', 'ไป', 'จำนวน', 'ผู้ทำรายการ', 'ที่มา'].map(q).join(',')].concat(
+            list.map((r) => [dt(r.t), r.code, r.name, locName(r.from), locName(r.to), r.qty, r.user, srcName(r.act)].map(q).join(',')));
+        const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+        const n = new Date(); a.download = 'rack-history-' + n.getFullYear() + pad(n.getMonth() + 1) + pad(n.getDate()) + '.csv';
+        document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    }
+ 
+    // ---------- บันทึกภาพ / คัดลอกภาพ / PDF ----------
+    // แท็บ "โอนย้าย & สรุปสถานะ" → ใช้รายงานสถานะแร็คเดิมของแดชบอร์ดแร็ค (rkaSaveImage / rkaSavePdf)
+    // แท็บ "ประวัติการโอนย้าย"    → ออกรายงานประวัติตามตัวกรองที่เลือกอยู่ (สูงสุด 200 แถวล่าสุด; CSV ได้ทั้งหมด)
+    const toast = (icon, title) => { try { Swal.fire({ toast: true, position: 'bottom-end', icon: icon, title: title, showConfirmButton: false, timer: 3800 }); } catch (e) { } };
+    const loading = (t) => { try { Swal.fire({ title: t, allowOutsideClick: false, didOpen: () => Swal.showLoading() }); } catch (e) { } };
+    const closeSw = () => { try { Swal.close(); } catch (e) { } };
+    const fname = (ext) => { const n = new Date(); return 'Rack_History_' + n.getFullYear() + pad(n.getMonth() + 1) + pad(n.getDate()) + '_' + pad(n.getHours()) + pad(n.getMinutes()) + '.' + ext; };
+    let busyX = false;
+    const MAXR = 200, MAXI = 40;
+    function reportHtml() {
+        const base = rows(), inR = base.filter((r) => inRange(r.t)), list = filtered(inR), stl = stale(base), shown = list.slice(0, MAXR);
+        const toC = inR.filter((r) => r.to === 'CUSTOMER').length, fromC = inR.filter((r) => r.from === 'CUSTOMER' && r.to !== 'CUSTOMER').length, toO = inR.filter((r) => r.to === 'OUT').length;
+        const bk = buckets(stl);
+        const fl = [rangeLabel() + (S.range === 'custom' ? ' (' + (S.from || '…') + ' → ' + (S.to || '…') + ')' : '')];
+        if (S.dest !== 'all') fl.push(L('ปลายทาง', 'To') + ': ' + locName(S.dest));
+        if (S.user) fl.push(L('ผู้ทำรายการ', 'By') + ': ' + S.user);
+        if (S.src) fl.push(L('ที่มา', 'Source') + ': ' + (S.src === 'lg' ? L('ยิงที่ LG', 'Scanned at LG') : L('โอนย้ายปกติ', 'Normal transfer')));
+        if (S.q) fl.push(L('ค้นหา', 'Search') + ': ' + S.q);
+        const n = new Date();
+        const td = 'padding:7px 9px;border-top:1px solid #e6eaf1;font-size:12.5px;vertical-align:middle;';
+        const th = (t, al) => '<th style="text-align:' + (al || 'left') + ';padding:8px 9px;background:#eef2f8;font-size:12px;color:#33415c;">' + t + '</th>';
+        const k = (l, v, c) => '<div style="flex:1;border:1px solid #e1e7f0;border-radius:12px;padding:10px 14px;background:' + (c || '#f8fafc') + '"><div style="font-size:12px;color:#5b6b84;font-weight:700">' + l + '</div><div style="font-size:26px;font-weight:800;color:#0b1b33;line-height:1.2">' + v + '</div></div>';
+        const sec = (t, r) => '<div style="margin:18px 0 8px;display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:15px;color:#0b1b33">' + t + '</b><span style="font-size:12px;color:#5b6b84">' + (r || '') + '</span></div>';
+        return '<div style="width:1040px;padding:26px 30px;background:#fff;font-family:inherit;color:#0b1b33;box-sizing:border-box">' +
+            '<div style="background:#0b1b33;color:#fff;border-radius:14px;padding:16px 22px"><div style="font-size:22px;font-weight:800">' + esc(L('รายงานประวัติการโอนย้ายแร็ค', 'Rack transfer history report')) + '</div><div style="font-size:12.5px;opacity:.85;margin-top:4px">' + esc(fl.join(' · ')) + ' · ' + esc(L('สร้างเมื่อ', 'created')) + ' ' + esc(dmhm(n.getTime())) + '</div></div>' +
+            '<div style="display:flex;gap:10px;margin-top:14px">' + k(esc(L('โอนย้ายทั้งหมด', 'Total moves')), inR.length) + k(esc(L('ส่งไปลูกค้า', 'Sent to customer')), toC, '#fffbeb') + k(esc(L('กลับจากลูกค้า', 'Back from customer')), fromC) + k(esc(L('ชำรุด (OUT)', 'Damaged')), toO) + k(esc(L('ไม่เคลื่อนไหวเกิน ', 'Idle over ') + WARN_DAYS + L(' วัน', ' d')), stl.length, '#fff3ee') + '</div>' +
+            sec(esc(L('รายการโอนย้าย', 'Transfers')), esc(list.length + ' ' + L('รายการ', 'records') + (list.length > MAXR ? ' · ' + L('แสดง ' + MAXR + ' รายการล่าสุด', 'showing latest ' + MAXR) : ''))) +
+            (shown.length ? '<table style="width:100%;border-collapse:collapse"><thead><tr>' + th(esc(L('เวลา', 'Time'))) + th(esc(L('รหัสแร็ค', 'Rack'))) + th(esc(L('ชื่อ', 'Name'))) + th(esc(L('จาก → ไป', 'From → To'))) + th(esc(L('จำนวน', 'Qty')), 'right') + th(esc(L('ผู้ทำรายการ', 'By'))) + th(esc(L('ที่มา', 'Source'))) + '</tr></thead><tbody>' +
+                shown.map((r) => '<tr style="page-break-inside:avoid"><td style="' + td + 'white-space:nowrap">' + esc(dmhm(r.t)) + '</td><td style="' + td + 'font-weight:700;word-break:break-all">' + esc(r.code) + '</td><td style="' + td + 'color:#5b6b84">' + esc(r.name) + '</td><td style="' + td + 'white-space:nowrap">' + pill(r.from) + '<span class="pkh-ar">➜</span>' + pill(r.to) + '</td><td style="' + td + 'text-align:right">' + r.qty + '</td><td style="' + td + '">' + esc(r.user || '-') + '</td><td style="' + td + '">' + esc(srcName(r.act)) + '</td></tr>').join('') + '</tbody></table>'
+                : '<div style="padding:16px;text-align:center;color:#7a8799;background:#f6f8fb;border-radius:10px">' + esc(L('ไม่พบรายการ', 'No records')) + '</div>') +
+            sec(esc(L('แร็คที่ไม่เคลื่อนไหวเกิน ', 'Racks with no movement over ') + WARN_DAYS + L(' วัน (ทุกตำแหน่ง)', ' days (all locations)')), esc(stl.length + ' ' + L('ใบ', 'racks') + ' · ' + WARN_DAYS + '–6: ' + bk[0] + ' · 7–13: ' + bk[1] + ' · 14+: ' + bk[2])) +
+            (stl.length ? '<table style="width:100%;border-collapse:collapse"><thead><tr>' + th(esc(L('รหัสแร็ค', 'Rack'))) + th(esc(L('ชื่อ', 'Name'))) + th(esc(L('ตำแหน่ง', 'Location'))) + th(esc(L('ตั้งแต่', 'Since'))) + th(esc(L('ค้าง', 'Idle')), 'right') + '</tr></thead><tbody>' +
+                stl.slice(0, MAXI).map((r) => '<tr style="page-break-inside:avoid"><td style="' + td + 'font-weight:700">' + esc(r.code) + '</td><td style="' + td + 'color:#5b6b84">' + esc(r.name) + '</td><td style="' + td + '">' + pill(r.loc) + '</td><td style="' + td + '">' + esc(dmhm(r.t)) + '</td><td style="' + td + 'text-align:right;font-weight:800;color:' + SEV(r.days) + '">' + r.days + ' ' + esc(L('วัน', 'd')) + '</td></tr>').join('') + '</tbody></table>' + (stl.length > MAXI ? '<div style="margin-top:6px;font-size:11.5px;color:#7a8799">' + esc(L('แสดง ' + MAXI + ' ใบที่ค้างนานที่สุด จากทั้งหมด ' + stl.length + ' ใบ', 'Showing the ' + MAXI + ' longest of ' + stl.length)) + '</div>' : '')
+                : '<div style="padding:14px;text-align:center;color:#0f6a49;background:#f0faf5;border-radius:10px">' + esc(L('ไม่มีแร็คค้าง', 'No idle racks')) + '</div>') +
+            '<div style="margin-top:16px;font-size:11px;color:#98a4b6;text-align:right">ATECH STOCK IN-OUT FG SYSTEM</div></div>';
+    }
+    function mountReport() {
+        const host = document.createElement('div');
+        host.style.cssText = 'position:fixed;left:-12000px;top:0;width:1100px;background:#fff;pointer-events:none;';
+        host.innerHTML = reportHtml(); document.body.appendChild(host);
+        return { host: host, el: host.firstElementChild };
+    }
+    async function histImage(mode) {
+        if (busyX) return;
+        if (typeof html2canvas !== 'function') { toast('error', L('ยังโหลดตัวสร้างภาพไม่เสร็จ ลองรีเฟรชหน้าแล้วกดใหม่', 'Image tool not loaded yet — refresh and try again')); return; }
+        busyX = true; loading(L('กำลังสร้างภาพ...', 'Creating image...'));
+        const m = mountReport();
+        try {
+            const sc = Math.max(1, Math.min(2, 14000 / (m.el.offsetHeight || 1)));
+            const job = html2canvas(m.el, { scale: sc, backgroundColor: '#ffffff', useCORS: true }).then((c) => new Promise((r) => c.toBlob(r, 'image/png')));
+            let copyP = null;
+            if (mode === 'copy' && navigator.clipboard && typeof window.ClipboardItem === 'function') {
+                try { copyP = navigator.clipboard.write([new ClipboardItem({ 'image/png': job.then((b) => { if (!b) throw new Error('no-blob'); return b; }) })]); copyP.catch(() => { }); } catch (e) { copyP = null; }
+            }
+            const blob = await job; m.host.remove(); closeSw();
+            if (!blob) throw new Error(L('สร้างไฟล์ภาพไม่ได้', 'Could not create image'));
+            if (mode === 'copy') {
+                if (copyP) { try { await copyP; toast('success', L('คัดลอกภาพแล้ว วางในไลน์/อีเมลได้เลย (Ctrl+V)', 'Image copied — paste with Ctrl+V')); return; } catch (e) { } }
+                toast('info', L('คัดลอกไม่ได้บนเครื่องนี้ ดาวน์โหลดไฟล์ภาพแทน', 'Copy not available — downloading instead'));
+            }
+            const file = new File([blob], fname('png'), { type: 'image/png' });
+            const isPhone = /Android|iPhone|iPad/i.test(navigator.userAgent) && navigator.maxTouchPoints > 0;
+            if (mode !== 'copy' && isPhone && navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: 'Rack History' }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+            if (mode !== 'copy') toast('success', L('บันทึกภาพเรียบร้อยแล้ว', 'Image saved'));
+        } catch (err) { m.host.remove(); closeSw(); toast('error', L('สร้างภาพไม่สำเร็จ: ', 'Could not create image: ') + (err && err.message ? err.message : err)); }
+        finally { busyX = false; }
+    }
+    async function histPdf() {
+        if (busyX) return;
+        if (typeof html2pdf === 'undefined') { toast('error', L('ยังโหลดตัวสร้าง PDF ไม่เสร็จ ลองรีเฟรชหน้าแล้วกดใหม่', 'PDF tool not loaded yet — refresh and try again')); return; }
+        busyX = true; loading(L('กำลังสร้าง PDF...', 'Creating PDF...'));
+        const m = mountReport();
+        try {
+            await html2pdf().set({ margin: [8, 8, 8, 8], filename: fname('pdf'), image: { type: 'jpeg', quality: 0.95 }, html2canvas: { scale: 2, backgroundColor: '#ffffff', useCORS: true, scrollY: 0 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }, pagebreak: { mode: ['css', 'legacy'], avoid: ['tr'] } }).from(m.el).save();
+            m.host.remove(); closeSw(); toast('success', L('บันทึก PDF เรียบร้อยแล้ว', 'PDF saved'));
+        } catch (err) { m.host.remove(); closeSw(); toast('error', L('สร้าง PDF ไม่สำเร็จ: ', 'Could not create PDF: ') + (err && err.message ? err.message : err)); }
+        finally { busyX = false; }
+    }
+    function exportDo(x) {
+        if (S.tab === 'hist') { if (x === 'pdf') histPdf(); else histImage(x === 'copy' ? 'copy' : 'img'); return; }
+        if (x === 'pdf') { if (typeof window.rkaSavePdf === 'function') window.rkaSavePdf(); else toast('error', L('ยังไม่พบตัวสร้าง PDF', 'PDF builder not found')); }
+        else if (typeof window.rkaSaveImage === 'function') window.rkaSaveImage(x === 'copy' ? 'copy' : 'img');
+        else toast('error', L('ยังไม่พบตัวสร้างภาพ', 'Image builder not found'));
+    }
+ 
+    // เตรียมแท็บให้พร้อม และรีเฟรชอัตโนมัติเมื่อมีการโอนย้ายใหม่ (เฉพาะตอนเปิดแท็บประวัติอยู่)
+    function boot() { try { build(); render(true); } catch (e) { console.warn('PK-HISTORY-V2', e); } }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+    setInterval(() => { try { const p = document.getElementById('pills-rack'); if (S.tab === 'hist' && p && p.classList.contains('active')) render(false); else if (!document.getElementById('pkh-pane')) build() && render(true); } catch (e) { } }, 3000);
+})();
+/* ===== จบ PK-HISTORY-V2 ===== */
 window.pkFilter = window.pkFilter || 'all';
                 window.pkSetFilter = function(f) {
                     window.pkFilter = f;
@@ -41173,6 +41842,149 @@ body:has(#anB-dr.open) #calc-toggle-btn,body:has(#anB-dr.open) #support-fab-btn,
     };
 })();
 /* ===== จบ DELIVERY-PLAN-IMAGE ===== */
+(function () {
+    if (window.__lgRackScan) return; window.__lgRackScan = true;
+    const BUSY = new Set();
+    const U = (s) => String(s == null ? '' : s).trim().toUpperCase();
+    const pad = (n) => String(n).padStart(2, '0');
+    const hm = (t) => { const d = new Date(t); return isNaN(d) ? '-' : pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+    const dmhm = (t) => { const d = new Date(t); return isNaN(d) ? '-' : pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + ' ' + hm(t); };
+    const dayK = (t) => { const d = new Date(t); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+    const LOC = { WH_EMPTY: 'WH กล่องเปล่า', WH_FILLED: 'WH ใส่ชิ้นงาน', CUSTOMER: 'อยู่ที่ลูกค้า', OUT: 'ชำรุด (OUT)' };
+ 
+    // ตำแหน่งล่าสุดของแร็ค = ปลายทางของประวัติรายการล่าสุด (กติกาเดียวกับ calculateRackStock)
+    function lastOf(db, code) {
+        let last = null;
+        (db.rackHistory || []).forEach((r) => { if (U(r.erpCode) === code) last = r; });
+        return last;
+    }
+ 
+    window.lgRackHook = async function (raw, api) {
+        const { card, esc, db, callAppsScript } = api;
+        if (typeof api.parse !== 'function' || api.parse(raw)) return false;   // เป็นแท็ก LG (หรืออ่านแยกไม่ได้) → โค้ดเดิมทำต่อ ไม่ยุ่ง
+        if (/[\x00-\x1F¿]/.test(raw) || (raw.indexOf('/') < 0 && (raw.length > 30 || /ATECH/i.test(raw)))) return false;   // หน้าตาเหมือนแท็ก LG → ให้โค้ดเดิมจัดการ ไม่เหมาเป็นแร็ค
+        const rawCode = String(raw).split('/')[0].trim();
+        const code = U(rawCode);
+        if (!code) return false;
+ 
+        const last = lastOf(db, code);
+        if (!last) {
+            card('err', '⛔ ไม่พบแร็คนี้ในระบบ', `<div class="lgr-note">รหัส <b>${esc(rawCode)}</b> — ที่ LG ลงทะเบียนแร็คใหม่ไม่ได้ ให้แจ้งฝ่ายแพ็คกิ้ง</div>`);
+            return true;
+        }
+        const from = last.to;
+        const me = api.me || 'Unknown';
+        const name = last.name || 'แพ็คกิ้ง';
+ 
+        if (from === 'OUT') { card('err', '⛔ แร็คนี้ถูกตั้งเป็นชำรุด (OUT)', `<div class="lgr-note"><b>${esc(rawCode)}</b> — ให้แจ้งฝ่ายแพ็คกิ้งก่อน</div>`); return true; }
+        if (from === 'CUSTOMER') {
+            card('warn', '⚠️ แร็คนี้อยู่ที่ลูกค้าอยู่แล้ว — ไม่บันทึกซ้ำ', `<div class="lgr-note"><b>${esc(rawCode)}</b> ถูกย้ายไปลูกค้าเมื่อ <b>${esc(dmhm(last.date))}</b>${last.user ? ' โดย ' + esc(last.user) : ''}</div>`);
+            return true;
+        }
+        if (BUSY.has(code)) return true;
+        BUSY.add(code);
+        try {
+            if (from === 'WH_EMPTY' && typeof Swal !== 'undefined') {
+                const q = await Swal.fire({ icon: 'question', title: 'ระบบบอกว่าแร็คนี้ "เปล่า"', html: `<b>${esc(rawCode)}</b> อยู่ที่ WH กล่องเปล่า<br>ยืนยันว่าใส่ชิ้นงานมาถึง LG จริง?`, showCancelButton: true, confirmButtonText: 'ยืนยัน ย้ายไปลูกค้า', cancelButtonText: 'ยกเลิก' });
+                if (!q.isConfirmed) { card('warn', '↩️ ยกเลิกแล้ว — ไม่ได้ย้ายแร็ค', `<div class="lgr-note"><b>${esc(rawCode)}</b> ยังอยู่ที่ WH กล่องเปล่า</div>`); return true; }
+            }
+            const entry = { id: 'rack-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5), date: new Date().toISOString(), erpCode: rawCode, name: name, from: from, to: 'CUSTOMER', quantity: 1, actionType: 'LG_RECEIVE', user: me };   // actionType บอกว่าย้ายจากหน้ารับแท็ก LG (ไม่เก็บเลขแท็ก LG — แท็กกับแร็คแยกกัน)
+            db.rackHistory = db.rackHistory || [];
+            db.rackHistory.push(entry);
+            card('wait', '⏳ กำลังบันทึกแร็ค...', '');
+            try {
+                await callAppsScript('appendBatchRackHistory', [entry]);
+            } catch (e) {
+                const ix = db.rackHistory.indexOf(entry); if (ix >= 0) db.rackHistory.splice(ix, 1);   // ถอยกลับ ไม่ให้ค้างในเครื่อง
+                card('err', '❌ ยังไม่ได้บันทึกแร็ค', `<div class="lgr-note"><b>${esc(rawCode)}</b> — บันทึกไม่สำเร็จ ลองยิงแร็คอีกครั้ง (แท็ก LG ที่รับไปแล้วไม่ได้รับผลกระทบ)</div>`);
+                return true;
+            }
+            try { if (typeof window.populateRackDashboard === 'function') window.populateRackDashboard(); } catch (e) { }
+            const today = dayK(Date.now());
+            const cnt = (db.rackHistory || []).filter((r) => String(r.actionType || '').indexOf('LG_RECEIVE') === 0 && r.date && dayK(r.date) === today).length;
+            card('ok', `🧰 แร็คไปอยู่ที่ลูกค้าแล้ว`, `<div class="lgr-row"><div><small>รหัสแร็ค</small><b>${esc(rawCode)}</b></div><div><small>รุ่น</small><b>${esc(name)}</b></div></div>
+                <div class="lgr-note">${esc(LOC[from] || from)} ➜ <b>อยู่ที่ลูกค้า</b><br>วันนี้ยิงแร็คที่ LG แล้ว <b>${cnt}</b> ใบ · ไม่มีผลกับสถานะแท็ก LG</div>`);
+        } finally { BUSY.delete(code); }
+        return true;
+    };
+})();
+/* ===== จบ LG-RACK-SCAN ===== */
+(function () {
+    if (window.__lgRackScan) return; window.__lgRackScan = true;
+    const BUSY = new Set();
+    const U = (s) => String(s == null ? '' : s).trim().toUpperCase();
+    const pad = (n) => String(n).padStart(2, '0');
+    const hm = (t) => { const d = new Date(t); return isNaN(d) ? '-' : pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+    const dmhm = (t) => { const d = new Date(t); return isNaN(d) ? '-' : pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + ' ' + hm(t); };
+    const dayK = (t) => { const d = new Date(t); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+    const LOC = { WH_EMPTY: 'WH กล่องเปล่า', WH_FILLED: 'WH ใส่ชิ้นงาน', CUSTOMER: 'อยู่ที่ลูกค้า', OUT: 'ชำรุด (OUT)' };
+ 
+    // ตำแหน่งล่าสุดของแร็ค = ปลายทางของประวัติรายการล่าสุด (กติกาเดียวกับ calculateRackStock)
+    function lastOf(db, code) {
+        let last = null;
+        (db.rackHistory || []).forEach((r) => { if (U(r.erpCode) === code) last = r; });
+        return last;
+    }
+ 
+    window.lgRackHook = async function (raw, api) {
+        const { card, esc, db, callAppsScript } = api;
+        if (typeof api.parse !== 'function' || api.parse(raw)) return false;   // เป็นแท็ก LG (หรืออ่านแยกไม่ได้) → โค้ดเดิมทำต่อ ไม่ยุ่ง
+        const rawCode = String(raw).split('/')[0].trim();
+        const code = U(rawCode);
+        if (!code) return false;
+ 
+        const last = lastOf(db, code);
+        if (!last) {
+            card('err', '⛔ ไม่พบแร็คนี้ในระบบ', `<div class="lgr-note">รหัส <b>${esc(rawCode)}</b> — ที่ LG ลงทะเบียนแร็คใหม่ไม่ได้ ให้แจ้งฝ่ายแพ็คกิ้ง</div>`);
+            return true;
+        }
+        const from = last.to;
+        const me = api.me || 'Unknown';
+        const name = last.name || 'แพ็คกิ้ง';
+ 
+        if (from === 'OUT') { card('err', '⛔ แร็คนี้ถูกตั้งเป็นชำรุด (OUT)', `<div class="lgr-note"><b>${esc(rawCode)}</b> — ให้แจ้งฝ่ายแพ็คกิ้งก่อน</div>`); return true; }
+        if (from === 'CUSTOMER') {
+            card('warn', '⚠️ แร็คนี้อยู่ที่ลูกค้าอยู่แล้ว — ไม่บันทึกซ้ำ', `<div class="lgr-note"><b>${esc(rawCode)}</b> ถูกย้ายไปลูกค้าเมื่อ <b>${esc(dmhm(last.date))}</b>${last.user ? ' โดย ' + esc(last.user) : ''}</div>`);
+            return true;
+        }
+        if (BUSY.has(code)) return true;
+        BUSY.add(code);
+        try {
+            if (from === 'WH_EMPTY' && typeof Swal !== 'undefined') {
+                const q = await Swal.fire({ icon: 'question', title: 'ระบบบอกว่าแร็คนี้ "เปล่า"', html: `<b>${esc(rawCode)}</b> อยู่ที่ WH กล่องเปล่า<br>ยืนยันว่าใส่ชิ้นงานมาถึง LG จริง?`, showCancelButton: true, confirmButtonText: 'ยืนยัน ย้ายไปลูกค้า', cancelButtonText: 'ยกเลิก' });
+                if (!q.isConfirmed) { card('warn', '↩️ ยกเลิกแล้ว — ไม่ได้ย้ายแร็ค', `<div class="lgr-note"><b>${esc(rawCode)}</b> ยังอยู่ที่ WH กล่องเปล่า</div>`); return true; }
+            }
+            // ผูกกับแท็กที่เพิ่งรับล่าสุดของคนนี้ (ภายใน 5 นาที)
+            let ref = '';
+            const rl = db.lgReceiveLog || [];
+            for (let i = rl.length - 1; i >= 0; i--) {
+                const r = rl[i];
+                if (U(r.receivedBy) !== U(me)) continue;
+                const t = new Date(r.receivedAt).getTime();
+                if (t && Date.now() - t <= 5 * 60 * 1000 && Number(r.qty) > 0) ref = String(r.docNumber || '').trim();
+                break;
+            }
+            const entry = { id: 'rack-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5), date: new Date().toISOString(), erpCode: rawCode, name: name, from: from, to: 'CUSTOMER', quantity: 1, actionType: 'LG_RECEIVE', lgTag: ref, user: me };   // lgTag = เลขแท็ก LG (คอลัมน์ lgTag ในชีท RackHistory)
+            db.rackHistory = db.rackHistory || [];
+            db.rackHistory.push(entry);
+            card('wait', '⏳ กำลังบันทึกแร็ค...', '');
+            try {
+                await callAppsScript('appendBatchRackHistory', [entry]);
+            } catch (e) {
+                const ix = db.rackHistory.indexOf(entry); if (ix >= 0) db.rackHistory.splice(ix, 1);   // ถอยกลับ ไม่ให้ค้างในเครื่อง
+                card('err', '❌ ยังไม่ได้บันทึกแร็ค', `<div class="lgr-note"><b>${esc(rawCode)}</b> — บันทึกไม่สำเร็จ ลองยิงแร็คอีกครั้ง (แท็ก LG ที่รับไปแล้วไม่ได้รับผลกระทบ)</div>`);
+                return true;
+            }
+            try { if (typeof window.populateRackDashboard === 'function') window.populateRackDashboard(); } catch (e) { }
+            const today = dayK(Date.now());
+            const cnt = (db.rackHistory || []).filter((r) => String(r.actionType || '').indexOf('LG_RECEIVE') === 0 && r.date && dayK(r.date) === today).length;
+            card('ok', `🧰 แร็คไปอยู่ที่ลูกค้าแล้ว`, `<div class="lgr-row"><div><small>รหัสแร็ค</small><b>${esc(rawCode)}</b></div><div><small>รุ่น</small><b>${esc(name)}</b></div></div>
+                <div class="lgr-note">${esc(LOC[from] || from)} ➜ <b>อยู่ที่ลูกค้า</b>${ref ? ' · ผูกกับแท็ก <b>' + esc(ref) + '</b>' : ''}<br>วันนี้ยิงแร็คที่ LG แล้ว <b>${cnt}</b> ใบ · ไม่มีผลกับสถานะแท็ก LG</div>`);
+        } finally { BUSY.delete(code); }
+        return true;
+    };
+})();
+/* ===== จบ LG-RACK-SCAN ===== */
 </script>
 </body>
 </html>
