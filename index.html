@@ -30741,6 +30741,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
     async function afterChange(keys, res, isReturn) {
         try {
             await resync();
+             if (isReturn && res && res.scanIds && res.scanIds.length) { for (let k = 0; k < 6 && stillThere(res.scanIds); k++) { await new Promise((ok) => setTimeout(ok, 2500)); await resync(); } }   // LG-RETCHK-WAIT
             const r = keys && keys.size ? summary(Array.from(keys)) : null;
             const stale = isReturn && res && res.op === 'lgReturn' && typeof res.count !== 'number';
             const n = isReturn && res ? stillThere(res.scanIds) : 0;
