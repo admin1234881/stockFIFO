@@ -5262,7 +5262,7 @@ async function loadDataFromSheet(isInitialLoad = false) {
                         });
                     },
                     reverseHistory: (historyItem) => {
-                        if (!currentUser || currentUser.role !== 'admin') return;
+                        if (!currentUser || !(currentUser.role === 'admin' || String(currentUser.canReverseHistory).toUpperCase() === 'TRUE')) return;
                         if (!historyItem || historyItem.type === 'reversal') {
                             return;
                         }
@@ -7311,7 +7311,7 @@ window.__stockKpiClick = function(kind) {
                 function populateHistoryTable() {
                     const T = translations[currentLanguage];
                     const header = document.getElementById('history-table-header');
-                    const isAdmin = currentUser.role === 'admin';
+                    const isAdmin = currentUser.role === 'admin' || String(currentUser.canReverseHistory).toUpperCase() === 'TRUE';   // REVERSE-PERM
                     header.innerHTML = `<tr>
                 <th>${T.history_table_type}</th>
                 <th>${T.product_name}</th>
@@ -29109,6 +29109,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
     ];
     const EXTRA_KEYS = ['canReceiveLG', 'canBackdateLGReceive', 'canReturnLGTag', 'canLGPrintTags', 'canLGUploadPlan', 'canLGManualPlan', 'canLGPrintPlan', 'canLGEditPlan', 'canManageArchive'];
     CATS[CATS.length - 1].items.push(['canManageArchive', 'จัดการ Archive ประวัติเก่า', 'ย้ายล็อตที่ปิดจบแล้วไปเก็บใน Archive', 'archive']);
+    CATS[0].items.push(['canReverseHistory', 'ยกเลิกรายการในประวัติ', 'กดยกเลิก (ย้อนกลับ) รายการรับ/จ่ายในหน้า "ประวัติการทำรายการ"', 'arrow-counterclockwise']); EXTRA_KEYS.push('canReverseHistory');   // REVERSE-PERM
     const LEGACY_KEYS = ['canLGPrintTags', 'canLGManualPlan', 'canLGPrintPlan'];
     const onOf = (u, k) => {
         const v = u ? u[k] : undefined;
@@ -31902,7 +31903,7 @@ ${stock > 0 ? `<div class="lock">${esc(t('locked', { s: fmt(stock) }))}</div>` :
         const r = rows.find((z) => z.k === S.sel);
         if (!r) { dp.innerHTML = `<div class="ph"><i class="bi bi-cursor" style="font-size:1.6rem;display:block;margin-bottom:6px"></i>${esc(t('pickRow'))}</div>`; dp.classList.remove('open'); ov.style.display = 'none'; return; }
         const x = r.x, T = tyOf(x);
-        const isAdmin = currentUser && currentUser.role === 'admin';
+        const isAdmin = currentUser && (currentUser.role === 'admin' || String(currentUser.canReverseHistory).toUpperCase() === 'TRUE');   // REVERSE-PERM
         const canErp = currentUser && (currentUser.username === 'admin' || currentUser.role === 'admin' || currentUser.canManageProducts);
         const erpP = x.type === 'import' && x.failedErpQty > 0 && (x.erpStatus === 'Pending' || !x.erpStatus), erpC = x.type === 'import' && x.failedErpQty > 0 && x.erpStatus === 'Cleared';
         const stock = (typeof calculatedStock !== 'undefined' ? calculatedStock : []).find((s) => str(s.productId) === str(x.productId));
@@ -40422,6 +40423,7 @@ window.pkFilter = window.pkFilter || 'all';
         canManageProducts: 'จัดการสินค้า', canForecast: 'อัปโหลด Forecast', canManageUsers: 'จัดการผู้ใช้', canManageAnnouncements: 'จัดการประกาศ', canManageSupport: 'ดูรายการแจ้งปัญหา', canManageArchive: 'จัดการ Archive ประวัติเก่า'
     };
     const LEGACY_ON = ['canLGPrintTags', 'canLGManualPlan', 'canLGPrintPlan'];   // ยังไม่เคยตั้งค่า = เปิดอยู่ (ตามแพตช์ LG เดิม)
+    LABEL.canReverseHistory = 'ยกเลิกรายการในประวัติ';   // REVERSE-PERM
     const BASE_KEYS = ['canImport', 'canExport', 'canViewHistory', 'canCountStock', 'canManageProducts', 'canManageUsers', 'canManageAnnouncements', 'canManageDeliveryPlan', 'canConvertPart', 'canManageRack', 'canForecast', 'canManageLotHold', 'canManageSupport', 'canCheckLGTags'];
     let dlg = null, busy = false;
  
