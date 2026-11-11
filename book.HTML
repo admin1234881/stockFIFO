@@ -137,7 +137,7 @@ textarea.in{height:76px;padding:10px 13px;resize:vertical}
 'use strict';
 // ===================== ตั้งค่า (แก้ได้ตรงนี้) =====================
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwGyMVpDNyn6A2bAEoyrnTZF4rkJYihNTJI9BsrJwoGcpnhgIJrqZssi0yK0g-yyjvp/exec';
-const AXIS_FROM = 6, AXIS_TO = 20;                                     // แถบเวลาที่โชว์ (06:00 - 20:00)
+const AXIS_FROM = 8, AXIS_TO = 32;                                     // แถบเวลาที่โชว์ (06:00 - 20:00)
 const REFRESH_MS = 30000;                                              // รีเฟรชสถานะอัตโนมัติทุกกี่มิลลิวินาที
 // ค่า v ต้องตรงกับที่ Google Script รับ (อย่าเปลี่ยน) — เปลี่ยนได้เฉพาะชื่อที่แสดงในพจนานุกรมภาษาด้านล่าง
 const PURPOSES = [
@@ -238,7 +238,7 @@ function setLang(l) { LANG = l === 'en' ? 'en' : 'th'; try { localStorage.setIte
 const $app = document.getElementById('app');
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pad = (n) => String(n).padStart(2, '0');
-function todayStr() { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); }
+function todayStr() { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(Date.now() - 8 * 3600000)); }
 function fmtDate(s) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || '')); if (!m) return String(s || '');
   const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])), T = TX[LANG];
@@ -246,7 +246,7 @@ function fmtDate(s) {
 }
 function fmtShort(s) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || '')); if (!m) return ''; const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])); return TX[LANG].wd[d.getUTCDay()] + ' ' + (+m[3]) + ' ' + TX[LANG].mo[+m[2] - 1]; }
 function fmtDateTime(s) { const m = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})/.exec(String(s || '')); return m ? fmtDate(m[1]) + ' ' + m[2] + t('tsfx') : (s || ''); }
-const toMin = (x) => { const p = String(x || '').split(':'); return Number(p[0]) * 60 + Number(p[1]); };
+const toMin = (x) => { const p = String(x || '').split(':'); const m = Number(p[0]) * 60 + Number(p[1]); return m < 480 ? m + 1440 : m; };   // รอบรถ 08:00-07:59
 const purposeLabel = (v) => { const p = PURPOSES.find((x) => x.v === v); return p ? t(p.k) : v; };
 
 // ---------- เก็บข้อมูลในเครื่อง (ถ้าใช้ไม่ได้ก็ข้าม) ----------
@@ -359,6 +359,7 @@ function renderForm() {
     '<div class="f"><label>' + esc(t('date')) + ' <b>*</b></label><input class="in" type="date" name="date" min="' + tdy + '" value="' + esc(form.date) + '"></div>' +
     '<div class="g2"><div class="f"><label>' + esc(t('from')) + ' <b>*</b></label><input class="in" type="time" name="startTime" value="' + esc(form.startTime) + '"></div>' +
     '<div class="f"><label>' + esc(t('to')) + ' <b>*</b></label><input class="in" type="time" name="endTime" value="' + esc(form.endTime) + '"></div></div>' +
+    '<div style="font-size:12px;color:#64748b;margin:-4px 0 12px">' + (LANG === 'en' ? 'Vehicle day runs 08:00 – 07:59 · times 00:00–07:59 count as the next morning (e.g. 22:00 → 02:00 is OK)' : 'รอบรถ 08:00 – 07:59 · เวลา 00:00–07:59 นับเป็นเช้าวันถัดไป (เช่น 22:00 → 02:00 ทำได้)') + '</div>' +
     '<div class="f"><label>' + esc(t('purpose')) + ' <b>*</b></label><div class="tiles" data-chips="purpose">' + PURPOSES.map((p) => '<button type="button" class="chip tile' + (form.purpose === p.v ? ' on' : '') + '" data-v="' + esc(p.v) + '"><i class="bi bi-' + p.icon + '"></i>' + esc(t(p.k)) + '</button>').join('') + '</div></div>' +
     '<div class="f" style="margin-bottom:4px"><label>' + esc(t('detail')) + '</label><textarea class="in" name="detail" maxlength="400" placeholder="' + esc(t('detailPh')) + '">' + esc(form.detail) + '</textarea></div></div>' +
     '<div class="hp" aria-hidden="true"><label>website</label><input name="website" tabindex="-1" autocomplete="off"></div>' +
@@ -480,7 +481,7 @@ function drawAvailability() {
       h += '<div class="band"><b style="left:' + l + '%;width:' + Math.max(1.5, r - l) + '%"></b></div>';
     }
     h += '</div><div class="ax">';
-    for (let x = AXIS_FROM; x <= AXIS_TO; x += 2) h += '<span style="left:' + pos(x * 60) + '%">' + pad(x) + '</span>';
+    for (let x = AXIS_FROM; x <= AXIS_TO; x += 3) h += '<span style="left:' + pos(x * 60) + '%">' + pad(x % 24) + '</span>';
     h += '</div><div class="legend"><span><s style="background:#e7f6ec"></s>' + esc(t('lgFree')) + '</span><span><s style="background:#c1c8dc"></s>' + esc(t('lgBusy')) + '</span><span><s style="background:rgba(79,70,229,.5)"></s>' + esc(t('lgSel')) + '</span></div>';
   }
   box.innerHTML = h + '</div>';
