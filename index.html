@@ -35834,10 +35834,10 @@ html.lgx-b .lgx-ctrl .card-header{padding-top:16px!important}`
             return out;
         } catch (e) { return []; }
     };
-    const mm = (s) => { const p = String(s || '').split(':'); return (Number(p[0]) || 0) * 60 + (Number(p[1]) || 0); };
+    const mm = (s) => { const p = String(s || '').split(':'); const m = (Number(p[0]) || 0) * 60 + (Number(p[1]) || 0); return m < 480 ? m + 1440 : m; };   // รอบรถ 08:00-07:59
     const ymd = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-    const todayS = () => ymd(new Date());
-    const tomorrowS = () => { const d = new Date(); d.setDate(d.getDate() + 1); return ymd(d); };
+    const todayS = () => ymd(new Date(Date.now() - 8 * 3600000));   // วันรอบรถเริ่ม 08:00
+    const tomorrowS = () => { const d = new Date(Date.now() - 8 * 3600000); d.setDate(d.getDate() + 1); return ymd(d); };
     function thD(s) {
         const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || '')); if (!m) return String(s || '');
         const d = new Date(+m[1], +m[2] - 1, +m[3]);
@@ -35899,13 +35899,13 @@ html.lgx-b .lgx-ctrl .card-header{padding-top:16px!important}`
     }
     function lanesHtml(L) {
         const act = L.filter(r => r.status === 'approved' || r.status === 'pending'); if (!act.length) return '';
-        let lo = 360, hi = 1260;
-        act.forEach(r => { lo = Math.min(lo, Math.floor(mm(tOf(r)) / 60) * 60); hi = Math.max(hi, Math.min(1440, Math.ceil(mm(eOf(r)) / 60) * 60)); });
+        let lo = 480, hi = 1260;
+        act.forEach(r => { lo = Math.min(lo, Math.floor(mm(tOf(r)) / 60) * 60); hi = Math.max(hi, Math.min(2040, Math.ceil(mm(eOf(r)) / 60) * 60)); });
         if (hi <= lo) hi = lo + 60;
         const pct = (x) => Math.max(0, Math.min(100, (x - lo) / (hi - lo) * 100));
         const bar = (r) => { const l = pct(mm(tOf(r))), w = Math.max(1.5, pct(Math.max(mm(eOf(r)), mm(tOf(r)) + 15)) - l); return '<i class="' + stCls(r) + '" style="left:' + l.toFixed(2) + '%;width:' + w.toFixed(2) + '%" title="' + esc(tOf(r) + '–' + eOf(r) + ' ' + r.requesterName) + '"></i>'; };
         const pl = plates().slice(); act.forEach(r => { const p = String(r.assignedPlate || ''); if (r.status === 'approved' && p && pl.indexOf(p) < 0) pl.push(p); });
-        let ax = ''; for (let h = lo; h <= hi; h += 180) ax += '<span style="left:' + pct(h).toFixed(2) + '%">' + String(Math.floor(h / 60)).padStart(2, '0') + '</span>';
+        let ax = ''; for (let h = lo; h <= hi; h += 180) ax += '<span style="left:' + pct(h).toFixed(2) + '%">' + String(Math.floor(h / 60) % 24).padStart(2, '0') + '</span>';
         let h = '<div class="vrq-ax">' + ax + '</div>';
         pl.forEach(p => { h += '<div class="vrq-ln2"><b title="' + esc(p) + '">' + esc(p) + '</b><div class="vrq-bar">' + act.filter(r => r.status === 'approved' && String(r.assignedPlate) === p).map(bar).join('') + '</div></div>'; });
         const un = act.filter(r => r.status === 'pending');
