@@ -29110,6 +29110,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
     ];
     const EXTRA_KEYS = ['canReceiveLG', 'canBackdateLGReceive', 'canReturnLGTag', 'canLGPrintTags', 'canLGUploadPlan', 'canLGManualPlan', 'canLGPrintPlan', 'canLGEditPlan', 'canManageArchive'];
     CATS[CATS.length - 1].items.push(['canManageArchive', 'จัดการ Archive ประวัติเก่า', 'ย้ายล็อตที่ปิดจบแล้วไปเก็บใน Archive', 'archive']);
+    (CATS.find(c => c.items.some(it => it[0] === 'canManageDeliveryPlan')) || CATS[0]).items.push(['canApproveVehicleReq', 'จัดการคำขอจองรถ', 'กดอนุมัติ / ปฏิเสธ / แก้ไขเวลา / ยกเลิก คำขอจองรถในหน้า Delivery plan', 'truck']); EXTRA_KEYS.push('canApproveVehicleReq');   // VRQ-PERM
     CATS[0].items.push(['canReverseHistory', 'ยกเลิกรายการในประวัติ', 'กดยกเลิก (ย้อนกลับ) รายการรับ/จ่ายในหน้า "ประวัติการทำรายการ"', 'arrow-counterclockwise']); EXTRA_KEYS.push('canReverseHistory');   // REVERSE-PERM
     const LEGACY_KEYS = ['canLGPrintTags', 'canLGManualPlan', 'canLGPrintPlan'];
     const onOf = (u, k) => {
@@ -36267,6 +36268,14 @@ html.lgx-b .lgx-ctrl .card-header{padding-top:16px!important}`
     window.addEventListener('resize', () => { if (uiOpen) placePop(); });
  
     setInterval(() => { try { if (me()) render(); } catch (e) { } }, 1000);
+    // VRQ-PERM: ปุ่มอนุมัติ / ปฏิเสธ / แก้ไขเวลา / ยกเลิก ต้องมีสิทธิ์ canApproveVehicleReq (แอดมินใช้ได้เสมอ) — ไม่มีสิทธิ์ = ดูคำขอได้อย่างเดียว
+    (() => {
+        const ok = () => { const u = me(); return !!u && (u.username === 'admin' || u.role === 'admin' || String(u.canApproveVehicleReq).toUpperCase() === 'TRUE'); };
+        const st = document.createElement('style'); st.textContent = 'body:not(.vrq-can) #vrq-wrap .vrq-a{display:none!important}body:not(.vrq-can) #vrq-wrap .vrq-ib:empty{display:none}'; document.head.appendChild(st);
+        const sync = () => { try { document.body.classList.toggle('vrq-can', ok()); } catch (e) { } };
+        setInterval(sync, 400); sync();
+        window.addEventListener('click', (e) => { const el = e.target && e.target.closest ? e.target.closest('#vrq-wrap .vrq-a') : null; if (el && !ok()) { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); } }, true);
+    })();
     window.VRQ = { day: (d) => { pickDay(d); }, refresh: () => { lastSig = ''; lastBtn = ''; render(); }, open: () => setOpen(true), close: () => setOpen(false) };
 })();
 // ===== จบ VEHICLE-REQ-ADMIN =====
@@ -40425,6 +40434,7 @@ window.pkFilter = window.pkFilter || 'all';
         canManageProducts: 'จัดการสินค้า', canForecast: 'อัปโหลด Forecast', canManageUsers: 'จัดการผู้ใช้', canManageAnnouncements: 'จัดการประกาศ', canManageSupport: 'ดูรายการแจ้งปัญหา', canManageArchive: 'จัดการ Archive ประวัติเก่า'
     };
     const LEGACY_ON = ['canLGPrintTags', 'canLGManualPlan', 'canLGPrintPlan'];   // ยังไม่เคยตั้งค่า = เปิดอยู่ (ตามแพตช์ LG เดิม)
+    LABEL.canApproveVehicleReq = 'จัดการคำขอจองรถ';   // VRQ-PERM
     LABEL.canReverseHistory = 'ยกเลิกรายการในประวัติ';   // REVERSE-PERM
     const BASE_KEYS = ['canImport', 'canExport', 'canViewHistory', 'canCountStock', 'canManageProducts', 'canManageUsers', 'canManageAnnouncements', 'canManageDeliveryPlan', 'canConvertPart', 'canManageRack', 'canForecast', 'canManageLotHold', 'canManageSupport', 'canCheckLGTags'];
     let dlg = null, busy = false;
