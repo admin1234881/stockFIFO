@@ -10969,7 +10969,195 @@ window.submitSupportTicket = async function() {
         Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถส่งได้: ' + error.message, 'error');
     }
 };
-
+(function () {
+    if (window.__chatNotifV1) return; window.__chatNotifV1 = true;
+    var POLL_VISIBLE = 20000, POLL_HIDDEN = 60000, TOAST_MS = 10000;
+    var notified = {}, readSet = {}, seeded = false, seedUser = null, lastPoll = 0, polling = false;
+    var toastTimer = null, ac = null, baseTitle = null, lastSig = '';
+ 
+    var css = ''
+    + 'body.cn-alert #atx-dock.col{transform:translate(0,-50%)!important}'
+    + 'body.cn-alert #atx-dock .atx-handle{opacity:.3!important;cursor:not-allowed!important}'
+    + '#support-fab-btn.cn-pulse::after{content:"";position:absolute;inset:-4px;border-radius:15px;border:2px solid #38bdf8;animation:cn-ring 1.4s ease-out infinite;pointer-events:none}'
+    + '#support-fab-btn.cn-pulse{background:linear-gradient(135deg,#2563eb,#06b6d4)!important;color:#fff!important}'
+    + '#support-fab-btn.cn-pulse i{animation:cn-shake 1.8s ease-in-out infinite;display:inline-block}'
+    + '#support-fab-btn.cn-pulse .support-fab-badge{animation:cn-pop 1.2s ease-in-out infinite}'
+    + '#atx-dock #support-fab-badge,#support-fab-btn #support-fab-badge{top:-6px!important;right:-6px!important;min-width:22px!important;height:22px!important;font-size:.78rem!important;border:2px solid #0f172a!important;z-index:2}'
+    + '@keyframes cn-ring{0%{transform:scale(.9);opacity:.9}100%{transform:scale(1.45);opacity:0}}'
+    + '@keyframes cn-shake{0%,55%,100%{transform:rotate(0)}60%{transform:rotate(-16deg)}70%{transform:rotate(14deg)}80%{transform:rotate(-10deg)}90%{transform:rotate(6deg)}}'
+    + '@keyframes cn-pop{0%,100%{transform:scale(1)}50%{transform:scale(1.18)}}'
+    + '#cn-toast{position:fixed;right:84px;top:50%;transform:translateY(-50%);width:270px;background:#fff;border-left:5px solid #dc3545;border-radius:12px;box-shadow:0 10px 28px rgba(0,0,0,.32);padding:10px 30px 10px 12px;z-index:4002;font-size:.85rem;cursor:pointer;animation:cn-in .25s ease-out}'
+    + '#cn-toast .cn-t{font-weight:700;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+    + '#cn-toast .cn-m{color:#444;margin-top:2px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}'
+    + '#cn-toast .cn-s{color:#888;font-size:.72rem;margin-top:4px}'
+    + '#cn-toast .cn-x{position:absolute;top:4px;right:8px;border:0;background:none;font-size:1.1rem;color:#999;cursor:pointer;line-height:1}'
+    + '@keyframes cn-in{from{opacity:0;transform:translate(20px,-50%)}to{opacity:1;transform:translate(0,-50%)}}'
+    + '@media (max-width:576px){#cn-toast{left:10px;right:64px;width:auto}}'
+    + '.cn-bell{font-size:1rem!important;margin-right:6px}';
+    var st = document.createElement('style'); st.id = 'cn-css'; st.textContent = css; document.head.appendChild(st);
+ 
+    function me() { return currentUser && currentUser.username; }
+    function mineRoom(m) {
+        var u = me(), r = String(m.roomId || '');
+        if (!u || !r) return false;
+        if (r === 'support__' + u) return u !== 'admin';          // ห้องแจ้งปัญหา (แอดมินไม่นับ เพราะไม่มีห้องนี้ในรายชื่อ)
+        var p = r.split('__');
+        return p.length === 2 && p[0] !== 'support' && p.indexOf(u) > -1;
+    }
+    function keyOf(m) { return String(m.id || (m.roomId + '|' + m.createdAt + '|' + m.sender)); }
+    function unreadList() {
+        var u = me(); if (!u) return [];
+        return (db.supportTickets || []).filter(function (m) {
+            return mineRoom(m) && m.sender !== u && m.status !== 'Read' && !readSet[keyOf(m)];
+        });
+    }
+    function popupEl() { return document.getElementById('support-popup'); }
+    function popupOpen() { var p = popupEl(); return !!(p && p.classList.contains('show')); }
+    function inRoomView() {
+        var v = document.getElementById('support-chat-view');
+        return popupOpen() && v && v.style.display !== 'none' && !!currentChatRoomId;
+    }
+    function nameOf(username) {
+        var x = (db.users || []).find(function (k) { return k.username === username; });
+        return (x && x.fullname && String(x.fullname).trim()) ? x.fullname : username;
+    }
+ 
+    /* ---- เสียง ---- */
+    function muted() { try { return localStorage.getItem('cnMute') === '1'; } catch (e) { return false; } }
+    function unlockAudio() {
+        try {
+            var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+            ac = ac || new AC(); if (ac.state === 'suspended') ac.resume();
+        } catch (e) {}
+    }
+    document.addEventListener('click', unlockAudio, true);
+    document.addEventListener('keydown', unlockAudio, true);
+    function ding() {
+        if (muted()) return;
+        try {
+            unlockAudio(); if (!ac || ac.state !== 'running') return;
+            [880, 1318].forEach(function (f, i) {
+                var o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime + i * 0.15;
+                o.type = 'sine'; o.frequency.value = f;
+                g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+                o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + 0.3);
+            });
+        } catch (e) {}
+    }
+    function ensureBell() {
+        document.querySelectorAll('#support-popup .support-popup-header').forEach(function (h) {
+            if (h.querySelector('.cn-bell')) return;
+            var x = h.querySelector('.support-popup-close'); if (!x) return;
+            var b = document.createElement('button'); b.type = 'button'; b.className = 'support-popup-close cn-bell';
+            b.title = 'เปิด/ปิดเสียงแจ้งเตือนแชท';
+            b.addEventListener('click', function (e) {
+                e.stopPropagation();
+                try { localStorage.setItem('cnMute', muted() ? '0' : '1'); } catch (er) {}
+                paintBells(); if (!muted()) ding();
+            });
+            h.insertBefore(b, x);
+        });
+        paintBells();
+    }
+    function paintBells() { document.querySelectorAll('.cn-bell').forEach(function (b) { b.textContent = muted() ? '🔕' : '🔔'; }); }
+ 
+    /* ---- การ์ดข้อความ ---- */
+    function hideToast() {
+        clearTimeout(toastTimer);
+        var t = document.getElementById('cn-toast'); if (t) t.remove();
+    }
+    function openRoomOf(m) {
+        var u = me(), isSup = String(m.roomId).indexOf('support__') === 0;
+        var partner = isSup ? '' : String(m.roomId).split('__').filter(function (p) { return p !== u; })[0];
+        var label = isSup ? '🎧 แจ้งปัญหาการใช้งาน' : nameOf(partner);
+        var p = popupEl(); if (p) p.classList.add('show');
+        if (typeof window.openChatRoom === 'function') window.openChatRoom(m.roomId, label, isSup);
+    }
+    function showToast(latest, total) {
+        hideToast();
+        var d = document.createElement('div'); d.id = 'cn-toast';
+        var prev = latest.message ? String(latest.message) : (latest.screenshotUrl ? '📷 ส่งรูปภาพ' : (latest.attachmentUrl ? '📎 ส่งไฟล์แนบ' : ''));
+        var t = document.createElement('div'); t.className = 'cn-t'; t.textContent = '💬 ' + nameOf(latest.sender);
+        var m = document.createElement('div'); m.className = 'cn-m'; m.textContent = prev.slice(0, 120);
+        var s = document.createElement('div'); s.className = 'cn-s'; s.textContent = 'ข้อความใหม่ ' + total + ' ข้อความ • กดเพื่อเปิดอ่าน';
+        var x = document.createElement('button'); x.type = 'button'; x.className = 'cn-x'; x.innerHTML = '&times;';
+        x.addEventListener('click', function (e) { e.stopPropagation(); hideToast(); });
+        d.appendChild(t); d.appendChild(m); d.appendChild(s); d.appendChild(x);
+        d.addEventListener('click', function () { hideToast(); openRoomOf(latest); });
+        document.body.appendChild(d);
+        toastTimer = setTimeout(hideToast, TOAST_MS);
+    }
+ 
+    /* ---- ดึงข้อความเบื้องหลัง ---- */
+    async function poll() {
+        if (polling || !me() || inRoomView()) return;
+        polling = true; lastPoll = Date.now();
+        var who = me();
+        try {
+            var res = await fetch(SCRIPT_URL + '?action=getChatMessages&t=' + Date.now());
+            var data = await res.json();
+            if (me() !== who || inRoomView()) return;               // เปลี่ยนคน/เปิดห้องแชทระหว่างรอ -> ทิ้งผลนี้
+            db.supportTickets = data.messages || [];
+            db.userPresence = data.presence || db.userPresence;
+            if (seedUser !== who) { seedUser = who; seeded = false; notified = {}; readSet = {}; }
+            var fresh = unreadList().filter(function (m) { return !notified[keyOf(m)]; });
+            fresh.forEach(function (m) { notified[keyOf(m)] = 1; });
+            if (seeded && fresh.length && !popupOpen()) {
+                fresh.sort(function (a, b) { return new Date(a.createdAt) - new Date(b.createdAt); });
+                showToast(fresh[fresh.length - 1], unreadList().length);
+                ding();
+            }
+            seeded = true;                                           // รอบแรกหลังล็อกอิน: แสดงแค่เลข/แถบ ไม่เด้งการ์ด
+            if (popupOpen() && typeof window.renderContactList === 'function') window.renderContactList();
+        } catch (e) { /* เงียบไว้ ลองใหม่รอบหน้า */ }
+        finally { polling = false; }
+    }
+ 
+    /* ---- ซิงก์สถานะหน้าจอ (ทุก 1 วิ ใช้ข้อมูลในเครื่องล้วนๆ) ---- */
+    function sync() {
+        var u = me();
+        if (!u) {
+            document.body.classList.remove('cn-alert'); hideToast();
+            if (baseTitle !== null) { document.title = baseTitle; }
+            seeded = false; seedUser = null; return;
+        }
+        ensureBell();
+        // กำลังเปิดห้องแชทอยู่ = อ่านแล้ว (เก็บไว้ในเครื่องทันที กันเลขเด้งกลับตอนชีตยังอัปเดตไม่ทัน)
+        if (inRoomView()) {
+            (db.supportTickets || []).forEach(function (m) {
+                if (m.roomId === currentChatRoomId && m.sender !== u && m.status !== 'Read') {
+                    m.status = 'Read'; readSet[keyOf(m)] = 1; notified[keyOf(m)] = 1;
+                }
+            });
+        }
+        var n = unreadList().length, open = popupOpen();
+        var sig = n + '|' + open;
+        var badge = document.getElementById('support-fab-badge'), fab = document.getElementById('support-fab-btn');
+        if (badge) {
+            if (n > 0) { badge.style.display = ''; var txt = n > 99 ? '99+' : String(n); if (badge.innerText !== txt) badge.innerText = txt; }
+            else if (badge.style.display !== 'none') badge.style.display = 'none';
+        }
+        document.body.classList.toggle('cn-alert', n > 0);
+        if (fab) fab.classList.toggle('cn-pulse', n > 0 && !open);
+        if (n > 0 && open) hideToast();
+        // ชื่อแท็บ
+        baseTitle = document.title.replace(/^\(\d+\+?\)\s*/, '');
+        var want = n > 0 ? '(' + n + ') ' + baseTitle : baseTitle;
+        if (document.title !== want) document.title = want;
+        // เรียกดึงข้อความตามรอบ
+        var gap = document.hidden ? POLL_HIDDEN : POLL_VISIBLE;
+        if (!polling && Date.now() - lastPoll >= gap) poll();
+    }
+    // ปุ่มหุบแถบ: ล็อกไว้ตอนมีข้อความค้าง
+    document.addEventListener('click', function (e) {
+        if (document.body.classList.contains('cn-alert') && e.target.closest && e.target.closest('#atx-dock .atx-handle')) {
+            e.stopImmediatePropagation(); e.preventDefault();
+        }
+    }, true);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden && me()) { lastPoll = 0; } });
+    setInterval(sync, 1000);
+})();
+/* ===== จบ CHAT-NOTIF-V1 ===== */
 // 🟢 อัปเดต badge บนปุ่มลอย ถ้ามีข้อความใหม่จากแอดมินที่ยังไม่เห็น
 window.checkMySupportReplies = function() {
     if (!currentUser) return;
