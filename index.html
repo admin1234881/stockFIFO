@@ -11249,7 +11249,54 @@ window.submitSupportTicket = async function() {
     if (!ensureUi()) { var tries = 0, iv = setInterval(function () { if (ensureUi() || ++tries > 20) clearInterval(iv); }, 1500); }
 })();
 /* ===== จบ CHAT-STICKER-V1 ===== */
- 
+ (function () {
+    if (window.__chatReadV1) return; window.__chatReadV1 = true;
+    var st = document.createElement('style'); st.id = 'cn-rd-css';
+    st.textContent = ''
+    + '.cn-rd{display:inline-flex;align-items:center;gap:3px;margin-left:6px;font-size:.68rem;font-weight:700;vertical-align:middle}'
+    + '.cn-rd svg{width:17px;height:12px;display:block}'
+    + '.chat-bubble.mine .cn-rd{color:rgba(255,255,255,.75)}'
+    + '.chat-bubble.mine .cn-rd.cn-read{color:#7dffb5}'
+    + '.chat-bubble.mine.cn-stk .cn-rd{color:#8a94a0}'
+    + '.chat-bubble.mine.cn-stk .cn-rd.cn-read{color:#16a34a}';
+    document.head.appendChild(st);
+    var ONE = '<svg viewBox="0 0 20 14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5l4 4L15 2.5"/></svg>';
+    var TWO = '<svg viewBox="0 0 20 14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 7.5l3.8 3.8L12 2.5M8.5 10.3l.9.9L18 2.5"/></svg>';
+    function markReceipts() {
+        if (!currentUser || !currentChatRoomId) return;
+        var box = document.getElementById('support-chat-messages'); if (!box) return;
+        var me = currentUser.username;
+        var msgs = (db.supportTickets || []).filter(function (t) { return t.roomId === currentChatRoomId; })
+            .sort(function (a, b) { return new Date(a.createdAt) - new Date(b.createdAt); });
+        var bubbles = box.querySelectorAll(':scope > .chat-bubble');
+        if (!msgs.length || bubbles.length !== msgs.length) return;
+        var last = -1;
+        msgs.forEach(function (m, i) { if (m.sender === me) last = i; });
+        msgs.forEach(function (m, i) {
+            if (m.sender !== me) return;
+            var tm = bubbles[i].querySelector('.chat-time'); if (!tm || tm.querySelector('.cn-rd')) return;
+            var sending = String(m.id || '').indexOf('temp-') === 0;
+            var read = !sending && m.status === 'Read';
+            var s = document.createElement('span');
+            s.className = 'cn-rd' + (read ? ' cn-read' : '');
+            s.title = sending ? 'กำลังส่ง' : (read ? 'อ่านแล้ว' : 'ส่งแล้ว');
+            var label = (i === last) ? (sending ? 'กำลังส่ง…' : (read ? 'อ่านแล้ว' : 'ส่งแล้ว')) : '';
+            s.innerHTML = (sending ? '' : (read ? TWO : ONE)) + (label ? '<span>' + label + '</span>' : '');
+            tm.appendChild(s);
+        });
+    }
+    var orig = window.renderChatMessages;
+    if (typeof orig === 'function' && !orig.__rd) {
+        window.renderChatMessages = function () {
+            var r = orig.apply(this, arguments);
+            try { markReceipts(); } catch (e) {}
+            return r;
+        };
+        window.renderChatMessages.__rd = true;
+        if (orig.__stk) window.renderChatMessages.__stk = true;
+    }
+})();
+/* ===== จบ CHAT-READ-V1 ===== */
 // 🟢 อัปเดต badge บนปุ่มลอย ถ้ามีข้อความใหม่จากแอดมินที่ยังไม่เห็น
 window.checkMySupportReplies = function() {
     if (!currentUser) return;
