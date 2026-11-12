@@ -20671,13 +20671,13 @@ renderLGTagPrintWindow = function(tags, printWin) {
     // ---------- เริ่มทำงาน ----------
     (function wait(n) { if (!build() && n < 50) setTimeout(() => wait(n + 1), 300); else applyPerm(); })(0);
 })();
-// ===== LG-RECEIVE-DASH: แดชบอร์ด LG Delivery เพิ่มฝั่ง "LG รับเข้า" (สถานะ ออก/รับ ต่อ WO และต่อแท็ก, ระหว่างทาง, ค้างเกิน 3 ชม. เป็นสีแดง, ค้นหาแท็ก) (วางต่อท้ายบล็อก LG ทั้งหมด และต้องวางหลัง LG-RECEIVE-PAGE) =====
+// ===== LG-RECEIVE-DASH: แดชบอร์ด LG Delivery เพิ่มฝั่ง "LG รับเข้า" (สถานะ ออก/รับ ต่อ WO และต่อแท็ก, ระหว่างทาง, ค้างเกิน 1 ชม. เป็นสีแดง, ค้นหาแท็ก) (วางต่อท้ายบล็อก LG ทั้งหมด และต้องวางหลัง LG-RECEIVE-PAGE) =====
 (function () {
     if (window.__lgRecvDash) return;
     window.__lgRecvDash = true;
     if (typeof window.renderLGDashboard !== 'function') return;
 
-    const STUCK_HOURS = 3;                       // 🔧 ระหว่างทางเกินกี่ชั่วโมงให้ขึ้นสีแดง
+    const STUCK_HOURS = 1;                     // 🔧 ระหว่างทางเกินกี่ชั่วโมงให้ขึ้นสีแดง
     const STUCK_MS = STUCK_HOURS * 3600 * 1000;
 
     const TX = {
@@ -21250,7 +21250,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
     if (!watch()) setTimeout(watch, 800);
     setTimeout(fit, 300);
 })();
-// ===== LG-RECEIVE-DASH-V3: แดชบอร์ด LG Delivery เพิ่มฝั่ง "LG รับเข้า" (สถานะ ออก/รับ ต่อ WO และต่อแท็ก, ระหว่างทาง, ค้างเกิน 3 ชม. เป็นสีแดง, ค้นหาแท็ก) (ถ้าเคยวางตัวก่อนหน้าไว้แล้ว ให้วาง "เหนือ" บรรทัดแรกที่ขึ้นต้น // ===== LG-RECEIVE-DASH ตัวใหม่นี้จะปิดตัวเก่าให้เอง ไม่ต้องลบอะไร) =====
+// ===== LG-RECEIVE-DASH-V3: แดชบอร์ด LG Delivery เพิ่มฝั่ง "LG รับเข้า" (สถานะ ออก/รับ ต่อ WO และต่อแท็ก, ระหว่างทาง, ค้างเกิน 1 ชม. เป็นสีแดง, ค้นหาแท็ก) (ถ้าเคยวางตัวก่อนหน้าไว้แล้ว ให้วาง "เหนือ" บรรทัดแรกที่ขึ้นต้น // ===== LG-RECEIVE-DASH ตัวใหม่นี้จะปิดตัวเก่าให้เอง ไม่ต้องลบอะไร) =====
 (function () {
     if (window.__lgRecvDash3) return;
     window.__lgRecvDash3 = true;
@@ -21258,7 +21258,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
     window.__lgRecvDash = true;   // ปิดตัวเวอร์ชันแรก (ถ้าอยู่ถัดลงไป) ไม่ให้ทำงานซ้ำ
     if (typeof window.renderLGDashboard !== 'function') return;
 
-    const STUCK_HOURS = 3;                       // 🔧 ระหว่างทางเกินกี่ชั่วโมงให้ขึ้นสีแดง
+    const STUCK_HOURS = 1;                      // 🔧 ระหว่างทางเกินกี่ชั่วโมงให้ขึ้นสีแดง
     const STUCK_MS = STUCK_HOURS * 3600 * 1000;
 
     const TX = {
@@ -22283,7 +22283,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
     if (window.__lgRecvPanel) return; window.__lgRecvPanel = true;
 
     const PANE = 'pills-lg-receive';
-    const STUCK_MS = 3 * 3600 * 1000;
+    const STUCK_MS = 1 * 3600 * 1000;
     const pad = (n) => String(n).padStart(2, '0');
     const up = (s) => String(s == null ? '' : s).trim().toUpperCase();
     const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -22413,7 +22413,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
         const done = c.outToday > 0 && c.outTodayRecv >= c.outToday;
         const chips = [];
         if (c.transit) chips.push(`<span class="ch ch-b"><i class="bi bi-truck"></i> ระหว่างทาง ${c.transit} แท็ก</span>`);
-        if (c.stuck) chips.push(`<span class="ch ch-r"><i class="bi bi-alarm-fill"></i> ค้างเกิน 3 ชม. ${c.stuck}</span>`);
+        if (c.stuck) chips.push(`<span class="ch ch-r"><i class="bi bi-alarm-fill"></i> ค้างเกิน 1 ชม. ${c.stuck}</span>`);
         if (c.noOut) chips.push(`<span class="ch ch-a"><i class="bi bi-exclamation-triangle-fill"></i> ไม่มีสแกนออก ${c.noOut}</span>`);
         if (!chips.length && c.outToday) chips.push(`<span class="ch ch-g"><i class="bi bi-check-circle-fill"></i> ไม่มีแท็กค้างทาง</span>`);
 
@@ -22628,7 +22628,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
     if (window.__lgRecvBack2) return; window.__lgRecvBack2 = true; window.__lgRecvBack = true;
 
     const PANE = 'pills-lg-receive';
-    const STUCK_MS = 3 * 3600 * 1000;
+    const STUCK_MS = 1 * 3600 * 1000;
     const REASONS = ['พนักงานลืมสแกน แต่ของถึงแล้ว', 'แท็กเก่าก่อนเริ่มใช้ระบบรับ (เคลียร์ยอดค้าง)', 'สแกนไม่ติด / QR เสีย', 'ระบบขัดข้อง', 'อื่นๆ (ระบุ)'];
     const CHUNK = 25;      // ส่งไป Google Script ครั้งละกี่ใบ
     const BIG = 20;        // เลือกเกินกี่ใบถึงต้องติ๊กยืนยันอีกชั้น
@@ -22884,7 +22884,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
             <div id="lgb-msg">${S.msg || ''}</div>
             <div class="tool"><input id="lgb-q" placeholder="ค้นหา เลขแท็ก / WO / พาร์ท" value="${esc(S.q)}" autocomplete="off">
             <span style="display:inline-flex;align-items:center;gap:4px;flex:0 0 auto"><input type="date" id="lgb-date" value="${S.date}" max="${dayKey(Date.now())}" title="เลือกวันที่ ATECH สแกนออก" style="flex:0 0 auto;min-width:0;width:auto;border-radius:10px;padding:4px 8px">${S.date ? '<button type="button" class="rb g" id="lgb-dateclr" style="padding:5px 10px">ล้างวันที่</button>' : ''}</span>
-              ${chip('all', 'ทั้งหมด', c.all.length)}${chip('transit', 'ระหว่างทาง', c.scope.length)}${chip('stuck', 'ค้างเกิน 3 ชม.', c.stuck.length)}${chip('today', 'วันนี้', c.today.length)}${c.old.length ? chip('old', 'แท็กเก่า (ก่อนเริ่มใช้ระบบรับ)', c.old.length) : ''}</div>
+              ${chip('all', 'ทั้งหมด', c.all.length)}${chip('transit', 'ระหว่างทาง', c.scope.length)}${chip('stuck', 'ค้างเกิน 1 ชม.', c.stuck.length)}${chip('today', 'วันนี้', c.today.length)}${c.old.length ? chip('old', 'แท็กเก่า (ก่อนเริ่มใช้ระบบรับ)', c.old.length) : ''}</div>
             <div class="list">${rows}</div>
             ${list.length > 200 ? `<div class="sub mt-1">แสดง 200 รายการแรก — ใช้ช่องค้นหาเพื่อกรอง</div>` : ''}
             ${form}
@@ -23072,7 +23072,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
     if (window.__lgRecvBack) return; window.__lgRecvBack = true;
 
     const PANE = 'pills-lg-receive';
-    const STUCK_MS = 3 * 3600 * 1000;
+    const STUCK_MS = 1 * 3600 * 1000;
     const REASONS = ['พนักงานลืมสแกน แต่ของถึงแล้ว', 'สแกนไม่ติด / QR เสีย', 'ระบบขัดข้อง', 'อื่นๆ (ระบุ)'];
     const pad = (n) => String(n).padStart(2, '0');
     const up = (s) => String(s == null ? '' : s).trim().toUpperCase();
@@ -23320,7 +23320,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
               <span class="sum">ATECH สแกนออกแล้ว LG ยังไม่ได้สแกนรับ ${c.scope.length} ใบ</span><button type="button" class="x" id="lgb-x" ${S.busy ? 'disabled' : ''}>✕</button></div>
             <div id="lgb-msg">${S.msg || ''}</div>
             <div class="tool"><input id="lgb-q" placeholder="ค้นหา เลขแท็ก / WO / พาร์ท" value="${esc(S.q)}" autocomplete="off">
-              ${chip('all', 'ทั้งหมด', c.scope.length)}${chip('stuck', 'ค้างเกิน 3 ชม.', c.stuck.length)}${chip('today', 'วันนี้', c.today.length)}${c.old.length ? chip('old', 'แท็กเก่า (ก่อนเริ่มใช้ระบบรับ)', c.old.length) : ''}</div>
+              ${chip('all', 'ทั้งหมด', c.scope.length)}${chip('stuck', 'ค้างเกิน 1 ชม.', c.stuck.length)}${chip('today', 'วันนี้', c.today.length)}${c.old.length ? chip('old', 'แท็กเก่า (ก่อนเริ่มใช้ระบบรับ)', c.old.length) : ''}</div>
             <div class="list">${rows}</div>
             ${list.length > 200 ? `<div class="sub mt-1">แสดง 200 รายการแรก — ใช้ช่องค้นหาเพื่อกรอง</div>` : ''}
             ${form}
@@ -26058,8 +26058,8 @@ renderLGTagPrintWindow = function(tags, printWin) {
         [/แสดง 8 รายการล่าสุด/g, 'Showing the latest 8'],
         [/กล่องเลือกไลน์ทำงานไม่ได้ —/g, 'The line selector failed —'],
         [/ค้างจากวันก่อน/g, 'Carried over'],
-        [/ค้างเกิน 3 ชม\./g, 'Over 3 h'],
-        [/ค้าง >3 ชม\./g, 'Over 3 h'],
+        [/ค้างเกิน 1 ชม\./g, 'Over 1 h'],
+        [/ค้าง >1 ชม\./g, 'Over 1 h'],
         [/ระบบเริ่มนับ/g, 'Counting starts'],
         [/ยิงออกวันนี้/g, 'Scanned out today'],
         [/รับแล้ววันนี้/g, 'Received today'],
@@ -28676,7 +28676,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
     if (window.__lgRecvLine) return; window.__lgRecvLine = true;
 
     const PANE = 'pills-lg-receive';
-    const STUCK_MS = 3 * 3600 * 1000;
+    const STUCK_MS = 1 * 3600 * 1000;
     const LSK = 'lgrLineSel_v1';
     const pad = (n) => String(n).padStart(2, '0');
     const up = (s) => String(s == null ? '' : s).trim().toUpperCase();
@@ -28951,7 +28951,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
             .concat(c.lines.map(l => { const o = c.perLine[l]; return `<button type="button" class="lgr3-chip ${selLine === l ? 'on' : ''}" data-line="${esc(l)}">${esc(l)}${o && o.n ? `<em class="${o.s ? 'red' : ''}">${o.n}</em>` : ''}</button>`; })).join('');
 
         const stat = (cls, ic, n, lab, sub) => `<div class="k ${cls}"><span class="i"><i class="bi ${ic}"></i></span><b>${n}</b><span class="l">${lab}</span>${sub ? `<span class="s">${sub}</span>` : ''}</div>`;
-        const pendSub = c.pendN ? `${num(c.pendQty)} ชิ้น${c.stuckN ? ` · <span class="r">ค้าง &gt;3 ชม. ${c.stuckN}</span>` : ''}` : '';
+        const pendSub = c.pendN ? `${num(c.pendQty)} ชิ้น${c.stuckN ? ` · <span class="r">ค้าง &gt;1 ชม. ${c.stuckN}</span>` : ''}` : '';
         const tiles = `<div class="lgr3-kp">
             ${stat('k1', 'bi-box-arrow-up-right', c.outN, 'ยิงออกวันนี้', 'แท็ก')}
             ${stat('k2', 'bi-check2-circle', c.outRecvN, 'LG รับแล้ว', `จาก ${c.outN} แท็ก`)}
@@ -28959,7 +28959,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
         </div>`;
 
         const chipsInfo = [];
-        if (c.stuckN) chipsInfo.push(`<span class="ch ch-r"><i class="bi bi-alarm-fill"></i> ค้างเกิน 3 ชม. ${c.stuckN}</span>`);
+        if (c.stuckN) chipsInfo.push(`<span class="ch ch-r"><i class="bi bi-alarm-fill"></i> ค้างเกิน 1 ชม. ${c.stuckN}</span>`);
         if (c.pendOld) chipsInfo.push(`<span class="ch ch-b"><i class="bi bi-calendar2-week"></i> ค้างจากวันก่อน ${c.pendOld}</span>`);
         if (c.noOut) chipsInfo.push(`<span class="ch ch-a"><i class="bi bi-exclamation-triangle-fill"></i> ไม่มีสแกนออก ${c.noOut}</span>`);
         if (!chipsInfo.length && c.trackFrom !== null) chipsInfo.push(`<span class="ch ch-g"><i class="bi bi-check-circle-fill"></i> ไม่มีแท็กค้างรับ</span>`);
@@ -37806,8 +37806,8 @@ html.mnl-lock,html.mnl-lock body{overflow:visible!important;height:auto!importan
             flowNote: [`แท็กที่ ATECH สแกนออกแล้วแต่ LG ยังไม่สแกนรับ คือ "แท็กค้างรับ" ที่หน้าต่างเช็กแท็กค้างรับแสดง`, `A tag that ATECH has scanned out but LG has not scanned in is a "pending tag" — that is what the check window lists.`],
             steps: [
                 [`สแกนรับแท็ก`, `Scan a tag in`, `ที่หน้า **รับแท็กเข้า LG** คลิกช่องสแกนแล้วยิงที่แท็ก หรือกด **สแกนด้วยกล้อง** ระบบบันทึกว่า LG รับแล้ว และแท็กนั้นจะหายจากรายการค้างรับ`, `On **Receive tags into LG**, click the scan box and scan the tag, or press **Scan with camera**. The system records that LG has received it and the tag leaves the pending list.`, null, null],
-                [`เปิดเช็กแท็กค้างรับ`, `Open Pending tag check`, `กดปุ่ม [[b|เช็กแท็กค้างรับ]] ที่หน้ารับแท็ก ตัวเลขบนปุ่ม: **แดง** = มีแท็กค้างเกิน 3 ชม. · **เหลือง** = มีค้างแต่ยังไม่เกิน 3 ชม. · **เทา** = ไม่มีค้าง`, `Press [[b|Pending tag check]] on the receive page. The number on the button: **red** = some tags pending over 3 h · **yellow** = pending but under 3 h · **grey** = none.`, null, null],
-                [`อ่านรายการ`, `Read the list`, `แต่ละแถวแสดง **เลขแท็ก · WO · Part · จำนวนชิ้น · เวลาที่ ATECH สแกนออก** และ "ค้าง ... ชม." (สีแดงเมื่อเกิน 3 ชม.) ปุ่มกรอง: ทั้งหมด · ระหว่างทาง · ค้างเกิน 3 ชม. · วันนี้ · แท็กเก่า (ก่อนเริ่มใช้ระบบรับ) ช่องค้นหาพิมพ์ เลขแท็ก / WO / พาร์ท ได้`, `Each row shows **tag no. · WO · Part · quantity · time ATECH scanned out** and "pending ... h" (red when over 3 h). Filters: All · In transit · Over 3 h · Today · Old tags (before receiving started). The search box takes a tag no. / WO / part.`, null, null],
+                [`เปิดเช็กแท็กค้างรับ`, `Open Pending tag check`, `กดปุ่ม [[b|เช็กแท็กค้างรับ]] ที่หน้ารับแท็ก ตัวเลขบนปุ่ม: **แดง** = มีแท็กค้างเกิน 1 ชม. · **เหลือง** = มีค้างแต่ยังไม่เกิน 1 ชม. · **เทา** = ไม่มีค้าง`, `Press [[b|Pending tag check]] on the receive page. The number on the button: **red** = some tags pending over 1 h · **yellow** = pending but under 3 h · **grey** = none.`, null, null],
+                [`อ่านรายการ`, `Read the list`, `แต่ละแถวแสดง **เลขแท็ก · WO · Part · จำนวนชิ้น · เวลาที่ ATECH สแกนออก** และ "ค้าง ... ชม." (สีแดงเมื่อเกิน 1 ชม.) ปุ่มกรอง: ทั้งหมด · ระหว่างทาง · ค้างเกิน 1 ชม. · วันนี้ · แท็กเก่า (ก่อนเริ่มใช้ระบบรับ) ช่องค้นหาพิมพ์ เลขแท็ก / WO / พาร์ท ได้`, `Each row shows **tag no. · WO · Part · quantity · time ATECH scanned out** and "pending ... h" (red when over 1 h). Filters: All · In transit · Over 1 h · Today · Old tags (before receiving started). The search box takes a tag no. / WO / part.`, null, null],
                 [`เลือกวันที่`, `Pick a date`, `ข้างช่องค้นหามี **ช่องวันที่** เลือกวันที่ ATECH สแกนออก รายการและตัวเลขบนปุ่มกรองจะแสดงเฉพาะแท็กของวันนั้น ใช้ร่วมกับช่องค้นหาและปุ่มกรองได้ กดปุ่ม [[n|ล้างวันที่]] เพื่อกลับไปดูทั้งหมด เปิดหน้าต่างใหม่ทุกครั้งจะเริ่มที่ "ทั้งหมด"`, `Next to the search box is a **date field**. Pick the day ATECH scanned out: the list and the numbers on the filter buttons show only that day. It works together with search and filters. Press [[n|Clear date]] to see everything again. Opening the window again always starts at "All".`, null, [`y`, `ถ้าเปลี่ยนวันที่ ใบที่ติ๊กเลือกไว้แต่ไม่ตรงวันนั้นจะถูกเอาติ๊กออกอัตโนมัติ กันกดรับย้อนหลังใบที่มองไม่เห็นโดยไม่ตั้งใจ เลือกวันในอนาคตไม่ได้`, `If you change the date, ticked tags that are not on that day are un-ticked automatically, so you never receive a tag you cannot see. Future dates cannot be picked.`]],
                 [`รับย้อนหลัง`, `Receive retroactively`, `ถ้าของถึง LG แล้วจริงแต่ลืมสแกน กด [[g|รับย้อนหลัง]] ที่แถวนั้น หรือติ๊กหลายใบแล้วกด [[g|รับย้อนหลังที่เลือก]] เลือก **เหตุผล** และ **เวลาที่รับจริง** (หรือติ๊กใช้เวลาเดียวกับที่ ATECH สแกนออก) ใส่หมายเหตุได้ แล้วกด [[g|บันทึกรับย้อนหลัง]] เลือกเกิน 20 ใบต้องติ๊กยืนยันอีกชั้น`, `If the goods really arrived at LG but nobody scanned, press [[g|Receive retroactively]] on the row, or tick several and press [[g|Receive selected]]. Choose a **reason** and the **actual receive time** (or tick "use the time ATECH scanned out"), add a note if you like, then press [[g|Save]]. Selecting more than 20 needs an extra confirmation tick.`, null, [`r`, `ใช้เมื่อมั่นใจว่าของถึง LG แล้วจริงเท่านั้น การรับย้อนหลังจำนวนมากแก้กลับยาก ระบบบันทึกชื่อผู้กดไว้ในประวัติ`, `Use it only when you are sure the goods reached LG. A large backdated receive is hard to undo. Your name is saved in the history.`]]
             ],
