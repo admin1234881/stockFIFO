@@ -16324,7 +16324,164 @@ window.renderLGMatchTable = function() {
         </tr>`;
     }).join('');
 };
-
+(function () {
+    if (window.__lgDragV1) return; window.__lgDragV1 = true;
+    var TB = null, drag = null, flashId = null, raf = 0, scroller = null;
+    var GRIP = '<svg viewBox="0 0 12 18" width="12" height="18" fill="currentColor"><circle cx="3" cy="3" r="1.7"/><circle cx="9" cy="3" r="1.7"/><circle cx="3" cy="9" r="1.7"/><circle cx="9" cy="9" r="1.7"/><circle cx="3" cy="15" r="1.7"/><circle cx="9" cy="15" r="1.7"/></svg>';
+    var css = ''
+    + '.lgdd-grip{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;margin-right:4px;border-radius:8px;color:#64748b;background:#f1f5f9;cursor:grab;touch-action:none;vertical-align:middle;user-select:none;-webkit-user-select:none}'
+    + '#lg-match-tbody button[onclick*="moveLGPlan"]{display:none!important}'
+    + '#lg-match-tbody button[onclick*="moveLGPlan"]{display:none!important}'   /* ซ่อนปุ่ม ▲▼ เดิม (ไม่ลบ เพราะระบบอื่นใช้หาไอดีแถว) */
+    + '#lg-match-tbody tr.lgdd-row{cursor:grab}'
+    + 'body.lgdd-on,body.lgdd-on *{cursor:grabbing!important;user-select:none!important;-webkit-user-select:none!important}'
+    + '#lg-match-tbody tr.lgdd-src>td{opacity:.35;background:#e0ecff!important}'
+    + '#lg-match-tbody tr.lgdd-before>td{box-shadow:inset 0 4px 0 #2563eb}'
+    + '#lg-match-tbody tr.lgdd-after>td{box-shadow:inset 0 -4px 0 #2563eb}'
+    + '#lg-match-tbody tr.lgdd-flash>td{animation:lgddFlash 1.4s ease-out}'
+    + '@keyframes lgddFlash{0%{background:#bbf7d0}100%{background:transparent}}'
+    + '#lgdd-ghost{position:fixed;z-index:5000;pointer-events:none;background:#1e40af;color:#fff;border-radius:12px;padding:8px 14px;font-size:.85rem;font-weight:700;box-shadow:0 10px 28px rgba(0,0,0,.35);white-space:nowrap;transform:translate(14px,-50%)}'
+    + '#lgdd-ghost small{display:block;font-weight:500;opacity:.85;font-size:.72rem}';
+    var st = document.createElement('style'); st.id = 'lgdd-css'; st.textContent = css; document.head.appendChild(st);
+ 
+    function idOf(tr) {
+        var mv = tr.querySelector('button[onclick*="moveLGPlan"]'); if (!mv) return null;
+        var m = /moveLGPlan\('([^']*)'/.exec(mv.getAttribute('onclick') || ''); return m ? m[1] : null;
+    }
+    function rowsNow() { return TB ? Array.prototype.filter.call(TB.querySelectorAll('tr'), function (tr) { return idOf(tr) !== null; }) : []; }
+    function decorate() {
+        rowsNow().forEach(function (tr) {
+            var mv = tr.querySelector('button[onclick*="moveLGPlan"]');
+            if (!tr.querySelector('.lgdd-grip')) {
+                var g = document.createElement('span'); g.className = 'lgdd-grip'; g.title = 'ลากเพื่อเรียงลำดับ'; g.innerHTML = GRIP;
+                mv.parentNode.insertBefore(g, mv.parentNode.firstChild);
+            }
+            tr.classList.add('lgdd-row');
+            if (flashId !== null && idOf(tr) === flashId) { tr.classList.add('lgdd-flash'); }
+        });
+        flashId = null;
+    }
+    function findScroller() {
+        for (var el = TB && TB.parentElement; el && el !== document.body; el = el.parentElement) {
+            var oy = getComputedStyle(el).overflowY;
+            if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 2) return el;
+        }
+        return null;
+    }
+    function ghostEl() {
+        var g = document.getElementById('lgdd-ghost');
+        if (!g) { g = document.createElement('div'); g.id = 'lgdd-ghost'; document.body.appendChild(g); }
+        return g;
+    }
+    function calc() {
+        var rows = rowsNow().filter(function (r) { return idOf(r) !== drag.id; });
+        rows.forEach(function (r) { r.classList.remove('lgdd-before', 'lgdd-after'); });
+        var before = null;
+        for (var i = 0; i < rows.length; i++) {
+            var rc = rows[i].getBoundingClientRect();
+            if (drag.y < rc.top + rc.height / 2) { before = rows[i]; break; }
+        }
+        var pos;
+        if (before) { before.classList.add('lgdd-before'); drag.beforeId = idOf(before); pos = rows.indexOf(before) + 1; }
+        else if (rows.length) { rows[rows.length - 1].classList.add('lgdd-after'); drag.beforeId = null; pos = rows.length + 1; }
+        else { drag.beforeId = null; pos = 1; }
+        drag.pos = pos;
+        var src = rowsNow().filter(function (r) { return idOf(r) === drag.id; })[0];
+        var c = src ? src.querySelectorAll('td') : [];
+        var g = ghostEl();
+        g.innerHTML = (c[0] ? c[0].innerText.trim() : '') + ' · ' + (c[1] ? c[1].innerText.trim() : '') + '<small>วางที่ลำดับ ' + pos + ' / ' + (rows.length + 1) + '</small>';
+        g.style.left = drag.x + 'px'; g.style.top = drag.y + 'px';
+    }
+    function tick() {
+        if (!drag || !drag.active) return;
+        var sp = 0, y = drag.y;
+        if (scroller) {
+            var r = scroller.getBoundingClientRect();
+            if (y < r.top + 50) sp = -Math.min(18, (r.top + 50 - y) / 3 + 3);
+            else if (y > r.bottom - 50) sp = Math.min(18, (y - (r.bottom - 50)) / 3 + 3);
+            if (sp) scroller.scrollTop += sp;
+        }
+        if (!sp) {
+            if (y < 60) window.scrollBy(0, -12); else if (y > window.innerHeight - 60) window.scrollBy(0, 12);
+        }
+        calc();
+        raf = requestAnimationFrame(tick);
+    }
+    function startDrag() {
+        drag.active = true;
+        scroller = findScroller();
+        document.body.classList.add('lgdd-on');
+        rowsNow().forEach(function (r) { if (idOf(r) === drag.id) r.classList.add('lgdd-src'); });
+        calc(); raf = requestAnimationFrame(tick);
+    }
+    function cleanup() {
+        cancelAnimationFrame(raf);
+        document.body.classList.remove('lgdd-on');
+        if (TB) TB.querySelectorAll('.lgdd-src,.lgdd-before,.lgdd-after').forEach(function (r) { r.classList.remove('lgdd-src', 'lgdd-before', 'lgdd-after'); });
+        var g = document.getElementById('lgdd-ghost'); if (g) g.remove();
+    }
+    async function applyOrder(newIds) {
+        var date = getLGSelectedDate();
+        var full = getLGPlanForDate(date);
+        var vis = {}; newIds.forEach(function (id) { vis[String(id)] = 1; });
+        var pos = [], byId = {};
+        full.forEach(function (p, i) { byId[String(p.id)] = p; if (vis[String(p.id)]) pos.push(i); });
+        if (pos.length !== newIds.length) return;
+        newIds.forEach(function (id, k) { full[pos[k]] = byId[String(id)]; });
+        var changes = [];
+        full.forEach(function (p, i) { var so = i + 1; if (parseFloat(p.sortOrder) !== so) { p.sortOrder = so; changes.push({ id: p.id, sortOrder: so }); } });
+        if (!changes.length) return;
+        flashId = String(drag ? drag.id : '');
+        window.renderLGMatchTable();
+        try { await callAppsScript('reorderLGPlan', changes); }
+        catch (e) { Swal.fire('บันทึกลำดับไม่สำเร็จ', e.message, 'error'); }
+    }
+    function endDrag(commit) {
+        if (!drag) return;
+        var d = drag; drag = null;
+        var wasActive = d.active;
+        var ids = rowsNow().map(idOf).filter(function (x) { return x !== d.id; });
+        cleanup();
+        if (!wasActive || !commit) return;
+        var at = d.beforeId === null || d.beforeId === undefined ? ids.length : ids.indexOf(d.beforeId);
+        if (at < 0) at = ids.length;
+        ids.splice(at, 0, d.id);
+        drag = { id: d.id };          // ใช้ id สำหรับไฮไลต์แถวหลังวาง
+        applyOrder(ids).then(function () { drag = null; }, function () { drag = null; });
+    }
+ 
+    document.addEventListener('pointerdown', function (e) {
+        if (drag || !TB) return;
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        var tr = e.target.closest ? e.target.closest('#lg-match-tbody tr') : null; if (!tr) return;
+        var id = idOf(tr); if (id === null) return;
+        var onGrip = !!e.target.closest('.lgdd-grip');
+        if (!onGrip) {
+            if (e.pointerType !== 'mouse') return;                         // สัมผัส: ลากได้เฉพาะที่ด้ามจับ (กันชนกับการเลื่อนหน้า)
+            if (e.target.closest('button,a,input,select,textarea,.lgep-box')) return;
+        }
+        drag = { id: id, sx: e.clientX, sy: e.clientY, x: e.clientX, y: e.clientY, active: false, beforeId: null, pos: 0 };
+        if (onGrip) { e.preventDefault(); startDrag(); }
+    }, true);
+    document.addEventListener('pointermove', function (e) {
+        if (!drag || drag.id === undefined || drag.sx === undefined) return;
+        drag.x = e.clientX; drag.y = e.clientY;
+        if (!drag.active) { if (Math.abs(e.clientY - drag.sy) > 6) startDrag(); return; }
+        e.preventDefault();
+    }, { capture: true, passive: false });
+    document.addEventListener('pointerup', function () { if (drag && drag.sx !== undefined) endDrag(true); }, true);
+    document.addEventListener('pointercancel', function () { if (drag && drag.sx !== undefined) endDrag(false); }, true);
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && drag && drag.sx !== undefined) endDrag(false); }, true);
+    // กันเมนูคลิกขวา/เลือกข้อความรบกวนตอนลาก
+    document.addEventListener('dragstart', function (e) { if (document.body.classList.contains('lgdd-on')) e.preventDefault(); }, true);
+ 
+    function init() {
+        TB = document.getElementById('lg-match-tbody'); if (!TB) return false;
+        new MutationObserver(function () { decorate(); }).observe(TB, { childList: true });
+        decorate(); return true;
+    }
+    if (!init()) { var n = 0, iv = setInterval(function () { if (init() || ++n > 30) clearInterval(iv); }, 1000); }
+})();
+/* ===== จบ LG-DRAG-V1 ===== */
 // ดาวน์โหลดเทมเพลต Excel สำหรับอัปโหลดแพลน
 window.downloadLGPlanTemplate = function() {
     const ws_data = [
