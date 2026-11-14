@@ -16331,7 +16331,6 @@ window.renderLGMatchTable = function() {
     var css = ''
     + '.lgdd-grip{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;margin-right:4px;border-radius:8px;color:#64748b;background:#f1f5f9;cursor:grab;touch-action:none;vertical-align:middle;user-select:none;-webkit-user-select:none}'
     + '#lg-match-tbody button[onclick*="moveLGPlan"]{display:none!important}'
-    + '#lg-match-tbody button[onclick*="moveLGPlan"]{display:none!important}'   /* ซ่อนปุ่ม ▲▼ เดิม (ไม่ลบ เพราะระบบอื่นใช้หาไอดีแถว) */
     + '#lg-match-tbody tr.lgdd-row{cursor:grab}'
     + 'body.lgdd-on,body.lgdd-on *{cursor:grabbing!important;user-select:none!important;-webkit-user-select:none!important}'
     + '#lg-match-tbody tr.lgdd-src>td{opacity:.35;background:#e0ecff!important}'
@@ -16432,6 +16431,7 @@ window.renderLGMatchTable = function() {
         if (!changes.length) return;
         flashId = String(drag ? drag.id : '');
         window.renderLGMatchTable();
+        try { if (typeof window.renderLGDashboard === 'function') window.renderLGDashboard(); } catch (e) {}
         try { await callAppsScript('reorderLGPlan', changes); }
         catch (e) { Swal.fire('บันทึกลำดับไม่สำเร็จ', e.message, 'error'); }
     }
@@ -16482,6 +16482,580 @@ window.renderLGMatchTable = function() {
     if (!init()) { var n = 0, iv = setInterval(function () { if (init() || ++n > 30) clearInterval(iv); }, 1000); }
 })();
 /* ===== จบ LG-DRAG-V1 ===== */
+/* ===== BROSE-TAG-V1: ออกแท็กชิ้นงาน BROSE THAILAND (ดึงจากแพลนส่งของ) ===== */
+(function () {
+    if (window.__broseTagV1) return; window.__broseTagV1 = true;
+    var LS_LAST = 'broseLastBatch_v1';
+    var css = ''
+    + '#brt-box table{font-size:.85rem}'
+    + '#brt-box th{background:#e9eef7;position:sticky;top:0;z-index:2;white-space:nowrap}'
+    + '#brt-box input[type=number]{width:84px;text-align:center;font-weight:700}'
+    + '#brt-box tr.brt-off td{opacity:.45}'
+    + '#brt-box .brt-warn{background:#fff3cd}';
+    var st = document.createElement('style'); st.id = 'brt-css'; st.textContent = css; document.head.appendChild(st);
+ 
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function isT(v) { return v === true || String(v).toUpperCase() === 'TRUE'; }
+    function canUse() {
+        var u = currentUser; return !!u && (u.username === 'admin' || u.role === 'admin' || isT(u.canManageDeliveryPlan) || isT(u.printTags));
+    }
+    function dmy(ymd) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(ymd || ''); return m ? (m[3] + '-' + m[2] + '-' + m[1]) : ymd; }
+    function dateOf(p) { return typeof window.formatDate === 'function' ? window.formatDate(p.date) : String(p.date || '').split('T')[0]; }
+    function perBoxOf(partNo) {
+        var p = (db.products || []).find(function (x) { return String(x.id).trim() === String(partNo).trim(); });
+        var n = p ? parseInt(p.fullBoxQuantity, 10) : 0; return n > 0 ? n : 0;
+    }
+    function plansFor(date, all) {
+        return (db.deliveryPlans || []).filter(function (p) {
+            if (!p || dateOf(p) !== date) return false;
+            if (!p.productId || p.productId === '-') return false;
+            if (p.jobType === 'Pickup' || p.jobType === 'Other') return false;
+            return all || /brose/i.test(String(p.customer || ''));
+        });
+    }
+ 
+    function rowsHtml(date, all) {
+        var list = plansFor(date, all);
+        if (!list.length) return '<div class="alert alert-warning text-start mb-0">ไม่พบแผนส่งของ' + (all ? '' : 'ของลูกค้าที่ชื่อมีคำว่า <b>BROSE</b> ') + 'ในวันที่เลือก' + (all ? '' : ' (ถ้าชื่อลูกค้าในแผนเขียนต่างไป ให้ติ๊ก "แสดงทุกลูกค้า")') + '</div>';
+        var h = '<div style="max-height:380px;overflow:auto" class="border rounded"><table class="table table-sm align-middle mb-0"><thead><tr>'
+            + '<th><input type="checkbox" id="brt-all" checked></th><th>ลูกค้า</th><th class="text-start">รหัสสินค้า (Part No)</th><th class="text-start">ชื่อ</th><th>ยอดแพลน</th><th>Invoice</th><th>จำนวน/กล่อง(แร็ค)</th><th>จำนวนแท็ก</th></tr></thead><tbody>';
+        list.forEach(function (p, i) {
+            var qty = parseInt(p.quantity, 10) || 0, pb = perBoxOf(p.productId), cnt = pb ? Math.ceil(qty / pb) : 0;
+            h += '<tr data-i="' + i + '" data-id="' + esc(p.id) + '" data-pn="' + esc(String(p.productId).trim()) + '" data-name="' + esc(p.productName) + '" data-inv="' + esc(p.invoiceNumber || '') + '" data-cus="' + esc(p.customer) + '" data-qty="' + qty + '"' + (pb ? '' : ' class="brt-warn"') + '>'
+                + '<td><input type="checkbox" class="brt-ck" checked></td>'
+                + '<td class="small">' + esc(p.customer) + '</td>'
+                + '<td class="text-start fw-bold">' + esc(String(p.productId).trim()) + '</td>'
+                + '<td class="text-start small">' + esc(p.productName) + '</td>'
+                + '<td class="fw-bold">' + qty + '</td>'
+                + '<td class="small">' + esc(p.invoiceNumber || '-') + '</td>'
+                + '<td><input type="number" min="1" class="form-control form-control-sm brt-pb" value="' + (pb || '') + '" placeholder="กรอก"></td>'
+                + '<td><input type="number" min="1" max="300" class="form-control form-control-sm brt-cnt" value="' + (cnt || '') + '"></td></tr>';
+        });
+        return h + '</tbody></table></div>';
+    }
+ 
+    function qtyList(qty, pb, cnt, useRem) {
+        var arr = []; for (var i = 0; i < cnt; i++) arr.push(pb);
+        if (useRem && cnt === Math.ceil(qty / pb) && qty % pb !== 0) arr[cnt - 1] = qty % pb;
+        return arr;
+    }
+    function collect(date, useRem) {
+        var tags = [], bad = null;
+        document.querySelectorAll('#brt-box tbody tr').forEach(function (tr) {
+            if (!tr.querySelector('.brt-ck').checked) return;
+            var pb = parseInt(tr.querySelector('.brt-pb').value, 10), cnt = parseInt(tr.querySelector('.brt-cnt').value, 10), qty = parseInt(tr.getAttribute('data-qty'), 10) || 0;
+            if (!(pb > 0) || !(cnt > 0)) { bad = bad || ('กรอกจำนวนต่อกล่อง/จำนวนแท็กของ ' + tr.getAttribute('data-pn')); return; }
+            qtyList(qty, pb, cnt, useRem).forEach(function (q) {
+                tags.push({ partNo: tr.getAttribute('data-pn'), qtyPerPack: q, invoiceNumber: tr.getAttribute('data-inv'), planId: tr.getAttribute('data-id'), customer: tr.getAttribute('data-cus'), productName: tr.getAttribute('data-name') });
+            });
+        });
+        return { tags: tags, bad: bad };
+    }
+    function refreshSummary() {
+        var el = document.getElementById('brt-sum'); if (!el) return;
+        var useRem = document.getElementById('brt-rem').checked, date = document.getElementById('brt-date').value;
+        var c = collect(date, useRem), pcs = c.tags.reduce(function (a, t) { return a + t.qtyPerPack; }, 0);
+        el.innerHTML = 'รวม <b>' + c.tags.length + '</b> ใบ · <b>' + pcs + '</b> ชิ้น · วันที่ส่ง <b>' + esc(dmy(date)) + '</b>' + (c.bad ? ' · <span class="text-danger">' + esc(c.bad) + '</span>' : '');
+    }
+    function fill() {
+        var date = document.getElementById('brt-date').value, all = document.getElementById('brt-allcus').checked;
+        document.getElementById('brt-box').innerHTML = rowsHtml(date, all);
+        refreshSummary();
+    }
+ 
+    /* ---- หน้าต่างปริ้น (A4 แนวตั้ง 8 ใบ/หน้า เหมือนแท็ก LG) ---- */
+    function renderPrint(tags, printWin, dateYmd) {
+        if (!printWin) { Swal.fire('เปิดหน้าต่างไม่สำเร็จ', 'เบราว์เซอร์บล็อกป๊อปอัพ กรุณาอนุญาตป๊อปอัพ แล้วกด "พิมพ์ชุดล่าสุดซ้ำ"', 'warning'); return; }
+        var total = tags.length, now = new Date();
+        var printed = now.getFullYear() + '.' + String(now.getMonth() + 1).padStart(2, '0') + '.' + String(now.getDate()).padStart(2, '0');
+        var card = function (t) {
+            return '<div class="bt">'
+                + '<div class="r1"><div class="sp"><div class="sup">SUPPLIER: A TECH AUTOMOTIVE CO.,LTD.</div><div class="sla">SLA0048</div></div>'
+                + '<div class="inv"><div class="il">Invoice No.</div><div class="iv">' + esc(t.invoiceNumber || '') + '</div></div></div>'
+                + '<div class="r2"><div class="c dt"><div class="lb">DELIVERY DATE:</div><div class="vl">' + esc(dmy(dateYmd)) + '</div></div>'
+                + '<div class="c qt"><div class="lb">QTY:</div><div class="vl">' + esc(t.qtyPerPack) + '</div></div></div>'
+                + '<div class="r3"><div class="c pt"><div class="rw"><span class="lb">PART NUMBER:</span><span class="vl pn">' + esc(t.partNo) + '</span></div>'
+                + '<div class="rw"><span class="lb">PART NAME:</span><span class="vl pm">' + esc(t.productName || '') + '</span></div></div>'
+                + '<div class="c qrc"><span class="lb">QR Code:</span><img src="' + t.qrUrl + '"></div></div>'
+                + '<div class="r4"><div class="c po"><div class="rw"><span class="lb">PURCHASE ORDER:</span><span class="vl pov">SLA00481</span></div>'
+                + '<div class="rw"><span class="lb sq">SEQUENCE:</span><span class="vl sqv">' + esc(t.serial) + '</span></div></div>'
+                + '<div class="c to"><div class="tl">To: Brose (Thailand) Co.,Ltd.</div><div class="tl"><span class="lb2">Cust:</span><span class="cv">A Tech Automotive</span></div></div></div>'
+                + '</div>';
+        };
+        var pages = '';
+        for (var p = 0; p < tags.length; p += 8) pages += '<div class="pg">' + tags.slice(p, p + 8).map(function (t) { return card(t); }).join('') + '</div>';
+        printWin.document.open();
+        printWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>ปริ้นแท็ก BROSE</title><style>'
+            + '*{box-sizing:border-box}@page{size:A4;margin:8mm}body{font-family:Arial,Helvetica,sans-serif;margin:0;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+            + '.pg{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(4,1fr);gap:2mm;width:194mm;height:281mm;page-break-after:always}.pg:last-child{page-break-after:auto}'
+            + '.bt{border:2px solid #d98a5f;display:grid;grid-template-rows:26fr 22fr 27fr 25fr;overflow:hidden;background:#fff}'+ '.pg{gap:5mm 7mm}.r1{grid-template-columns:66fr 34fr}.sup{font-size:9.5px}.sup,.lb,.tl,.cv,.lb2,.sla{white-space:nowrap}.qrc img{width:18mm;height:18mm}.tl{font-size:7px}.lb2{width:9mm}'
+            + '.bt>div{border-bottom:1.5px solid #d98a5f}.bt>div:last-child{border-bottom:0}'
+            + '.r1{display:grid;grid-template-columns:64fr 36fr;padding:1.5mm 2mm}.sup{font-weight:bold;font-size:10.5px;line-height:1.2}.sla{font-weight:bold;font-size:14px;margin:2.2mm 0 0 6mm}'
+            + '.inv{padding-left:1mm}.il{font-size:7.5px;font-weight:bold;margin:1mm 0 0 8mm}.iv{font-weight:bold;font-size:13px;margin-top:3.2mm;text-align:center}'
+            + '.r2{display:grid;grid-template-columns:1fr 1fr}.r2 .c{padding:1.2mm 2mm}.r2 .dt{border-right:1.5px solid #d98a5f}'
+            + '.lb{font-size:8.5px;font-weight:normal;text-transform:uppercase}.r2 .vl{font-weight:bold;font-size:15px;margin-top:2.4mm;text-align:center}.r2 .qt .vl{font-size:17px}.r2 .dt .vl{text-align:left;margin-left:5mm}'
+            + '.r3{display:grid;grid-template-columns:63fr 37fr}.r3 .pt{border-right:1.5px solid #d98a5f;padding:0 2mm;display:flex;flex-direction:column;justify-content:center;gap:2.5mm}'
+            + '.rw{display:flex;align-items:baseline}.rw .lb{flex:0 0 27mm}.pn{font-weight:bold;font-size:13px}.pm{font-weight:bold;font-size:13px}'
+            + '.qrc{position:relative;padding:1.5mm 2mm;display:flex;align-items:flex-start;justify-content:space-between}.qrc .lb{font-size:8.5px;margin-top:1mm}.qrc img{width:20mm;height:20mm;display:block;margin-left:auto}'
+            + '.r4{display:grid;grid-template-columns:63fr 37fr}.r4 .po{border-right:1.5px solid #d98a5f;padding:1.5mm 2mm;display:flex;flex-direction:column;justify-content:center;gap:2.5mm}'
+            + '.r4 .vl.pov{font-weight:bold;font-size:14px}.sq{font-size:7.5px}.sqv{font-weight:bold;font-size:8px;letter-spacing:.2px;margin-left:2mm}.r4 .po .rw .lb{flex:0 0 31mm}'
+            + '.to{padding:1.5mm 2mm;display:flex;flex-direction:column;justify-content:center;gap:2.5mm}.tl{font-size:7.5px}.lb2{font-size:8.5px;display:inline-block;width:11mm}.cv{font-size:8px;font-weight:bold}'
+            + '@media print{.bt{page-break-inside:avoid}}</style></head><body>' + pages
+            + '<script>window.onload=function(){setTimeout(function(){window.print()},300)};<\/script></body></html>');
+        printWin.document.close();
+    }
+    function addQr(tags) {
+        var holder = document.createElement('div'); holder.style.cssText = 'position:fixed;left:-9999px'; document.body.appendChild(holder);
+        try {
+            tags.forEach(function (t) {
+                var d = document.createElement('div'); holder.appendChild(d); safeCreateQRCode(d, t.qr);
+                var cv = d.querySelector('canvas'); t.qrUrl = cv ? cv.toDataURL('image/png') : '';
+            });
+        } finally { document.body.removeChild(holder); }
+    }
+ 
+    async function doPrint(date, useRem) {
+        var printWin = window.open('', '_blank');
+        if (printWin) printWin.document.write('<html><body style="font-family:sans-serif;text-align:center;padding:60px;font-size:18px;">⏳ กำลังออกเลขแท็ก กรุณารอสักครู่...</body></html>');
+        var c = collect(date, useRem);
+        if (c.bad || !c.tags.length) { if (printWin) printWin.close(); Swal.showValidationMessage(c.bad || 'ยังไม่ได้เลือกรายการ'); return false; }
+        if (c.tags.length > 300) { if (printWin) printWin.close(); Swal.showValidationMessage('ออกได้ไม่เกิน 300 ใบต่อครั้ง'); return false; }
+        try {
+            // เช็คตัวสร้าง QR ก่อนขอเลขแท็ก — ถ้า QR ใช้ไม่ได้จะไม่เปลืองเลขลำดับ
+            try { var _t = document.createElement('div'); safeCreateQRCode(_t, 'test'); if (!_t.querySelector('canvas')) throw new Error('no canvas'); }
+            catch (qe) { throw new Error('ตัวสร้าง QR ยังไม่พร้อม (ยังไม่ได้ออกเลขแท็ก) กรุณารีเฟรชหน้าเว็บแล้วลองใหม่'); }
+            var issued = false;
+            var res = await callAppsScript('issueBroseTags', { deliveryDate: date, printedBy: (currentUser && currentUser.username) || '', tags: c.tags });
+            if (!res || !res.tags || res.tags.length !== c.tags.length) throw new Error('เซิร์ฟเวอร์ตอบกลับไม่ครบ (ยังไม่ปริ้น) กรุณาตรวจชีต BROSE_TagLog');
+            var out = c.tags.map(function (t, i) { return Object.assign({}, t, { serial: res.tags[i].serial, qr: res.tags[i].qr }); });
+            issued = true;
+            try { localStorage.setItem(LS_LAST, JSON.stringify({ date: date, tags: out })); } catch (e) {}
+            addQr(out);
+            renderPrint(out, printWin, date);
+            return true;
+        } catch (e) {
+            if (printWin) printWin.close();
+            Swal.showValidationMessage((issued ? 'ออกเลขแท็กแล้วแต่แสดงผลไม่สำเร็จ — กดปุ่ม "พิมพ์ชุดล่าสุดซ้ำ" ได้ (' : 'ออกแท็กไม่สำเร็จ: ') + (e && e.message ? e.message : e) + (issued ? ')' : ''));
+            return false;
+        }
+    }
+    function reprintLast() {
+        var b = null; try { b = JSON.parse(localStorage.getItem(LS_LAST) || 'null'); } catch (e) {}
+        if (!b || !b.tags || !b.tags.length) { Swal.fire('ยังไม่มีชุดล่าสุด', 'เครื่องนี้ยังไม่เคยออกแท็ก BROSE', 'info'); return; }
+        var w = window.open('', '_blank');
+        try { addQr(b.tags); renderPrint(b.tags, w, b.date); } catch (e) { if (w) w.close(); Swal.fire('พิมพ์ซ้ำไม่สำเร็จ', e.message, 'error'); }
+    }
+    /* ===== BROSE-HIST-V1: ประวัติแท็กชิ้นงาน BROSE — ออกเลขใหม่แทนใบที่หาย (รันต่อจากเลขล่าสุดของวัน) ===== */
+(function () {
+    if (window.__broseHistV1) return; window.__broseHistV1 = true;
+    var S = { tags: [], sel: {}, date: '', armed: '' };
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function isT(v) { return v === true || String(v).toUpperCase() === 'TRUE'; }
+    function canUse() { var u = currentUser; return !!u && (u.username === 'admin' || u.role === 'admin' || isT(u.canManageDeliveryPlan) || isT(u.printTags)); }
+    function dmy(ymd) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(ymd || ''); return m ? (m[3] + '-' + m[2] + '-' + m[1]) : ymd; }
+    function selList() { return S.tags.filter(function (t) { return S.sel[t.serial] && t.status !== 'lost'; }).map(function (t) { return t.serial; }); }
+    function fb(msg, kind) { var e = document.getElementById('bh-fb'); if (e) { e.innerHTML = msg; e.style.color = kind === 'ok' ? '#198754' : (kind === 'warn' ? '#b45309' : '#dc3545'); } }
+ 
+    function render() {
+        var box = document.getElementById('bh-box'); if (!box) return;
+        var q = (document.getElementById('bh-q').value || '').trim().toLowerCase();
+        var list = S.tags.filter(function (t) { return !q || (t.serial + ' ' + t.partNo + ' ' + t.invoiceNumber + ' ' + t.productName).toLowerCase().indexOf(q) >= 0; });
+        if (!S.tags.length) { box.innerHTML = '<div class="alert alert-warning text-start mb-0">ไม่พบแท็กที่เคยออกของวันที่ ' + esc(dmy(S.date)) + '</div>'; sumLine(); return; }
+        var h = '<div style="max-height:360px;overflow:auto" class="border rounded"><table class="table table-sm align-middle mb-0"><thead style="position:sticky;top:0;background:#e9eef7"><tr>'
+            + '<th><input type="checkbox" id="bh-all" title="ติ๊กทั้งหมดที่แสดงอยู่"></th><th>เลขแท็ก (Sequence)</th><th class="text-start">รหัสสินค้า</th><th>จำนวน</th><th>Invoice</th><th>พิมพ์เมื่อ</th><th class="text-start">หมายเหตุ</th></tr></thead><tbody id="bh-tb">';
+        list.forEach(function (t) {
+            var lost = t.status === 'lost', note = lost ? '<span class="text-danger">หาย → แทนด้วย ' + esc(t.replacedBy) + '</span>' : (t.replaces ? '<span class="text-primary">ใบแทนของ ' + esc(t.replaces) + '</span>' : '');
+            h += '<tr data-s="' + esc(t.serial) + '"' + (lost ? ' style="opacity:.5;text-decoration:line-through"' : '') + '><td><input type="checkbox" class="bh-ck"' + (lost ? ' disabled' : '') + (S.sel[t.serial] && !lost ? ' checked' : '') + '></td>'
+                + '<td class="fw-bold" style="font-family:monospace">' + esc(t.serial) + '</td><td class="text-start">' + esc(t.partNo) + '</td><td>' + esc(t.qtyPerPack) + '</td>'
+                + '<td class="small">' + esc(t.invoiceNumber || '-') + '</td><td class="small">' + esc(t.printedAt) + '</td><td class="small text-start" style="text-decoration:none">' + note + '</td></tr>';
+        });
+        box.innerHTML = h + '</tbody></table></div>'; sumLine();
+    }
+    function sumLine() {
+        var el = document.getElementById('bh-sum'); if (!el) return;
+        var mx = S.tags.reduce(function (a, t) { return t.serial > a ? t.serial : a; }, '');
+        el.innerHTML = 'แท็กของวันนี้ <b>' + S.tags.length + '</b> ใบ' + (mx ? ' · เลขล่าสุด <b style="font-family:monospace">' + esc(mx) + '</b> (ใบใหม่จะเริ่มต่อจากนี้)' : '') + ' · ติ๊กไว้ <b>' + selList().length + '</b> ใบ';
+    }
+    function load() {
+        S.date = document.getElementById('bh-date').value; S.sel = {}; S.tags = []; S.armed = '';
+        document.getElementById('bh-box').innerHTML = '<div class="text-muted py-3">⏳ กำลังโหลด…</div>';
+        return callAppsScript('getBroseTags', { deliveryDate: S.date }).then(function (r) {
+            if (!r || r.status === 'error') throw new Error((r && r.message) || 'โหลดไม่สำเร็จ');
+            S.tags = (r.tags || []).slice().sort(function (a, b) { return a.serial < b.serial ? -1 : 1; }); render();
+        }).catch(function (e) { document.getElementById('bh-box').innerHTML = '<div class="alert alert-danger text-start mb-0">โหลดประวัติไม่สำเร็จ: ' + esc(e && e.message ? e.message : e) + '</div>'; });
+    }
+ 
+    // กดครั้งแรก = แสดงสรุปให้ตรวจ / กดซ้ำ (รายการเดิม) = ออกเลขใหม่จริง (กันกดพลาดเพราะเลขที่ออกแล้วย้อนไม่ได้)
+    function reissue() {
+        var sel = selList();
+        if (!sel.length) { Swal.showValidationMessage('ยังไม่ได้ติ๊กแท็กที่หาย'); return false; }
+        if (typeof window.__broseTagPrint !== 'function') { Swal.showValidationMessage('ยังไม่ได้วางบล็อกออกแท็ก BROSE (BROSE-TAG-V1 + จุดเสริม) — ดูไฟล์แพตช์'); return false; }
+        var key = sel.join(',');
+        if (S.armed !== key) {
+            S.armed = key; Swal.resetValidationMessage();
+            fb('⚠ จะออกแท็กใหม่ ' + sel.length + ' ใบ แทน ' + esc(sel[0]) + (sel.length > 1 ? ' … ' + esc(sel[sel.length - 1]) : '') + ' ด้วยเลขใหม่ต่อจากเลขล่าสุดของวัน (ใบเก่าจะถูกจดว่าหาย) — กดปุ่มสีม่วงอีกครั้งเพื่อยืนยัน', 'warn');
+            return false;
+        }
+        S.armed = '';
+        var w = window.open('', '_blank');   // ต้องเปิดทันทีที่กด ไม่งั้นเบราว์เซอร์บล็อกป๊อปอัพ
+        if (w) w.document.write('<html><body style="font-family:sans-serif;text-align:center;padding:60px;font-size:18px;">⏳ กำลังออกเลขแท็กใหม่ กรุณารอสักครู่...</body></html>');
+        var issued = false;
+        return callAppsScript('reissueBroseTags', { deliveryDate: S.date, printedBy: (currentUser && currentUser.username) || '', oldSerials: sel }).then(function (r) {
+            if (!r || r.status === 'error') throw new Error((r && r.message) || 'ออกเลขใหม่ไม่สำเร็จ');
+            if (!r.tags || r.tags.length !== sel.length) throw new Error('เซิร์ฟเวอร์ตอบกลับไม่ครบ กรุณาตรวจชีต BROSE_TagLog');
+            issued = true;
+            var tags = r.tags.map(function (t) { return { serial: t.serial, qr: t.qr, partNo: t.partNo, qtyPerPack: t.qtyPerPack, invoiceNumber: t.invoiceNumber, productName: t.productName }; });
+            try { localStorage.setItem('broseLastBatch_v1', JSON.stringify({ date: S.date, tags: tags })); } catch (e) { }
+            window.__broseTagPrint(tags, S.date, w);
+            fb('✔ ออกใหม่ ' + tags.length + ' ใบ: ' + esc(tags[0].serial) + (tags.length > 1 ? ' – ' + esc(tags[tags.length - 1].serial) : ''), 'ok');
+            return load().then(function () { return false; });
+        }).catch(function (e) {
+            if (w) { try { w.close(); } catch (x) { } }
+            Swal.showValidationMessage((issued ? 'ออกเลขแล้วแต่พิมพ์ไม่สำเร็จ — ใช้ปุ่ม "พิมพ์ชุดล่าสุดซ้ำ" ในหน้า "ออกแท็ก BROSE" ได้ (' : 'ออกเลขใหม่ไม่สำเร็จ: ') + (e && e.message ? e.message : e) + (issued ? ')' : ''));
+            return false;
+        });
+    }
+ 
+    window.openBroseHistoryDialog = function () {
+        if (!canUse()) { Swal.fire('ไม่มีสิทธิ์', 'ต้องมีสิทธิ์จัดการแผนการจัดส่ง หรือสิทธิ์ปริ้นแท็ก', 'warning'); return; }
+        var v = document.getElementById('view-plan-date'), d0 = (v && v.value) || new Date().toISOString().slice(0, 10);
+        Swal.fire({
+            title: 'แท็ก BROSE หาย — ออกเลขใหม่', width: 1000, showCancelButton: true, showLoaderOnConfirm: true, focusConfirm: false,
+            confirmButtonText: '<i class="bi bi-printer-fill"></i> ออกเลขใหม่แทนใบที่ติ๊ก + ปริ้น', cancelButtonText: 'ปิด',
+            html: '<div class="d-flex align-items-center gap-2 flex-wrap text-start mb-2"><label class="fw-bold mb-0">วันที่ส่งงาน</label><input type="date" id="bh-date" class="form-control form-control-sm" style="max-width:170px">'
+                + '<input type="text" id="bh-q" class="form-control form-control-sm" placeholder="พิมพ์เลข Invoice / รหัสสินค้า เพื่อกรอง" style="max-width:300px"></div>'
+                + '<div class="text-start small text-muted mb-2">วิธีใช้: พิมพ์เลข Invoice ที่แท็กหาย → ติ๊กช่องหัวตารางเพื่อเลือกทั้งหมดที่แสดง (หรือติ๊กทีละใบ) → กดปุ่มสีม่วง ระบบจะออกแท็กใหม่ด้วยรหัสสินค้า/จำนวน/Invoice เดิม แต่ได้เลขลำดับใหม่ต่อจากเลขล่าสุดของวัน</div>'
+                + '<div id="bh-box"></div><div id="bh-sum" class="text-start small mt-2"></div><div id="bh-fb" class="text-start small fw-bold mt-1"></div>',
+            didOpen: function () {
+                document.getElementById('bh-date').value = d0; load();
+                document.getElementById('bh-date').addEventListener('change', load);
+                document.getElementById('bh-q').addEventListener('input', render);
+                document.getElementById('bh-box').addEventListener('change', function (e) {
+                    if (e.target.id === 'bh-all') document.querySelectorAll('#bh-tb tr').forEach(function (tr) { var c = tr.querySelector('.bh-ck'); if (c && !c.disabled) { c.checked = e.target.checked; S.sel[tr.getAttribute('data-s')] = e.target.checked; } });
+                    else if (e.target.classList.contains('bh-ck')) S.sel[e.target.closest('tr').getAttribute('data-s')] = e.target.checked;
+                    S.armed = ''; fb('', 'ok'); sumLine();
+                });
+            },
+            preConfirm: reissue
+        });
+    };
+ 
+    function addButton() {
+        var acts = document.querySelector('#pills-delivery-plan #dpB-root .top .acts');
+        var v = document.getElementById('view-plan-date'), b = document.getElementById('bh-open-btn');
+        if (!acts && !v) return false;
+        if (b && b.isConnected && (!acts || b.parentNode === acts)) return true;
+        if (!b) { b = document.createElement('button'); b.type = 'button'; b.id = 'bh-open-btn'; b.title = 'แท็กหาย — ออกเลขใหม่ต่อจากเลขล่าสุดของวัน'; b.addEventListener('click', window.openBroseHistoryDialog); }
+        if (acts) {
+            b.className = 'dpB-btn'; b.style.cssText = 'background:#0f172a;color:#fff;border-color:#0f172a'; b.innerHTML = '<i class="bi bi-arrow-repeat"></i>แท็กหาย/ออกใหม่';
+            var after = document.getElementById('bri-open-btn') || document.getElementById('brt-open-btn');
+            after = after && after.parentNode === acts ? after : acts.querySelector('[data-act="pdf"]');
+            acts.insertBefore(b, after ? after.nextSibling : acts.firstChild);
+        } else { b.className = 'btn btn-dark btn-sm fw-bold me-2 shadow-sm'; b.style.cssText = ''; b.innerHTML = '<i class="bi bi-arrow-repeat"></i> แท็กหาย/ออกใหม่'; v.parentElement.insertBefore(b, v.parentElement.firstChild); }
+        return true;
+    }
+    addButton();
+    setInterval(function () { try { addButton(); } catch (e) { } }, 1500);
+})();
+/* ===== จบ BROSE-HIST-V1 ===== */
+        // ให้บล็อกประวัติแท็ก (BROSE-HIST-V1) เรียกใช้ตัวพิมพ์เดียวกัน (ส่งหน้าต่างที่เปิดไว้แล้วมาได้ ไม่งั้นจะเปิดใหม่)
+    window.__broseTagPrint = function (tags, dateYmd, preWin) { var w = preWin || window.open('', '_blank'); try { addQr(tags); renderPrint(tags, w, dateYmd); return true; } catch (e) { if (w) w.close(); throw e; } };
+    window.__broseReprintLast = function () { reprintLast(); };   // ให้เมนูรวม (BROSE-MENU-V1) เรียก "รีปริ้นชุดล่าสุด"
+    window.openBroseTagDialog = function () {
+        if (!canUse()) { Swal.fire('ไม่มีสิทธิ์', 'ต้องมีสิทธิ์จัดการแผนการจัดส่ง หรือสิทธิ์ปริ้นแท็ก', 'warning'); return; }
+        var v = document.getElementById('view-plan-date');
+        var d0 = (v && v.value) || new Date().toISOString().slice(0, 10);
+        Swal.fire({
+            title: 'ออกแท็ก BROSE THAILAND', width: 1020, showCancelButton: true, confirmButtonText: '<i class="bi bi-printer-fill"></i> ออกเลข + ปริ้นแท็ก', cancelButtonText: 'ปิด', focusConfirm: false, showLoaderOnConfirm: true,
+            html: '<div class="d-flex align-items-center gap-3 flex-wrap text-start mb-2"><label class="fw-bold mb-0">วันที่ส่งงาน</label><input type="date" id="brt-date" class="form-control form-control-sm" style="max-width:170px">'
+                + '<label class="small mb-0"><input type="checkbox" id="brt-rem" checked> ใบสุดท้ายใช้จำนวนเศษที่เหลือ</label>'
+                + '<label class="small mb-0"><input type="checkbox" id="brt-allcus"> แสดงทุกลูกค้า</label>'
+                + '<button type="button" id="brt-last" class="btn btn-sm btn-outline-secondary ms-auto"><i class="bi bi-arrow-repeat"></i> พิมพ์ชุดล่าสุดซ้ำ</button></div>'
+                + '<div id="brt-box"></div><div id="brt-sum" class="text-start small mt-2"></div>'
+                + '<div class="text-start text-muted mt-1" style="font-size:.75rem">เลขลำดับท้าย QR นับต่อกันตามวันที่ส่งงาน (001, 002, …) ไม่ซ้ำ · เมื่อกดปริ้นแล้วเลขจะถูกใช้ไปเลย ถ้าปริ้นพลาดให้กด "พิมพ์ชุดล่าสุดซ้ำ"</div>',
+            didOpen: function () {
+                document.getElementById('brt-date').value = d0; fill();
+                document.getElementById('brt-date').addEventListener('change', fill);
+                document.getElementById('brt-allcus').addEventListener('change', fill);
+                document.getElementById('brt-rem').addEventListener('change', refreshSummary);
+                document.getElementById('brt-last').addEventListener('click', reprintLast);
+                document.getElementById('brt-box').addEventListener('input', refreshSummary);
+                document.getElementById('brt-box').addEventListener('change', function (e) {
+                    if (e.target.id === 'brt-all') { document.querySelectorAll('#brt-box .brt-ck').forEach(function (c) { c.checked = e.target.checked; }); }
+                    refreshSummary();
+                });
+            },
+            preConfirm: function () { return doPrint(document.getElementById('brt-date').value, document.getElementById('brt-rem').checked); }
+        });
+    };
+ 
+    // วางปุ่มในแถวปุ่มของหน้าแผนส่งของแบบใหม่ (ถ้าไม่มี ใช้แถบเดิม) และคอยเช็คเผื่อหน้าถูกวาดใหม่ (เช่นเปลี่ยนภาษา)
+    function addButton() {
+        var acts = document.querySelector('#pills-delivery-plan #dpB-root .top .acts');
+        var v = document.getElementById('view-plan-date');
+        var b = document.getElementById('brt-open-btn');
+        if (acts) {
+            if (b && b.parentNode === acts) return true;
+            if (!b) {
+                b = document.createElement('button'); b.type = 'button'; b.id = 'brt-open-btn';
+                b.title = 'ออกแท็กชิ้นงาน BROSE THAILAND';
+                b.innerHTML = '<i class="bi bi-qr-code"></i>ออกแท็ก BROSE';
+                b.addEventListener('click', window.openBroseTagDialog);
+            }
+            b.className = 'dpB-btn'; b.style.cssText = 'background:#0f172a;color:#fff;border-color:#0f172a';
+            var pdf = acts.querySelector('[data-act="pdf"]');
+            acts.insertBefore(b, pdf ? pdf.nextSibling : acts.firstChild);
+            return true;
+        }
+        if (!v) return false;
+        if (b && b.isConnected) return true;
+        if (!b) {
+            b = document.createElement('button'); b.type = 'button'; b.id = 'brt-open-btn';
+            b.title = 'ออกแท็กชิ้นงาน BROSE THAILAND';
+            b.innerHTML = '<i class="bi bi-qr-code"></i> ออกแท็ก BROSE';
+            b.addEventListener('click', window.openBroseTagDialog);
+        }
+        b.className = 'btn btn-dark btn-sm fw-bold me-2 shadow-sm'; b.style.cssText = '';
+        v.parentElement.insertBefore(b, v.parentElement.firstChild);
+        return true;
+    }
+    addButton();
+    setInterval(function () { try { addButton(); } catch (e) { } }, 1500);
+})();
+/* ===== จบ BROSE-TAG-V1 ===== */
+/* ===== BROSE-INV-V1: แท็กแนบ Invoice BROSE THAILAND (แนวยาว, QR = เลข Invoice, DOCK ตั้งเองได้) ===== */
+(function () {
+    if (window.__broseInvV1) return; window.__broseInvV1 = true;
+    var LS_DOCK = 'broseDock_v1', DEF_DOCK = 'DOCK 1 & DOCK 2';
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function isT(v) { return v === true || String(v).toUpperCase() === 'TRUE'; }
+    function canUse() { var u = currentUser; return !!u && (u.username === 'admin' || u.role === 'admin' || isT(u.canManageDeliveryPlan) || isT(u.printTags)); }
+    function dmy(ymd) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(ymd || ''); return m ? (m[3] + '-' + m[2] + '-' + m[1]) : ymd; }
+    function dateOf(p) { return typeof window.formatDate === 'function' ? window.formatDate(p.date) : String(p.date || '').split('T')[0]; }
+    function dockMap() { try { return JSON.parse(localStorage.getItem(LS_DOCK) || '{}') || {}; } catch (e) { return {}; } }
+    function saveDock(parts, dock) { try { var m = dockMap(); parts.forEach(function (p) { if (p) m[p] = dock; }); localStorage.setItem(LS_DOCK, JSON.stringify(m)); } catch (e) { } }
+ 
+    // รวมแผนส่งของของวันนั้นเป็น "ใบ Invoice" (Invoice เดียวกัน = 1 แถว) แผนที่ไม่มีเลข Invoice แยกเป็นแถวละรายการ (ติ๊กปิดไว้ ให้พิมพ์เลขเอง)
+    function groups(date, all) {
+        var map = {}, out = [];
+        (db.deliveryPlans || []).forEach(function (p) {
+            if (!p || dateOf(p) !== date) return;
+            if (!p.productId || p.productId === '-') return;
+            if (p.jobType === 'Pickup' || p.jobType === 'Other') return;
+            if (!(all || /brose/i.test(String(p.customer || '')))) return;
+            var inv = String(p.invoiceNumber || '').trim(), pn = String(p.productId).trim(), q = parseInt(p.quantity, 10) || 0;
+            var g;
+            if (inv) { g = map[inv]; if (!g) { g = map[inv] = { inv: inv, parts: [], qty: 0 }; out.push(g); } }
+            else { g = { inv: '', parts: [], qty: 0 }; out.push(g); }
+            if (g.parts.indexOf(pn) < 0) g.parts.push(pn); g.qty += q;
+        });
+        return out;
+    }
+    function dockFor(parts) { var m = dockMap(); for (var i = 0; i < parts.length; i++) if (m[parts[i]]) return m[parts[i]]; return DEF_DOCK; }
+    function rowHtml(g) {
+        return '<tr data-parts="' + esc(g.parts.join('|')) + '"><td><input type="checkbox" class="bri-ck"' + (g.inv ? ' checked' : '') + '></td>'
+            + '<td><input type="text" class="form-control form-control-sm bri-inv fw-bold" value="' + esc(g.inv) + '" placeholder="เลข Invoice" style="min-width:170px"></td>'
+            + '<td class="small text-start">' + esc(g.parts.join(', ') || '-') + '</td><td class="fw-bold">' + (g.qty || '') + '</td>'
+            + '<td><input type="text" class="form-control form-control-sm bri-dock fw-bold" value="' + esc(dockFor(g.parts)) + '" style="min-width:190px;color:#d00"></td>'
+            + '<td><input type="number" min="1" max="50" class="form-control form-control-sm bri-n" value="1" style="width:70px;text-align:center"></td></tr>';
+    }
+    function fill() {
+        var date = document.getElementById('bri-date').value, all = document.getElementById('bri-allcus').checked, gs = groups(date, all);
+        var h = '<div style="max-height:380px;overflow:auto" class="border rounded"><table class="table table-sm align-middle mb-0"><thead><tr style="background:#e9eef7">'
+            + '<th><input type="checkbox" id="bri-all" checked></th><th>เลข Invoice (ใน QR)</th><th class="text-start">รหัสสินค้าใน Invoice</th><th>จำนวนรวม</th><th>DOCK (พิมพ์เองได้)</th><th>จำนวนแท็ก</th></tr></thead><tbody id="bri-tb">'
+            + gs.map(rowHtml).join('') + '</tbody></table></div>';
+        if (!gs.length) h = '<div class="alert alert-warning text-start mb-2">ไม่พบแผนส่งของ' + (all ? '' : 'ของลูกค้าที่ชื่อมีคำว่า <b>BROSE</b> ') + 'ในวันที่เลือก — กด "เพิ่มแถวเอง" เพื่อพิมพ์ Invoice เองได้</div><div class="border rounded"><table class="table table-sm align-middle mb-0"><tbody id="bri-tb"></tbody></table></div>';
+        document.getElementById('bri-box').innerHTML = h; sum();
+    }
+    function collect() {
+        var tags = [], bad = null, date = document.getElementById('bri-date').value;
+        document.querySelectorAll('#bri-tb tr').forEach(function (tr) {
+            if (!tr.querySelector('.bri-ck').checked) return;
+            var inv = tr.querySelector('.bri-inv').value.trim(), dock = tr.querySelector('.bri-dock').value.trim(), n = parseInt(tr.querySelector('.bri-n').value, 10);
+            if (!inv) { bad = bad || 'มีแถวที่ติ๊กไว้แต่ยังไม่กรอกเลข Invoice'; return; }
+            if (/["\n\r]/.test(inv)) { bad = bad || 'เลข Invoice มีอักขระที่ใช้ไม่ได้: ' + inv; return; }
+            if (!(n > 0) || n > 50) { bad = bad || 'จำนวนแท็กของ ' + inv + ' ต้อง 1-50'; return; }
+            for (var i = 0; i < n; i++) tags.push({ inv: inv, dock: dock, parts: (tr.getAttribute('data-parts') || '').split('|').filter(Boolean) });
+        });
+        return { tags: tags, bad: bad, date: date };
+    }
+    function sum() {
+        var el = document.getElementById('bri-sum'); if (!el) return;
+        var c = collect(); el.innerHTML = 'รวม <b>' + c.tags.length + '</b> ใบ · วันที่ส่ง <b>' + esc(dmy(c.date)) + '</b>' + (c.bad ? ' · <span class="text-danger">' + esc(c.bad) + '</span>' : '');
+    }
+    function addQr(tags) {
+        var holder = document.createElement('div'); holder.style.cssText = 'position:fixed;left:-9999px'; document.body.appendChild(holder);
+        try {
+            var cache = {};
+            tags.forEach(function (t) {
+                if (!cache[t.inv]) { var d = document.createElement('div'); holder.appendChild(d); safeCreateQRCode(d, t.inv); var cv = d.querySelector('canvas'); if (!cv) throw new Error('สร้าง QR ไม่สำเร็จ'); cache[t.inv] = cv.toDataURL('image/png'); }
+                t.qrUrl = cache[t.inv];
+            });
+        } finally { document.body.removeChild(holder); }
+    }
+    function render(tags, w, date) {
+        // แบบเดิม: แท็กกว้างเต็มแถว ใบละ 1 แถว 3 ใบ/หน้า คั่นด้วยเส้นประ (ออกแบบบนพื้นที่ 618x247 แล้วขยายให้พอดีกว้าง 194 มม.)
+        var fit = function (txt, base, maxLen) { var n = String(txt).length; return n > maxLen ? Math.max(9, Math.floor(base * maxLen / n * 10) / 10) : base; };
+        var card = function (t) {
+            return '<div class="slot"><div class="cw"><div class="sc">'
+                + '<div class="a sup">SUPPLIER: A TECH AUTOMOTIVE CO.,LTD.</div>'
+                + '<div class="a sla">SLA0048</div>'
+                + '<div class="a il">Invoice No.</div><div class="a iv" style="font-size:' + fit(t.inv, 19, 20) + 'px">' + esc(t.inv) + '</div>'
+                + '<div class="a dl">DELIVERY DATE:</div><div class="a dk" style="font-size:' + fit(t.dock, 21, 17) + 'px">' + esc(t.dock) + '</div>'
+                + '<div class="a dt">' + esc(dmy(date)) + '</div>'
+                + '<div class="a pl">PURCHASE ORDER:</div><div class="a po">SLA00481</div><div class="a to">To: Brose (Thailand) Co.,Ltd.</div>'
+                + '<div class="a ql">QR Code:</div><div class="a qb"><img src="' + t.qrUrl + '"></div>'
+                + '</div></div></div>';
+        };
+        var pages = '';
+        for (var p = 0; p < tags.length; p += 3) pages += '<div class="pg">' + tags.slice(p, p + 3).map(card).join('') + '</div>';
+        w.document.open();
+        w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>ปริ้นแท็ก Invoice BROSE</title><style>'
+            + '*{box-sizing:border-box}@page{size:A4;margin:8mm}body{font-family:Arial,Helvetica,sans-serif;margin:0;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+            + '.pg{width:194mm;height:281mm;page-break-after:always;display:flex;flex-direction:column}.pg:last-child{page-break-after:auto}'
+            + '.slot{height:93.6mm;padding-top:5mm;border-bottom:.4mm dashed #444}.slot:last-child{border-bottom:0}'
+            + '.cw{width:194mm;height:77.5mm;overflow:hidden}'
+            + '.sc{position:relative;width:618px;height:247px;border:1.5px solid #000;transform:scale(1.186);transform-origin:0 0;background:#fff}'
+            + '.a{position:absolute;white-space:nowrap;line-height:1;font-weight:bold}'
+            + '.sup{left:37px;top:18px;font-size:19px}.sla{left:37px;top:63px;font-size:17px}'
+            + '.il{left:36px;top:91px;font-size:12.5px}.iv{left:178px;top:88px}'
+            + '.dl{left:36px;top:132px;font-size:14.5px;font-weight:normal}.dk{left:183px;top:124px;color:#ff0000}'
+            + '.dt{left:91px;top:169px;font-size:18px}'
+            + '.pl{left:36px;top:213px;font-size:12.5px}.po{left:178px;top:209px;font-size:19px}.to{left:363px;top:213px;font-size:12.5px}'
+            + '.ql{left:457px;top:43px;font-size:14px}.qb{left:416px;top:68px;width:150px;height:125px;border:1px solid #ddd;display:flex;align-items:center;justify-content:center}.qb img{width:112px;height:112px;display:block}'
+            + '</style></head><body>' + pages
+            + '<script>window.onload=function(){setTimeout(function(){window.print()},300)};<\/script></body></html>');
+        w.document.close();
+    }
+    function doPrint() {
+        var w = window.open('', '_blank');
+        if (w) w.document.write('<html><body style="font-family:sans-serif;text-align:center;padding:60px;font-size:18px;">⏳ กำลังสร้างแท็ก...</body></html>');
+        var c = collect();
+        if (c.bad || !c.tags.length) { if (w) w.close(); Swal.showValidationMessage(c.bad || 'ยังไม่ได้เลือกรายการ'); return false; }
+        if (c.tags.length > 90) { if (w) w.close(); Swal.showValidationMessage('ปริ้นได้ไม่เกิน 90 ใบต่อครั้ง'); return false; }
+        try {
+            addQr(c.tags);
+            document.querySelectorAll('#bri-tb tr').forEach(function (tr) { if (tr.querySelector('.bri-ck').checked) saveDock((tr.getAttribute('data-parts') || '').split('|').filter(Boolean), tr.querySelector('.bri-dock').value.trim()); });
+            if (!w) { Swal.showValidationMessage('เบราว์เซอร์บล็อกป๊อปอัพ กรุณาอนุญาตป๊อปอัพแล้วกดใหม่'); return false; }
+            render(c.tags, w, c.date); return true;
+        } catch (e) { if (w) w.close(); Swal.showValidationMessage('ปริ้นไม่สำเร็จ: ' + (e && e.message ? e.message : e)); return false; }
+    }
+    window.openBroseInvoiceDialog = function () {
+        if (!canUse()) { Swal.fire('ไม่มีสิทธิ์', 'ต้องมีสิทธิ์จัดการแผนการจัดส่ง หรือสิทธิ์ปริ้นแท็ก', 'warning'); return; }
+        var v = document.getElementById('view-plan-date'), d0 = (v && v.value) || new Date().toISOString().slice(0, 10);
+        Swal.fire({
+            title: 'ออกแท็ก Invoice BROSE THAILAND', width: 980, showCancelButton: true, confirmButtonText: '<i class="bi bi-printer-fill"></i> ปริ้นแท็ก Invoice', cancelButtonText: 'ปิด', focusConfirm: false,
+            html: '<div class="d-flex align-items-center gap-3 flex-wrap text-start mb-2"><label class="fw-bold mb-0">วันที่ส่งงาน</label><input type="date" id="bri-date" class="form-control form-control-sm" style="max-width:170px">'
+                + '<label class="small mb-0"><input type="checkbox" id="bri-allcus"> แสดงทุกลูกค้า</label>'
+                + '<button type="button" id="bri-add" class="btn btn-sm btn-outline-primary ms-auto"><i class="bi bi-plus-lg"></i> เพิ่มแถวเอง</button></div>'
+                + '<div id="bri-box"></div><div id="bri-sum" class="text-start small mt-2"></div>'
+                + '<div class="text-start text-muted mt-1" style="font-size:.75rem">QR = เลข Invoice · ช่อง DOCK พิมพ์เองได้ ระบบจำค่าที่ใช้ล่าสุดของแต่ละรหัสสินค้าไว้ให้ครั้งต่อไป · แถวที่ไม่มีเลข Invoice ในแผนจะไม่ถูกติ๊ก ต้องพิมพ์เลขเอง</div>',
+            didOpen: function () {
+                document.getElementById('bri-date').value = d0; fill();
+                document.getElementById('bri-date').addEventListener('change', fill);
+                document.getElementById('bri-allcus').addEventListener('change', fill);
+                document.getElementById('bri-add').addEventListener('click', function () {
+                    var tb = document.getElementById('bri-tb'); tb.insertAdjacentHTML('beforeend', rowHtml({ inv: '', parts: [], qty: 0 }));
+                    var r = tb.lastElementChild; r.querySelector('.bri-ck').checked = true; r.querySelector('.bri-inv').focus(); sum();
+                });
+                var box = document.getElementById('bri-box');
+                box.addEventListener('input', sum);
+                box.addEventListener('change', function (e) {
+                    if (e.target.id === 'bri-all') document.querySelectorAll('#bri-tb .bri-ck').forEach(function (c) { c.checked = e.target.checked; });
+                    sum();
+                });
+            },
+            preConfirm: doPrint
+        });
+    };
+    function addButton() {
+        var acts = document.querySelector('#pills-delivery-plan #dpB-root .top .acts');
+        var v = document.getElementById('view-plan-date'), b = document.getElementById('bri-open-btn'), anchor = document.getElementById('brt-open-btn');
+        if (!acts && !v) return false;
+        if (b && b.isConnected && (!acts || b.parentNode === acts)) return true;
+        if (!b) { b = document.createElement('button'); b.type = 'button'; b.id = 'bri-open-btn'; b.title = 'ออกแท็กแนบ Invoice BROSE THAILAND'; b.innerHTML = '<i class="bi bi-receipt"></i>แท็ก Invoice BROSE'; b.addEventListener('click', window.openBroseInvoiceDialog); }
+        if (acts) {
+            b.className = 'dpB-btn'; b.style.cssText = 'background:#0f172a;color:#fff;border-color:#0f172a';
+            var after = anchor && anchor.parentNode === acts ? anchor : acts.querySelector('[data-act="pdf"]');
+            acts.insertBefore(b, after ? after.nextSibling : acts.firstChild);
+        } else { b.className = 'btn btn-dark btn-sm fw-bold me-2 shadow-sm'; b.style.cssText = ''; b.innerHTML = '<i class="bi bi-receipt"></i> แท็ก Invoice BROSE'; v.parentElement.insertBefore(b, v.parentElement.firstChild); }
+        return true;
+    }
+    addButton();
+    setInterval(function () { try { addButton(); } catch (e) { } }, 1500);
+})();
+/* ===== จบ BROSE-INV-V1 ===== */
+/* ===== BROSE-MENU-V1: รวมปุ่มแท็ก BROSE ทั้งหมดเป็นปุ่มเดียว (ชี้เมาส์แล้วมีเมนูให้เลือก) ===== */
+(function () {
+    if (window.__broseMenuV1) return; window.__broseMenuV1 = true;
+    var css = document.createElement('style'); css.id = 'brm-css';
+    css.textContent = ''
+        + '#brt-open-btn,#bri-open-btn,#bh-open-btn{display:none!important}'   // ซ่อนปุ่มแยก 3 ปุ่มเดิม (ยังทำงานอยู่ข้างหลัง)
+        + '.brm{position:relative;display:inline-block}'
+        + '.brm .brm-b,#brm-btn{background:#0f172a!important;color:#fff!important;border:1px solid #0f172a!important}#brm-btn:hover{background:#1e293b!important}.brm-b .brm-c{font-size:.7rem;margin-left:2px;transition:transform .15s}.brm.open .brm-c{transform:rotate(180deg)}'
+        + '.brm-p{position:absolute;top:100%;left:0;margin-top:0;padding-top:8px;z-index:3000;display:none}.brm.open .brm-p{display:block}'
+        + '.brm-card{width:330px;background:#fff;border:1px solid #dbe2ee;border-radius:16px;box-shadow:0 14px 36px rgba(15,23,42,.18);padding:6px;text-align:left}'
+        + '.brm-i{display:flex;gap:12px;align-items:center;width:100%;border:0;background:transparent;border-radius:11px;padding:9px 10px;cursor:pointer;text-align:left;font:inherit;color:#0f172a}.brm-i:hover{background:#f1f5f9}'
+        + '.brm-i *{pointer-events:none}'
+        + '.brm-ic{flex:0 0 36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.05rem}'
+        + '.brm-t{font-weight:600;font-size:.92rem;line-height:1.2}.brm-s{font-size:.75rem;color:#64748b;margin-top:2px;line-height:1.25}'
+        + '.brm-hr{height:1px;background:#e8edf5;margin:5px 8px}.brm-g{font-size:.68rem;font-weight:700;letter-spacing:.4px;color:#94a3b8;padding:7px 10px 3px}';
+    document.head.appendChild(css);
+    function isT(v) { return v === true || String(v).toUpperCase() === 'TRUE'; }
+    function canUse() { var u = currentUser; return !!u && (u.username === 'admin' || u.role === 'admin' || isT(u.canManageDeliveryPlan) || isT(u.printTags)); }
+    var ITEMS = [
+        { g: 'ออกแท็กใหม่' },
+        { fn: 'openBroseTagDialog', ic: 'bi-box-seam', c: '#1d4ed8', bg: '#dbeafe', t: 'แท็กชิ้นงาน', s: 'ติดแร็ค/กล่อง · QR มีเลขลำดับ ดึงจากแผนส่งของ' },
+        { fn: 'openBroseInvoiceDialog', ic: 'bi-receipt', c: '#0f766e', bg: '#ccfbf1', t: 'แท็ก Invoice', s: 'แนวยาว · QR = เลข Invoice · ตั้ง DOCK เองได้' },
+        { hr: 1 },
+        { g: 'พิมพ์ซ้ำ / แก้ไข' },
+        { fn: '__broseReprintLast', ic: 'bi-printer', c: '#475569', bg: '#e2e8f0', t: 'รีปริ้นชุดล่าสุด', s: 'พิมพ์แท็กชุดที่เพิ่งออกซ้ำ (เลขเดิม)' },
+        { fn: 'openBroseHistoryDialog', ic: 'bi-arrow-repeat', c: '#b45309', bg: '#fef3c7', t: 'แท็กหาย / ออกเลขใหม่', s: 'ออกแทนใบที่หาย โดยรันเลขต่อจากเลขล่าสุดของวัน' }
+    ];
+    function build() {
+        var wrap = document.createElement('div'); wrap.className = 'brm'; wrap.id = 'brm-wrap';
+        wrap.innerHTML = '<button type="button" class="dpB-btn brm-b" id="brm-btn" title="แท็ก BROSE THAILAND"><i class="bi bi-qr-code"></i>ออกแท็ก BROSE<i class="bi bi-chevron-down brm-c"></i></button><div class="brm-p"><div class="brm-card" id="brm-card"></div></div>';
+        var card = wrap.querySelector('#brm-card');
+        ITEMS.forEach(function (it) {
+            if (it.hr) { card.insertAdjacentHTML('beforeend', '<div class="brm-hr"></div>'); return; }
+            if (it.g) { card.insertAdjacentHTML('beforeend', '<div class="brm-g">' + it.g + '</div>'); return; }
+            var b = document.createElement('button'); b.type = 'button'; b.className = 'brm-i'; b.setAttribute('data-fn', it.fn);
+            b.innerHTML = '<span class="brm-ic" style="background:' + it.bg + ';color:' + it.c + '"><i class="bi ' + it.ic + '"></i></span><span><div class="brm-t">' + it.t + '</div><div class="brm-s">' + it.s + '</div></span>';
+            card.appendChild(b);
+        });
+        var t = null;
+        function place() { var pn = wrap.querySelector('.brm-p'); pn.style.left = '0'; pn.style.right = 'auto'; var r = pn.getBoundingClientRect(); if (r.right > window.innerWidth - 8) { pn.style.left = 'auto'; pn.style.right = '0'; } }
+        function open() { clearTimeout(t); wrap.classList.add('open'); place(); }
+        function close() { clearTimeout(t); t = setTimeout(function () { wrap.classList.remove('open'); }, 220); }
+        wrap.addEventListener('mouseenter', open); wrap.addEventListener('mouseleave', close);
+        wrap.querySelector('#brm-btn').addEventListener('click', function () { wrap.classList.toggle('open'); if (wrap.classList.contains('open')) place(); });   // มือถือ/ทัชสกรีน: แตะเปิด-ปิด
+        card.addEventListener('click', function (e) {
+            var b = e.target.closest ? e.target.closest('.brm-i') : null; if (!b) return;
+            wrap.classList.remove('open');
+            var fn = window[b.getAttribute('data-fn')];
+            if (typeof fn === 'function') fn(); else if (window.Swal) Swal.fire('ยังไม่พร้อมใช้งาน', 'ยังไม่ได้วางแพตช์ของเมนูนี้ในไฟล์ HTML', 'info');
+        });
+        document.addEventListener('click', function (e) { if (!wrap.contains(e.target)) wrap.classList.remove('open'); });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') wrap.classList.remove('open'); });
+        return wrap;
+    }
+    function ensure() {
+        var acts = document.querySelector('#pills-delivery-plan #dpB-root .top .acts');
+        var w = document.getElementById('brm-wrap');
+        if (!canUse()) { if (w) w.remove(); return false; }
+        if (acts) {
+            if (w && w.parentNode === acts) return true;
+            if (!w) w = build();
+            var pdf = acts.querySelector('[data-act="pdf"]'); acts.insertBefore(w, pdf ? pdf.nextSibling : acts.firstChild); return true;
+        }
+        var v = document.getElementById('view-plan-date'); if (!v) return false;
+        if (w && w.isConnected) return true;
+        if (!w) w = build(); w.style.marginRight = '8px'; v.parentElement.insertBefore(w, v.parentElement.firstChild); return true;
+    }
+    ensure();
+    setInterval(function () { try { ensure(); } catch (e) { } }, 1500);
+})();
+/* ===== จบ BROSE-MENU-V1 ===== */
 // ดาวน์โหลดเทมเพลต Excel สำหรับอัปโหลดแพลน
 window.downloadLGPlanTemplate = function() {
     const ws_data = [
