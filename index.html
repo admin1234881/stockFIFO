@@ -16761,6 +16761,33 @@ window.renderLGMatchTable = function() {
         // ให้บล็อกประวัติแท็ก (BROSE-HIST-V1) เรียกใช้ตัวพิมพ์เดียวกัน (ส่งหน้าต่างที่เปิดไว้แล้วมาได้ ไม่งั้นจะเปิดใหม่)
     window.__broseTagPrint = function (tags, dateYmd, preWin) { var w = preWin || window.open('', '_blank'); try { addQr(tags); renderPrint(tags, w, dateYmd); return true; } catch (e) { if (w) w.close(); throw e; } };
     window.__broseReprintLast = function () { reprintLast(); };   // ให้เมนูรวม (BROSE-MENU-V1) เรียก "รีปริ้นชุดล่าสุด"
+    // รีปริ้นชุดล่าสุด: ดึงจาก Google Sheet (ชีต BROSE_TagLog) ใช้ได้ทุกเครื่อง — ถ้าดึงไม่ได้ค่อยใช้สำเนาในเครื่องนี้แทน
+    // (ประกาศซ้ำชื่อ reprintLast ไว้หลังตัวเดิม ตัวนี้จะถูกใช้แทน ตัวเดิมปล่อยไว้ได้)
+    function reprintLast() {
+        Swal.fire({ title: 'กำลังดึงชุดล่าสุดจาก Google Sheet…', allowOutsideClick: false, showConfirmButton: false, didOpen: function () { Swal.showLoading(); } });
+        callAppsScript('getBroseLastBatch', {}).then(function (r) {
+            if (!r || r.status === 'error') throw new Error((r && r.message) || 'ดึงข้อมูลไม่สำเร็จ');
+            if (!r.tags || !r.tags.length) { Swal.fire('ยังไม่มีชุดล่าสุด', 'ยังไม่เคยออกแท็ก BROSE (ไม่พบข้อมูลในชีต BROSE_TagLog)', 'info'); return; }
+            var tags = r.tags.map(function (t) { return { serial: t.serial, qr: t.qrData, partNo: t.partNo, qtyPerPack: t.qtyPerPack, invoiceNumber: t.invoiceNumber, productName: t.productName }; });
+            var rows = r.tags.map(function (t) { return '<tr><td style="font-family:monospace;font-weight:700">' + esc(t.serial) + '</td><td class="text-start">' + esc(t.partNo) + '</td><td>' + esc(t.qtyPerPack) + '</td><td class="small">' + esc(t.invoiceNumber || '-') + '</td></tr>'; }).join('');
+            Swal.fire({
+                title: 'รีปริ้นแท็กชุดล่าสุด', width: 640, showCancelButton: true, confirmButtonText: '<i class="bi bi-printer-fill"></i> พิมพ์ซ้ำ ' + tags.length + ' ใบ (เลขเดิม)', cancelButtonText: 'ยกเลิก',
+                html: '<div class="text-start small mb-2">ชุดล่าสุดในระบบ · <b>' + tags.length + '</b> ใบ · เลข <b style="font-family:monospace">' + esc(tags[0].serial) + (tags.length > 1 ? ' – ' + esc(tags[tags.length - 1].serial) : '') + '</b><br>วันที่ส่ง <b>' + esc(dmy(r.deliveryDate)) + '</b> · ออกโดย ' + esc(r.printedBy || '-') + ' เมื่อ ' + esc(r.printedAt || '-') + '</div>'
+                    + '<div style="max-height:260px;overflow:auto" class="border rounded"><table class="table table-sm mb-0 align-middle"><thead style="position:sticky;top:0;background:#e9eef7"><tr><th>เลขแท็ก</th><th class="text-start">รหัสสินค้า</th><th>จำนวน</th><th>Invoice</th></tr></thead><tbody>' + rows + '</tbody></table></div>',
+                preConfirm: function () {
+                    try { var w = window.open('', '_blank'); addQr(tags); renderPrint(tags, w, r.deliveryDate); return true; }
+                    catch (e) { Swal.showValidationMessage('พิมพ์ไม่สำเร็จ: ' + (e && e.message ? e.message : e)); return false; }
+                }
+            });
+        }).catch(function (e) {
+            var b = null; try { b = JSON.parse(localStorage.getItem(LS_LAST) || 'null'); } catch (x) { }
+            if (b && b.tags && b.tags.length) {
+                Swal.fire({ title: 'ดึงจาก Google Sheet ไม่สำเร็จ', icon: 'warning', showCancelButton: true, confirmButtonText: 'พิมพ์ชุดที่จำไว้ในเครื่องนี้ (' + b.tags.length + ' ใบ)', cancelButtonText: 'ยกเลิก',
+                    text: (e && e.message ? e.message : e) + ' — ใช้สำเนาล่าสุดที่เครื่องนี้เคยพิมพ์แทนได้',
+                    preConfirm: function () { try { var w = window.open('', '_blank'); addQr(b.tags); renderPrint(b.tags, w, b.date); return true; } catch (x) { Swal.showValidationMessage(x.message); return false; } } });
+            } else Swal.fire('ดึงชุดล่าสุดไม่สำเร็จ', (e && e.message ? e.message : e) + ' (ตรวจว่า Deploy Apps Script เวอร์ชันใหม่แล้ว)', 'error');
+        });
+    }
     window.openBroseTagDialog = function () {
         if (!canUse()) { Swal.fire('ไม่มีสิทธิ์', 'ต้องมีสิทธิ์จัดการแผนการจัดส่ง หรือสิทธิ์ปริ้นแท็ก', 'warning'); return; }
         var v = document.getElementById('view-plan-date');
