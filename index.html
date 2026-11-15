@@ -17840,6 +17840,296 @@ window.renderLGMatchTable = function() {
     init(); var n = 0, tm = setInterval(function () { try { if (init() && ++n > 10) clearInterval(tm); else if (++n > 60) clearInterval(tm); } catch (e) { } }, 1000);
 })();
 /* ===== จบ BROSE-GUARD-V1 ===== */
+(function () {
+    if (window.__clockV1) return; window.__clockV1 = true;
+    var TH_D = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'], TH_M = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+    var EN_D = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], EN_M = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    function en() { return typeof currentLanguage !== 'undefined' && currentLanguage === 'en'; }
+    function p2(n) { return String(n).padStart(2, '0'); }
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    // วันทำงานเริ่ม 07:00 (ก่อน 07:00 นับเป็นของเมื่อวาน) — ใช้กติกาเดียวกับแดชบอร์ดรถ
+    function shifted(h, m) { return ((h >= 7 ? h - 7 : h + 17) * 60) + m; }
+    function opDateStr(now) { var d = new Date(now); if (now.getHours() < 7) d.setDate(d.getDate() - 1); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+    function dateOf(p) { return typeof window.formatDate === 'function' ? window.formatDate(p.date) : String(p.date || '').split('T')[0]; }
+    function timeOf(p) { var t = typeof window.formatTimeDisplay === 'function' ? window.formatTimeDisplay(p.time) : String(p.time || ''); var m = /^(\d{1,2}):(\d{2})/.exec(String(t).replace(/^'+/, '').trim()); return m ? { h: +m[1], m: +m[2], s: p2(+m[1]) + ':' + m[2] } : null; }
+ 
+    var cache = { at: 0, today: '', info: null };
+    function rounds(now) {
+        var today = opDateStr(now);
+        if (cache.info && cache.today === today && Date.now() - cache.at < 8000) return cache.info;
+        var pend = {}, total = 0, done = 0;
+        ((typeof db !== 'undefined' && db.deliveryPlans) || []).forEach(function (p) {
+            if (!p || !p.date || dateOf(p) !== today) return; p = Object.assign({}, p, { jobType: 'Delivery' });
+            if (p.jobType === 'Pickup' || p.jobType === 'Other') return;
+            var t = timeOf(p); if (!t) return; if (p.status === 'Cancelled') return; total++;
+            if (p.status === 'Completed' || p.status === 'Delivering') { done++; return; }
+            pend[t.s] = shifted(t.h, t.m);
+        });
+        var list = Object.keys(pend).map(function (k) { return { s: k, v: pend[k] }; }).sort(function (a, b) { return a.v - b.v; });
+        cache = { at: Date.now(), today: today, info: { list: list, total: total, done: done } };
+        return cache.info;
+    }
+    function dur(mins) { mins = Math.max(0, Math.floor(mins)); if (mins < 1) return en() ? 'under 1 min' : 'ไม่ถึงนาที'; var h = Math.floor(mins / 60), m = mins % 60; return en() ? (h ? h + ' h ' : '') + m + ' min' : (h ? h + ' ชม. ' : '') + m + ' นาที'; }
+ 
+    var st = document.createElement('style');
+    st.textContent = '#brk-clock{display:flex;align-items:center;gap:14px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:5px 16px;box-shadow:0 4px 14px rgba(15,23,42,.08);cursor:pointer;user-select:none;flex:none;margin:0 12px;white-space:nowrap}'
+        + '#brk-clock:hover{border-color:#93c5fd}'
+        + '#brk-clock .t{text-align:center;line-height:1.1}#brk-clock .tm{font:800 21px/1 Inter,Arial,sans-serif;color:#0f172a;letter-spacing:-.3px;font-variant-numeric:tabular-nums}#brk-clock .dt{font-size:10.5px;color:#64748b;margin-top:2px}'
+        + '#brk-clock .sp{width:1px;height:30px;background:#e2e8f0}#brk-clock .n{line-height:1.2}#brk-clock .nl{font-size:10.5px;color:#64748b}#brk-clock .nv{font-size:13px;font-weight:800;color:#2563eb}'
+        + '#brk-clock .nv .g{font-weight:600;color:#16a34a}#brk-clock .nv .o{font-weight:700;color:#d97706}#brk-clock .nv .r{font-weight:700;color:#dc2626}#brk-clock .nv .x{font-weight:700;color:#64748b}'
+        + '#brk-clock .ov{display:inline-block;margin-left:6px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:999px;padding:0 7px;font-size:10.5px;font-weight:800}'
+        + '@media (max-width:1250px){#brk-clock .n,#brk-clock .sp{display:none}}@media (max-width:900px){#brk-clock{display:none}}';
+    document.head.appendChild(st);
+ 
+    function tick() {
+        var el = document.getElementById('brk-clock'); if (!el || !el.isConnected) return;
+        var now = new Date(), E = en();
+        el.querySelector('.tm').textContent = p2(now.getHours()) + ':' + p2(now.getMinutes()) + ':' + p2(now.getSeconds());
+        el.querySelector('.dt').textContent = E ? EN_D[now.getDay()] + ' ' + now.getDate() + ' ' + EN_M[now.getMonth()] + ' ' + now.getFullYear() : TH_D[now.getDay()] + ' ' + now.getDate() + ' ' + TH_M[now.getMonth()] + ' ' + (now.getFullYear() + 543);
+        var nowMin = shifted(now.getHours(), now.getMinutes()) + now.getSeconds() / 60, inf = rounds(now);
+        var up = inf.list.filter(function (r) { return r.v > nowMin; }), over = inf.list.filter(function (r) { return r.v <= nowMin; });
+        var lab = el.querySelector('.nl'), val = el.querySelector('.nv'), h;
+        if (up.length) {
+            var d = up[0].v - nowMin; lab.textContent = E ? 'Next dispatch round' : 'รอบส่งของถัดไป';
+            h = esc(up[0].s) + (E ? '' : ' น.') + ' <span class="' + (d <= 10 ? 'o' : 'g') + '">· ' + (E ? 'in ' : 'อีก ') + dur(d) + '</span>';
+            if (over.length) h += '<span class="ov">⚠ ' + (E ? 'late ' : 'เลยเวลา ') + over.length + '</span>';
+        } else if (over.length) { lab.textContent = E ? 'Dispatch round' : 'รอบส่งของ'; h = esc(over[0].s) + (E ? '' : ' น.') + ' <span class="r">· ' + (E ? 'late ' : 'เลยเวลา ') + dur(nowMin - over[0].v) + '</span>' + (over.length > 1 ? '<span class="ov">+' + (over.length - 1) + '</span>' : ''); }
+        else { lab.textContent = E ? 'Today\'s rounds' : 'รอบส่งของวันนี้'; h = !inf.total ? '<span class="x">' + (E ? 'No plans today' : 'ไม่มีแผนส่งของวันนี้') + '</span>' : '<span class="g">' + (E ? 'All dispatched ✓' : 'ปล่อยรถครบทุกรอบแล้ว ✓') + '</span>'; }
+        h = h.replace('ปล่อยรถครบทุกรอบแล้ว', 'ทำครบทุกรอบแล้ว').replace('ไม่มีแผนส่งของวันนี้', 'ไม่มีแผนวันนี้').replace('All dispatched', 'All done');
+        lab.textContent = E ? lab.textContent.replace('dispatch round', 'job').replace('Dispatch round', 'Job round').replace('Today\'s rounds', 'Today\'s jobs') : lab.textContent.replace('รอบส่งของ', 'รอบงาน');
+        if (val.getAttribute('data-h') !== h) { val.innerHTML = h; val.setAttribute('data-h', h); }
+        var tip = (E ? 'Open delivery plan' : 'ไปหน้าแผนการจัดส่ง'); if (inf.list.length) tip += '\n' + (E ? 'Pending rounds: ' : 'รอบที่ยังไม่ปล่อยรถ: ') + inf.list.slice(0, 6).map(function (r) { return r.s; }).join(', ');
+        if (el.title !== tip) el.title = tip;
+    }
+    function ensure() {
+        var cw = document.querySelector('#main-dashboard .header-contact-widget'), ex = document.getElementById('brk-clock');
+        if (!cw) { if (ex) ex.remove(); return; }
+        var right = cw.closest('header > *'), header = right && right.parentNode; if (!header) return;
+        if (ex && ex.isConnected && ex.parentNode === header) return;
+        if (ex) ex.remove();
+        var el = document.createElement('div'); el.id = 'brk-clock';
+        el.innerHTML = '<div class="t"><div class="tm">00:00:00</div><div class="dt"></div></div><span class="sp"></span><div class="n"><div class="nl"></div><div class="nv"></div></div>';
+        el.addEventListener('click', function () { var b = document.getElementById('nav-delivery-plan-item'); if (b) b.click(); });
+        header.insertBefore(el, right); tick();
+    }
+    setInterval(function () { try { ensure(); tick(); } catch (e) { } }, 1000);
+})();
+/* ===== จบ CLOCK-V1 ===== */
+(function () {
+    if (window.__broseLangV1) return; window.__broseLangV1 = true;
+    var TH = /[฀-๿]/;
+    // ---- วลี/ประโยคเต็ม (แทนที่เป็นข้อความย่อย ยาวสุดก่อน) ----
+    var P = [
+        // เมนู
+        ['ออกแท็กใหม่', 'Issue new tags'], ['แท็กชิ้นงาน', 'Piece tags'], ['แท็ก Invoice BROSE', 'BROSE Invoice tags'], ['แท็ก Invoice', 'Invoice tags'],
+        ['พิมพ์ซ้ำ / แก้ไข', 'Reprint / Fix'], ['รีปริ้นชุดล่าสุด', 'Reprint latest batch'], ['แท็กหาย / ออกเลขใหม่', 'Lost tag / New serial'],
+        ['ติดแร็ค/กล่อง · QR มีเลขลำดับ ดึงจากแผนส่งของ', 'For racks/boxes · QR carries a serial no. · pulled from the delivery plan'],
+        ['แนวยาว · QR = เลข Invoice · ตั้ง DOCK เองได้', 'Landscape · QR = Invoice no. · DOCK is editable'],
+        ['พิมพ์แท็กชุดที่เพิ่งออกซ้ำ (เลขเดิม)', 'Reprint the batch just issued (same serials)'],
+        ['ออกแทนใบที่หาย โดยรันเลขต่อจากเลขล่าสุดของวัน', "Replace lost tags — new serials continue from the day's latest"],
+        ['ยังไม่พร้อมใช้งาน', 'Not available yet'],
+        ['ยังไม่ได้วางแพตช์ของเมนูนี้ในไฟล์ HTML', "This menu item's patch is not installed in the HTML file yet"],
+        ['ออกแท็ก BROSE THAILAND', 'Issue BROSE THAILAND tags'], ['ออกแท็ก BROSE', 'Issue BROSE tags'], ['แท็ก BROSE THAILAND', 'BROSE THAILAND tags'],
+        ['ออกแท็กชิ้นงาน BROSE THAILAND', 'Issue piece tags · BROSE THAILAND'], ['ออกแท็กชิ้นงาน · BROSE THAILAND', 'Issue piece tags · BROSE THAILAND'],
+        ['ออกแท็ก Invoice BROSE THAILAND', 'Issue Invoice tags · BROSE THAILAND'], ['ออกแท็ก Invoice · BROSE THAILAND', 'Issue Invoice tags · BROSE THAILAND'],
+        ['ออกแท็กแนบ Invoice BROSE THAILAND', 'Issue Invoice-attached tags · BROSE THAILAND'],
+        ['ปริ้นแท็ก Invoice BROSE', 'Print BROSE Invoice tags'], ['ปริ้นแท็ก Invoice', 'Print Invoice tags'], ['ปริ้นแท็ก BROSE', 'Print BROSE tags'],
+        ['แท็กหาย — ออกเลขใหม่ต่อจากเลขล่าสุดของวัน', "Lost tag — issue new serials continuing from the day's latest"],
+        ['แท็ก BROSE หาย — ออกเลขใหม่', 'BROSE tag lost — issue new serials'], ['แท็กหาย — ออกเลขใหม่', 'Lost tag — issue new serials'], ['แท็กหาย-ออกเลขใหม่', 'Lost tag – new serial'],
+        // ออกแท็กชิ้นงาน (bt / ui2)
+        ['ออกเลข + ปริ้นแท็ก', 'Issue serials + print tags'], ['รหัสสินค้า (Part No)', 'Product code (Part No.)'], ['จำนวน/กล่อง(แร็ค)', 'Qty/box (rack)'], ['จำนวนแท็ก', 'Tag qty'], ['ยอดแพลน (ชิ้น)', 'Plan qty (pcs)'], ['ยอดแพลน', 'Plan qty'],
+        
+        ['ไม่พบแผนส่งของ', 'No delivery plan found'], ['ของลูกค้าที่ชื่อมีคำว่า', 'for customers whose name contains'], ['ในวันที่เลือก', 'on the selected date'],
+        ['(ถ้าชื่อลูกค้าในแผนเขียนต่างไป ให้ติ๊ก "แสดงทุกลูกค้า")', '(if the customer name in the plan is spelled differently, tick "Show all customers")'], ['แสดงทุกลูกค้า', 'Show all customers'],
+        ['กรอกจำนวนต่อกล่อง/จำนวนแท็กของ', 'Enter the qty per box / tag qty for'], ['ยังไม่ได้เลือกรายการ', 'No items selected'],
+        ['ออกได้ไม่เกิน 300 ใบต่อครั้ง', 'Max 300 tags per issue'], ['ใบสุดท้ายใช้จำนวนเศษที่เหลือ', 'The last tag uses the remaining quantity'], ['ใบสุดท้าย', 'Last tag'], ['ชิ้น (เศษ)', 'pcs (remainder)'],
+        ['ออกเลขแท็กแล้วแต่แสดงผลไม่สำเร็จ — กดปุ่ม "พิมพ์ชุดล่าสุดซ้ำ" ได้ (', 'Serials were issued but display failed — you can press "Reprint latest batch" ('],
+        ['เลขลำดับท้าย QR นับต่อกันตามวันที่ส่งงาน (001, 002, …) ไม่ซ้ำ · เมื่อกดปริ้นแล้วเลขจะถูกใช้ไปเลย ถ้าปริ้นพลาดให้กด "พิมพ์ชุดล่าสุดซ้ำ"',
+            'The serial at the end of the QR counts up per delivery date (001, 002, …) and never repeats · once you press print the numbers are used up — if printing fails, press "Reprint latest batch"'],
+        ['ติดแร็ค/กล่อง · QR มีเลขลำดับไม่ซ้ำ · ระบบคำนวณจำนวนกล่อง/แท็กจากแผนส่งของให้อัตโนมัติ', 'For racks/boxes · every QR has a unique serial · boxes/tags are calculated from the delivery plan automatically'],
+        ['ระบบคำนวณจากยอดแพลน', 'Calculated by the system from the plan qty'], ['🔒 ระบบคำนวณจากแพลน', '🔒 Calculated from the plan'], ['ดึงจากข้อมูลสินค้า', 'Taken from the product data'],
+        ['⚠ ไม่พบจำนวน/กล่องในข้อมูลสินค้า — กรอกจำนวน/กล่องเอง ระบบจะคำนวณจำนวนแท็กให้', '⚠ Qty/box not found in the product data — enter it yourself and the system will calculate the tag qty'],
+        ['ชิ้น / กล่อง', 'pcs / box'], ['กล่อง = แท็ก', 'boxes = tags'], ['รายการ · รวม', 'items · Total'], ['ไม่มีเลข Invoice', 'No Invoice no.'], ['กรอก', 'Enter'],
+        ['ชุดล่าสุดในระบบ ·', 'Latest batch in the system ·'], ['เลขใหม่ที่จะได้', 'New serials to be issued'], 
+        ['(เลขเดิม)', '(same serials)'], ['ต้องมีเหตุผลและการอนุมัติ', 'require a reason and approval'], ['ในชุดนี้มี', 'In this batch'], ['ที่เคยออกแท็กไปแล้ว — ออกซ้ำต้องมีเหตุผลและการอนุมัติ', ' already issued — re-issuing requires a reason and approval'], ['(เศษ)', '(remainder)'], ['ดึงไม่สำเร็จ', 'Fetch failed'], ['ข้อมูลเดิมทุกอย่าง', 'all other data unchanged'], ['ออกแท็กเพิ่ม (ไม่ทราบใบที่หาย)', 'Issue extra tags (lost tag unknown)'], ['พิมพ์ซ้ำไม่สำเร็จ', 'Reprint failed'], ['พิมพ์ชุดล่าสุดซ้ำ', 'Reprint latest batch'], ['รีปริ้นแท็กชุดล่าสุด', 'Reprint latest tag batch'],
+        
+        ['พิมพ์ชุดที่จำไว้ในเครื่องนี้ (', 'Print the batch remembered on this device ('], ['ใช้ชุดที่จำไว้ในเครื่องนี้ (', 'Use the batch remembered on this device ('],
+        ['เครื่องนี้ยังไม่เคยออกแท็ก BROSE', 'No BROSE tags have been issued from this device yet'],
+        ['ยังไม่เคยออกแท็ก BROSE (ไม่พบข้อมูลในชีต BROSE_TagLog)', 'No BROSE tags have been issued yet (nothing found in sheet BROSE_TagLog)'],
+        ['ยังไม่มีชุดล่าสุด', 'No latest batch yet'], ['ดึงชุดล่าสุดไม่สำเร็จ', 'Could not fetch the latest batch'], ['ดึงข้อมูลไม่สำเร็จ', 'Could not fetch the data'], ['ดึงจาก Google Sheet ไม่สำเร็จ', 'Could not fetch from Google Sheet'],
+        ['(ตรวจว่า Deploy Apps Script เวอร์ชันใหม่แล้ว)', '(check that the new Apps Script version is deployed)'],
+        ['กำลังดึงชุดล่าสุดจาก Google Sheet…', 'Fetching the latest batch from Google Sheet…'],
+        ['— ใช้สำเนาล่าสุดที่เครื่องนี้เคยพิมพ์แทนได้', '— you can use the last copy printed on this device instead'],
+        ['ดึงจาก Google Sheet · เลขแท็กเดิมทุกใบ ไม่ออกเลขใหม่', 'From Google Sheet · same serial on every tag, no new serials'],
+        ['⏳ กำลังออกเลขแท็ก กรุณารอสักครู่...', '⏳ Issuing serials, please wait...'], ['⏳ กำลังออกเลขแท็กใหม่ กรุณารอสักครู่...', '⏳ Issuing new serials, please wait...'],
+        ['⏳ กำลังออกเลขแท็กเพิ่ม กรุณารอสักครู่...', '⏳ Issuing extra serials, please wait...'], ['⏳ กำลังสร้างแท็ก...', '⏳ Creating tags...'],
+        ['⏳ กำลังโหลด…', '⏳ Loading…'], ['⏳ กำลังดึงค่า DOCK ที่เคยบันทึกไว้…', '⏳ Fetching saved DOCK values…'],
+        ['ออกแท็กไม่สำเร็จ:', 'Could not issue tags:'], ['พิมพ์ไม่สำเร็จ:', 'Print failed:'], ['ปริ้นไม่สำเร็จ:', 'Print failed:'], ['เปิดหน้าต่างไม่สำเร็จ', 'Could not open the window'],
+        ['เบราว์เซอร์บล็อกป๊อปอัพ กรุณาอนุญาตป๊อปอัพ แล้วกด "พิมพ์ชุดล่าสุดซ้ำ"', 'The browser blocked the pop-up. Please allow pop-ups, then press "Reprint latest batch"'],
+        ['เบราว์เซอร์บล็อกป๊อปอัพ กรุณาอนุญาตป๊อปอัพแล้วกดใหม่', 'The browser blocked the pop-up. Please allow pop-ups and try again'],
+        ['ตัวสร้าง QR ยังไม่พร้อม (ยังไม่ได้ออกเลขแท็ก) กรุณารีเฟรชหน้าเว็บแล้วลองใหม่', 'The QR generator is not ready (no serials were issued). Please refresh the page and try again'],
+        ['เซิร์ฟเวอร์ตอบกลับไม่ครบ (ยังไม่ปริ้น) กรุณาตรวจชีต BROSE_TagLog', 'Incomplete server response (nothing printed). Please check sheet BROSE_TagLog'],
+        ['เซิร์ฟเวอร์ตอบกลับไม่ครบ กรุณาตรวจชีต BROSE_TagLog', 'Incomplete server response. Please check sheet BROSE_TagLog'],
+        ['ต้องมีสิทธิ์จัดการแผนการจัดส่ง หรือสิทธิ์ปริ้นแท็ก', 'You need the Manage Delivery Plan or Print Tags permission'], ['ไม่มีสิทธิ์', 'No permission'],
+        // Invoice (inv / ui / dock)
+        ['เลือกใบ Invoice ที่จะปริ้น — QR คือเลข Invoice, DOCK ระบบจำให้ตามรหัสสินค้า', 'Choose the Invoices to print — the QR is the Invoice no.; DOCK is remembered per product code'],
+        ['QR = เลข Invoice · ช่อง DOCK พิมพ์เองได้ ระบบจำค่าที่ใช้ล่าสุดของแต่ละรหัสสินค้าไว้ให้ครั้งต่อไป · แถวที่ไม่มีเลข Invoice ในแผนจะไม่ถูกติ๊ก ต้องพิมพ์เลขเอง',
+            'QR = Invoice no. · the DOCK field is editable and the system remembers the latest value per product code · rows with no Invoice no. in the plan are left unticked — type the number yourself'],
+        ['แถวสีเทา = ยังไม่ได้เลือก · แถวที่ไม่มีเลข Invoice ในแผนต้องพิมพ์เลขเอง · ปริ้นได้ไม่เกิน 90 ใบต่อครั้ง', 'Grey row = not selected · rows with no Invoice no. in the plan need the number typed in · max 90 tags per print'],
+        ['ปริ้นได้ไม่เกิน 90 ใบต่อครั้ง', 'Max 90 tags per print'], ['ในวันที่เลือก — กด "เพิ่มแถวเอง" เพื่อพิมพ์ Invoice เองได้', 'on the selected date — press "Add row" to type an Invoice yourself'], ['เพิ่มแถวเอง', 'Add row'],
+        ['เลข Invoice (ใน QR)', 'Invoice no. (in QR)'], ['รหัสสินค้าใน Invoice', 'Product code in Invoice'], ['จำนวนรวม', 'Total qty'], ['DOCK (พิมพ์เองได้)', 'DOCK (editable)'], ['เลข Invoice', 'Invoice no.'],
+        ['จำนวนแท็กของ', 'Tag qty of'], ['ต้อง 1-50', 'must be 1-50'], ['มีแถวที่ติ๊กไว้แต่ยังไม่กรอกเลข Invoice', 'A ticked row has no Invoice no. yet'],
+        ['เลข Invoice มีอักขระที่ใช้ไม่ได้:', 'The Invoice no. contains invalid characters:'], ['สร้าง QR ไม่สำเร็จ', 'Could not create the QR code'],
+        ['ยังไม่ได้วางบล็อกออกแท็ก BROSE (BROSE-TAG-V1 + จุดเสริม) — ดูไฟล์แพตช์', 'The BROSE tag block (BROSE-TAG-V1 + add-ons) is not installed — see the patch file'],
+        ['ยังไม่ได้วางบล็อกออกแท็ก BROSE (BROSE-TAG-V1 + จุดเสริม)', 'The BROSE tag block (BROSE-TAG-V1 + add-ons) is not installed'], ['ยังไม่ได้วางบล็อกออกแท็ก BROSE', 'The BROSE tag block is not installed'],
+        ['ปริ้นแท็ก Invoice', 'Print Invoice tags'], ['ตัวอย่างแท็กที่จะได้ ·', 'Preview of the tag ·'], ['ตัวอย่างแท็ก', 'Tag preview'], ['ยังไม่มีเลข Invoice', 'No Invoice no. yet'],
+        ['✔ แท็ก 3 ใบ/หน้า A4 · ขนาด 18.5 × 7.5 ซม.', '✔ 3 tags per A4 page · size 18.5 × 7.5 cm'], ['หน้า A4 · 3 ใบ/หน้า', 'A4 pages · 3 tags/page'], ['หน้า A4', 'A4 pages'],
+        ['✎ แก้ DOCK / เลข Invoice แล้วตัวอย่างเปลี่ยนทันที', '✎ Edit DOCK / Invoice no. and the preview updates instantly'], ['แตะแถวไหน ตัวอย่างจะแสดงแถวนั้น', 'Tap a row to preview it'],
+        ['เลือกวัน / ค้นหา Invoice', 'Pick a date / find Invoice'], ['แตะใบที่หาย', 'Tap the lost tags'],
+        ['ใช้ค่า DOCK ที่จำไว้ในเครื่องนี้ (ดึงจากระบบไม่ได้ — ตรวจว่า Deploy Apps Script เวอร์ชันใหม่แล้ว)', 'Using the DOCK values remembered on this device (could not fetch from the system — check that the new Apps Script version is deployed)'],
+        ['ยังไม่มี DOCK ที่เคยบันทึกไว้ในระบบ — ใช้ค่าเริ่มต้น แก้ไขได้ เมื่อกดปริ้นระบบจะจำไว้ให้ครั้งต่อไป', 'No DOCK has been saved in the system yet — default values are used and can be edited; pressing print saves them for next time'],
+        ['✔ DOCK ดึงจากที่เคยบันทึกไว้ในระบบ (Google Sheet) แล้ว แก้ไขได้ — เมื่อกดปริ้น ระบบจะจำค่าใหม่ไว้ใช้ครั้งต่อไป', '✔ DOCK loaded from the values saved in the system (Google Sheet) — editable; pressing print remembers the new values for next time'],
+        // ประวัติ / แท็กหาย (hist / ui / uix)
+        ['วิธีใช้: พิมพ์เลข Invoice ที่แท็กหาย → ติ๊กช่องหัวตารางเพื่อเลือกทั้งหมดที่แสดง (หรือติ๊กทีละใบ) → กดปุ่มสีม่วง ระบบจะออกแท็กใหม่ด้วยรหัสสินค้า/จำนวน/Invoice เดิม แต่ได้เลขลำดับใหม่ต่อจากเลขล่าสุดของวัน',
+            'How to use: type the Invoice no. of the lost tag → tick the header box to select everything shown (or tick tags one by one) → press the purple button. The system issues new tags with the same product code/qty/Invoice but a new serial continuing from the day\'s latest'],
+        ['ใบที่หายจะถูกจดว่า “หาย” แล้วออกใบใหม่ รหัสสินค้า/จำนวน/Invoice เดิม เลขลำดับต่อท้ายของวัน', 'Lost tags are marked "lost" and replaced by new tags with the same product code/qty/Invoice, numbered after the day\'s latest serial'],
+        ['ไม่รู้ว่าใบไหนหาย?', "Don't know which tag is lost?"],
+        ['ออกเพิ่มตามจำนวนที่ต้องการได้เลย (เช่น หาย 1 ใบ ออกเพิ่ม 1 ใบ) — ไม่ต้องเลือกเลขแท็ก ใบเก่าไม่ถูกจดว่าหาย', 'Just issue as many extra as you need (e.g. 1 lost → issue 1 more) — no need to pick a tag no.; old tags are not marked lost'],
+        ['ออกเลขใหม่แทนใบที่ติ๊ก + ปริ้น', 'Issue new serials for the ticked tags + print'],
+        ['ด้วยเลขใหม่ต่อจากเลขล่าสุดของวัน (ใบเก่าจะถูกจดว่าหาย) — กดปุ่มสีม่วงอีกครั้งเพื่อยืนยัน', 'with new serials after the day\'s latest (old tags will be marked lost) — press the purple button again to confirm'],
+        ['(ใบเก่าไม่ถูกจดว่าหาย) — กดปุ่มเดิมอีกครั้งเพื่อยืนยัน', '(old tags are not marked lost) — press the same button again to confirm'],
+        ['ใบเก่าจะถูกจดว่า', 'Old tags will be marked'], ['(ใบใหม่จะเริ่มต่อจากนี้)', '(new tags continue from here)'], ['· เลขล่าสุด', '· latest serial'], ['· ติ๊กไว้', '· ticked'],
+        ['⚠ จะออกแท็กใหม่', '⚠ Will issue new tags:'], ['❗ จะออกแท็กเพิ่ม', '❗ Will issue extra tags:'], ['ใบแทนของ', 'Replacement of'], ['หาย → แทนด้วย', 'lost → replaced by'], ['แท็กหาย/ออกใหม่', 'Lost tag / Reissued'],
+        ['เลขใหม่ …', 'new serial …'], ['✔ ออกใหม่', '✔ Issued new'], ['✔ ออกเพิ่ม', '✔ Issued extra'], ['ออกเลขใหม่ไม่สำเร็จ:', 'Could not issue new serials:'], ['ออกเลขใหม่ไม่สำเร็จ', 'Could not issue new serials'],
+        ['ออกเลขเพิ่มไม่สำเร็จ:', 'Could not issue extra serials:'], ['ออกเลขเพิ่มไม่สำเร็จ', 'Could not issue extra serials'],
+        ['ออกเลขแล้วแต่พิมพ์ไม่สำเร็จ — ใช้ปุ่ม "พิมพ์ชุดล่าสุดซ้ำ" ในหน้า "ออกแท็ก BROSE" ได้ (', 'Serials were issued but printing failed — use "Reprint latest batch" in the "Issue BROSE tags" page ('],
+        ['ออกเลขแล้วแต่พิมพ์ไม่สำเร็จ — ใช้ "รีปริ้นชุดล่าสุด" ได้ ·', 'Serials were issued but printing failed — you can use "Reprint latest batch" ·'],
+        ['ยังไม่ได้ติ๊กแท็กที่หาย', 'No lost tags ticked yet'], ['ไม่พบแท็กที่เคยออกของวันที่', 'No issued tags found for the date'], ['ไม่พบแท็กในช่วงเลขที่เลือก', 'No tags in the selected range'],
+        ['แตะเลขแท็กที่หายด้านบน ระบบจะแสดงเลขใหม่ที่จะได้ตรงนี้', 'Tap the lost tag numbers above — the new serials will be shown here'], ['แตะเลขแท็กที่หาย', 'Tap the lost tag numbers'], ['แท็กของวันนี้', "Today's tags"],
+        ['โหลดประวัติไม่สำเร็จ:', 'Could not load history:'], ['โหลดไม่สำเร็จ', 'Could not load'], ['แท็กหาย/ออกใหม่', 'Lost tag / Reissued'],
+        ['ยังไม่ได้วางบล็อกออกแท็ก BROSE (BROSE-TAG-V1 + จุดเสริม) — ดูไฟล์แพตช์', 'The BROSE tag block (BROSE-TAG-V1 + add-ons) is not installed — see the patch file'],
+        ['เลขแท็ก (Sequence)', 'Tag no. (Sequence)'], ['เลขแท็ก', 'Tag no.'], ['วันที่ส่งงาน', 'Delivery date'], ['พิมพ์เลข Invoice / รหัสสินค้า เพื่อกรอง', 'Invoice no. / product code…'], ['ติ๊กทั้งหมดที่แสดงอยู่', 'Tick all shown'],
+        ['ออกเลขใหม่', 'Issue new serials'], ['ออกเพิ่ม + ปริ้น', 'Issue extra + print'], ['ยืนยัน ออกเพิ่ม', 'Confirm issue extra'], ['ออกเพิ่ม (ไม่ทราบใบที่หาย)', 'Issue extra (lost tag unknown)'], 
+        ['ยืนยัน —', 'Confirm —'], ['เลือกช่วงเลข', 'Select a number range'], ['เลือกทั้งหมด', 'Select all'], ['เลือกใบที่หาย', 'Lost tags selected'], ['เลือก ', 'Selected '], ['เลขท้าย', 'Last digits'],
+        ['(3 หลักท้ายของเลขแท็ก)', '(last 3 digits of the tag no.)'], ['ใบที่หาย', 'Lost tags'], 
+        ['กดปุ่มแดง 2 ครั้งเพื่อยืนยัน', 'Press the red button twice to confirm'], ['จำนวนที่ออกเพิ่มต้อง 1-50 ใบ', 'The extra quantity must be 1-50 tags'], 
+        ['รายการที่เคยออกแท็กไปแล้ว — ออกซ้ำต้องมีเหตุผลและการอนุมัติ', 'items already issued — re-issuing requires a reason and approval'],
+        
+        ['ไม่พบแท็กในช่วงเลขที่เลือก', 'No tags in the selected range'], ['ยังไม่ได้วางบล็อก', 'The block is not installed'],
+        // ป้าย/แผงอนุมัติ (guard)
+        ['ออกซ้ำ (แท็กชิ้นงาน)', 'Re-issue (piece tags)'], ['เพิ่มกล่อง / ยอดเพิ่ม', 'Extra boxes / added qty'], ['ปริ้นผิด / ข้อมูลผิด', 'Misprint / wrong data'], ['อื่นๆ (ระบุ)', 'Other (specify)'], ['อื่นๆ:', 'Other:'],
+        ['— เลือกเหตุผล —', '— Select a reason —'], ['กรุณาเลือกเหตุผล', 'Please select a reason'], ['กรุณาระบุเหตุผล (อย่างน้อย 3 ตัวอักษร)', 'Please enter a reason (at least 3 characters)'], ['ระบุเหตุผล', 'Enter a reason'],
+        ['หัวหน้า (admin) อนุมัติ', 'Admin approval'], ['และให้หัวหน้า (admin) ยืนยัน', 'and have an admin confirm'], ['อนุมัติโดย', 'Approved by'], ['✔ อนุมัติโดย', '✔ Approved by'], ['(admin — คุณเอง)', '(admin — you)'],
+        ['ชื่อผู้ใช้/รหัสผ่านของ admin ไม่ถูกต้อง', 'Admin username/password is incorrect'], ['ชื่อผู้ใช้ admin', 'Admin username'], ['รหัสผ่าน admin', 'Admin password'], ['แล้วกดปุ่มยืนยันอีกครั้ง', 'then press the confirm button again'],
+        ['ออกแล้ว', 'Issued'], ['(เคยออก', '(issued'], ['แทนเลข:', 'Replaces no.:'], ['เหตุผล', 'Reason'], ['แท็กหาย', 'Lost tag']
+    ];
+    // ---- คำสั้น (แทนเฉพาะเมื่ออยู่โดดๆ ไม่ติดตัวอักษรไทยอื่น) ----
+    var WG = [['ยกเลิก', 'Cancel'], ['ยืนยัน', 'Confirm'], ['ปิด', 'Close']];      // ใช้ได้ทุกป๊อปอัพ
+    var WL = [['ใบ', '#TAG#'], ['ชิ้น', 'pcs'], ['แท็ก', 'tags'], ['รวม', 'Total'], ['ชื่อ', 'Name'], ['ล้าง', 'Clear'], ['ช่วง', 'Range'], ['เมื่อ', 'at'], ['จำนวน', 'Qty'], ['เลือก', 'Select'], ['ลูกค้า', 'Customer'],
+        ['หายแล้ว', 'Lost'], ['ใบแทน', 'Replacement'], ['ใช้งาน', 'Active'], ['จะพิมพ์', 'Print'], ['ทั้งชุด', 'Whole batch'], ['พิมพ์ซ้ำ', 'Reprint'], ['หมายเหตุ', 'Note'], ['วันที่ส่ง', 'Delivery date'], ['รหัสสินค้า', 'Product code'],
+        ['พิมพ์เมื่อ', 'Printed at'], ['ออกโดย', 'issued by'], ['โดย', 'by'], ['แทน', 'replacing'], ['ปริ้น', 'print'], ['หาย', 'lost'], ['เลข', 'No.'], ['ถึง', 'to'], ['ของ', 'of'], ['มี', 'There are'], ['ไม่มีสิทธิ์', 'No permission']];
+ 
+    // ---- รูปแบบที่ต้องสลับลำดับคำ/เติม s ตามจำนวน (ใช้กับข้อความที่มีตัวเลขในโหนดเดียวกัน) ----
+    function tg(n) { return 'tag' + (String(n) === '1' ? '' : 's'); }
+    var R = [
+        [/ปริ้นแท็ก Invoice (\d+) ใบ/g, function (m, n) { return 'Print ' + n + ' Invoice ' + tg(n); }],
+        [/ออกเลขใหม่ (\d+) ใบ \+ ปริ้น/g, function (m, n) { return 'Issue ' + n + ' new ' + tg(n) + ' + print'; }],
+        [/ออกเลข \+ ปริ้นแท็ก (\d+) ใบ/g, function (m, n) { return 'Issue serials + print ' + n + ' ' + tg(n); }],
+        [/พิมพ์ซ้ำ (\d+) ใบ/g, function (m, n) { return 'Reprint ' + n + ' ' + tg(n); }]
+    ];
+    function esc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+    function sortDesc(a) { return a.slice().sort(function (x, y) { return y[0].length - x[0].length; }); }
+    var mapP = {}; P.forEach(function (p) { mapP[p[0]] = p[1]; });
+    var reP = new RegExp(sortDesc(P).map(function (p) { return esc(p[0]); }).join('|'), 'g');
+    function mkW(list) { var m = {}; list.forEach(function (p) { m[p[0]] = p[1]; }); var re = new RegExp(sortDesc(list).map(function (p) { return '(?<![\\u0E00-\\u0E7F])' + esc(p[0]) + '(?![\\u0E00-\\u0E7F])'; }).join('|'), 'g'); return { m: m, re: re }; }
+    var G = mkW(WG), L = mkW(WL);
+    var prevCtx = '';
+    function tagWord(str, off) {                       // 1 → tag , อื่น → tags
+        var before = str.slice(0, off); if (!/\S/.test(before)) before = prevCtx + before;
+        return /(^|[^0-9])1\s*$/.test(before) ? 'tag' : 'tags';
+    }
+    function tr(s, local, prev) {
+        if (!s || !TH.test(s)) return s;
+        var o = s; R.forEach(function (r) { o = o.replace(r[0], r[1]); });
+        if (TH.test(o)) o = o.replace(reP, function (m) { return mapP[m]; });
+        if (TH.test(o)) { prevCtx = prev || ''; o = o.replace(G.re, function (m) { return G.m[m]; }); }
+        if (local && TH.test(o)) { prevCtx = prev || ''; o = o.replace(L.re, function (m, off, str) { var v = L.m[m]; return v === '#TAG#' ? tagWord(str, off) : v; }); }
+        return o;
+    }
+    window.__broseLangTr = function (s, local, prev) { return tr(s, !!local, prev); };
+ 
+    function isEn() { try { return currentLanguage === 'en'; } catch (e) { return false; } }
+    var tracked = [];                                   // {n, a, o, t}  a = null → text node
+    var skipTag = { SCRIPT: 1, STYLE: 1, TEXTAREA: 1 };
+    var ATTRS = ['placeholder', 'title', 'aria-label'];
+    function isLocal(root) {
+        if (root.id === 'brm-wrap') return true;
+        var t = root.querySelector && root.querySelector('.swal2-title'); if (t && /BROSE/.test(t.textContent)) return true;
+        if (/BROSE|แท็ก|เลขเดิม/.test(root.textContent || '')) return true;
+        return !!(root.classList.contains('brx-rp') || root.querySelector('#bri-box,#bh-box,#brt-box,#brg-panel,#brx-fsum,#brt2-fsum'));
+    }
+    function prevOf(n) { var p = n.previousSibling; return p ? (p.textContent || '') : ''; }
+    function scanRoot(root) {
+        var local = isLocal(root);
+        var hist = root.querySelector && root.querySelector('#bh-tb'), tilesReady = !!(root.querySelector && root.querySelector('.brx-tiles'));
+        var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, null), n, txt = [], els = [];
+        while ((n = w.nextNode())) { if (n.nodeType === 3) txt.push(n); else els.push(n); }
+        txt.forEach(function (t) {
+            var pe = t.parentNode; if (!pe || skipTag[pe.nodeName]) return;
+            var v = t.nodeValue; if (!TH.test(v)) return;
+            if (hist && window.__broseUiV1 && !tilesReady && pe.closest && pe.closest('#bh-tb')) return;   // ให้บล็อกป๊อปอัพเดิมอ่านค่าตารางก่อน แล้วค่อยแปล
+            var nv = (v.trim() === 'เลือก' && pe.nodeName === 'SMALL') ? v.replace('เลือก', 'Picked') : tr(v, local, prevOf(t)); if (nv !== v) { tracked.push({ n: t, a: null, o: v, t: nv }); t.nodeValue = nv; }
+        });
+        els.forEach(function (e) {
+            ATTRS.forEach(function (a) { var v = e.getAttribute(a); if (v && TH.test(v)) { var nv = tr(v, local, ''); if (nv !== v) { tracked.push({ n: e, a: a, o: v, t: nv }); e.setAttribute(a, nv); } } });
+        });
+        if (root.getAttribute && root.getAttribute('title')) { /* กันกรณี root เอง */ }
+    }
+    function roots() { var r = [].slice.call(document.querySelectorAll('.swal2-popup')); var m = document.getElementById('brm-wrap'); if (m) r.push(m); return r; }
+    function scanAll() { if (!isEn()) return; roots().forEach(scanRoot); prune(); }
+    function prune() { if (tracked.length > 3000 || tracked.some(function (x) { return !(x.n.isConnected); })) tracked = tracked.filter(function (x) { return x.n.isConnected; }); }
+    function restore() {
+        tracked.forEach(function (x) { try { if (x.a === null) { if (x.n.nodeValue === x.t) x.n.nodeValue = x.o; } else if (x.n.getAttribute(x.a) === x.t) x.n.setAttribute(x.a, x.o); } catch (e) { } });
+        tracked = [];
+    }
+    // CSS ที่เป็น content:"..." ภาษาไทย → ทับด้วยอังกฤษเมื่อเปิดโหมด EN
+    function cssOn(on) {
+        var s = document.getElementById('brl-css');
+        if (!on) { if (s) s.remove(); return; }
+        if (s) return; s = document.createElement('style'); s.id = 'brl-css';
+        s.textContent = '#bri-tb td:nth-child(4):not(:empty)::after{content:"total pcs"!important}#brt-box td:nth-child(5)::after{content:"Plan qty (pcs)"!important}';
+        document.head.appendChild(s);
+    }
+    var watched = typeof WeakSet === 'function' ? new WeakSet() : null;
+    function watch(el) {
+        if (!el || (watched && watched.has(el))) return; if (watched) watched.add(el);
+        new MutationObserver(function () { if (isEn()) scanAll(); }).observe(el, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ATTRS });
+    }
+    function attach() {
+        [].forEach.call(document.querySelectorAll('.swal2-container'), watch); watch(document.getElementById('brm-wrap'));
+    }
+    new MutationObserver(function (ms) {
+        for (var i = 0; i < ms.length; i++) for (var j = 0; j < ms[i].addedNodes.length; j++) {
+            var a = ms[i].addedNodes[j]; if (a.nodeType === 1 && ((a.classList && a.classList.contains('swal2-container')) || a.id === 'brm-wrap' || (a.querySelector && a.querySelector('#brm-wrap')))) { attach(); if (isEn()) scanAll(); return; }
+        }
+    }).observe(document.body, { childList: true, subtree: false });
+    // เมนูถูกสร้างใต้ header (ไม่ใช่ลูกตรงของ body) → ตรวจซ้ำเป็นระยะ + จับการสลับภาษา
+    var last = null;
+    function tick() {
+        var en = isEn(); attach();
+        if (en !== last) { last = en; if (en) { cssOn(true); scanAll(); } else { restore(); cssOn(false); } }
+        else if (en) scanAll();
+    }
+    setInterval(tick, 700); tick();
+    // หน้าต่างพิมพ์ (window.open + document.write) → แปลข้อความไทยที่เขียนลงไปด้วย
+    var _open = window.open;
+    window.open = function () {
+        var w = _open.apply(this, arguments);
+        if (w && isEn()) { try { var d = w.document, dw = d.write; d.write = function () { var a = [].slice.call(arguments).map(function (s) { return typeof s === 'string' ? tr(s, false) : s; }); return dw.apply(d, a); }; } catch (e) { } }
+        return w;
+    };
+})();
+/* ===== จบ BROSE-LANG-V1 ===== */
 // ดาวน์โหลดเทมเพลต Excel สำหรับอัปโหลดแพลน
 window.downloadLGPlanTemplate = function() {
     const ws_data = [
