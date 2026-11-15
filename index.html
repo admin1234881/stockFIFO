@@ -16583,7 +16583,7 @@ window.renderLGMatchTable = function() {
                 + '</div>';
         };
         var pages = '';
-        for (var p = 0; p < tags.length; p += 8) pages += '<div class="pg">' + tags.slice(p, p + 8).map(function (t) { return card(t); }).join('') + '</div>';
+        for (var p = 0; p < tags.length; p += 3) pages += '<div class="pg">' + tags.slice(p, p + 3).map(function (t) { return card(t); }).join('') + '</div>';
         printWin.document.open();
         printWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>ปริ้นแท็ก BROSE</title><style>'
             + '*{box-sizing:border-box}@page{size:A4;margin:8mm}body{font-family:Arial,Helvetica,sans-serif;margin:0;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
@@ -16600,6 +16600,13 @@ window.renderLGMatchTable = function() {
             + '.r4{display:grid;grid-template-columns:63fr 37fr}.r4 .po{border-right:1.5px solid #d98a5f;padding:1.5mm 2mm;display:flex;flex-direction:column;justify-content:center;gap:2.5mm}'
             + '.r4 .vl.pov{font-weight:bold;font-size:14px}.sq{font-size:7.5px}.sqv{font-weight:bold;font-size:8px;letter-spacing:.2px;margin-left:2mm}.r4 .po .rw .lb{flex:0 0 31mm}'
             + '.to{padding:1.5mm 2mm;display:flex;flex-direction:column;justify-content:center;gap:2.5mm}.tl{font-size:7.5px}.lb2{font-size:8.5px;display:inline-block;width:11mm}.cv{font-size:8px;font-weight:bold}'
+             + 'body{font-family:Univers,"Univers LT Std","Univers 55",Arial,Helvetica,sans-serif}'
+            + '.pg{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:9mm;padding-top:3mm}.bt{width:140mm;height:75mm;flex:0 0 auto;grid-template-rows:15mm 14mm 1fr 14.5mm}.r2,.r3,.r4{grid-template-rows:100%}'
+            + '.r1{padding:1.5mm 3.5mm}.sup{font-size:14px}.sla{font-size:19px;margin:2.2mm 0 0 9mm}.il{font-size:10.5px;margin:1mm 0 0 12mm}.iv{font-size:18px;margin-top:3.6mm}'
+            + '.r2 .c{padding:1.2mm 3.5mm}.lb{font-size:12px}.r2 .vl{font-size:20px;margin-top:2mm}.r2 .qt .vl{font-size:23px}.r2 .dt .vl{margin-left:9mm}'
+            + '.r3 .pt{padding:0 3.5mm;gap:4mm}.rw .lb{flex:0 0 36mm}.pn,.pm{font-size:18px}.qrc{padding:2mm 3.5mm}.qrc .lb{font-size:12px;margin-top:1.5mm}.qrc img{width:25mm;height:25mm}'
+            + '.r4 .po{padding:1.5mm 3.5mm;gap:2.5mm}.r4 .vl.pov{font-size:20px}.sq{font-size:10.5px}.sqv{font-size:11.5px;margin-left:3mm}.r4 .po .rw .lb{flex:0 0 42mm}'
+            + '.to{padding:1.5mm 3.5mm;gap:2.5mm}.tl{font-size:10.5px}.lb2{font-size:12px;width:13mm}.cv{font-size:11.5px}'
             + '@media print{.bt{page-break-inside:avoid}}</style></head><body>' + pages
             + '<script>window.onload=function(){setTimeout(function(){window.print()},300)};<\/script></body></html>');
         printWin.document.close();
@@ -16950,6 +16957,10 @@ window.renderLGMatchTable = function() {
             + '.dt{left:91px;top:169px;font-size:18px}'
             + '.pl{left:36px;top:213px;font-size:12.5px}.po{left:178px;top:209px;font-size:19px}.to{left:363px;top:213px;font-size:12.5px}'
             + '.ql{left:457px;top:43px;font-size:14px}.qb{left:416px;top:68px;width:150px;height:125px;border:1px solid #ddd;display:flex;align-items:center;justify-content:center}.qb img{width:112px;height:112px;display:block}'
+            + 'body{font-family:Univers,"Univers LT Std","Univers 55",Arial,Helvetica,sans-serif}'
+            + '.cw{width:185mm;height:75mm;margin:0 auto}.sc{height:251px;transform:scale(1.1314)}'
+            + '.sup{font-size:16.5px}.ql{left:424px;top:21px}.qb{left:420px;top:40px;width:170px;height:164px;overflow:hidden}.qb img{width:190px;height:190px;flex:0 0 auto}'
+            + '.cw{overflow:visible}.sc{transform:none;zoom:1.1314}'
             + '</style></head><body>' + pages
             + '<script>window.onload=function(){setTimeout(function(){window.print()},300)};<\/script></body></html>');
         w.document.close();
@@ -17083,6 +17094,752 @@ window.renderLGMatchTable = function() {
     setInterval(function () { try { ensure(); } catch (e) { } }, 1500);
 })();
 /* ===== จบ BROSE-MENU-V1 ===== */
+/* ===== BROSE-DOCK-V1: แท็ก Invoice — ดึงค่า DOCK ที่เคยใส่ (จาก Google Sheet) มาเติมให้อัตโนมัติ แก้ไขได้ ===== */
+(function () {
+    if (window.__broseDockV1) return; window.__broseDockV1 = true;
+    var LS = 'broseDock_v1';   // ที่เดียวกับที่บล็อกแท็ก Invoice ใช้อ่านค่าเริ่มต้น
+    function lsMap() { try { return JSON.parse(localStorage.getItem(LS) || '{}') || {}; } catch (e) { return {}; } }
+    function setMap(m) { try { localStorage.setItem(LS, JSON.stringify(m)); } catch (e) { } }
+    function partsOf(tr) { return (tr.getAttribute('data-parts') || '').split('|').filter(Boolean); }
+    function pick(map, parts) { for (var i = 0; i < parts.length; i++) if (map[parts[i]]) return map[parts[i]]; return ''; }
+ 
+    // ช่องไหนที่ผู้ใช้พิมพ์แก้เองแล้ว จะไม่ถูกเขียนทับ
+    document.addEventListener('input', function (e) { var t = e.target; if (t && t.classList && t.classList.contains('bri-dock')) t.setAttribute('data-touched', '1'); }, true);
+ 
+    function note(txt, ok) {
+        var el = document.getElementById('bri-dock-note');
+        if (!el) { var s = document.getElementById('bri-sum'); if (!s) return; el = document.createElement('div'); el.id = 'bri-dock-note'; el.className = 'text-start mt-1'; el.style.fontSize = '.75rem'; s.parentNode.insertBefore(el, s.nextSibling); }
+        el.style.color = ok ? '#198754' : '#6c757d'; el.innerHTML = txt;
+    }
+    function refreshRows(map) {
+        var n = 0;
+        document.querySelectorAll('#bri-tb tr').forEach(function (tr) {
+            var inp = tr.querySelector('.bri-dock'); if (!inp || inp.getAttribute('data-touched')) return;
+            var v = pick(map, partsOf(tr)); if (v && inp.value !== v) { inp.value = v; n++; }
+        });
+        return n;
+    }
+    function loadDocks() {
+        note('⏳ กำลังดึงค่า DOCK ที่เคยบันทึกไว้…', false);
+        callAppsScript('getBroseDocks', {}).then(function (r) {
+            if (!r || r.status === 'error' || !r.docks) throw new Error((r && r.message) || 'ดึงไม่สำเร็จ');
+            var m = lsMap(); Object.keys(r.docks).forEach(function (k) { m[k] = r.docks[k]; }); setMap(m);
+            refreshRows(m);
+            if (Object.keys(r.docks).length) note('✔ DOCK ดึงจากที่เคยบันทึกไว้ในระบบ (Google Sheet) แล้ว แก้ไขได้ — เมื่อกดปริ้น ระบบจะจำค่าใหม่ไว้ใช้ครั้งต่อไป', true);
+            else note('ยังไม่มี DOCK ที่เคยบันทึกไว้ในระบบ — ใช้ค่าเริ่มต้น แก้ไขได้ เมื่อกดปริ้นระบบจะจำไว้ให้ครั้งต่อไป', false);
+        }).catch(function () { note('ใช้ค่า DOCK ที่จำไว้ในเครื่องนี้ (ดึงจากระบบไม่ได้ — ตรวจว่า Deploy Apps Script เวอร์ชันใหม่แล้ว)', false); });
+    }
+ 
+    // ครอบฟังก์ชันเปิดหน้าต่างแท็ก Invoice: เปิดเสร็จแล้วค่อยไปดึงค่า DOCK (รอจนกว่าบล็อกแท็ก Invoice จะถูกโหลด)
+    function wrap() {
+        var orig = window.openBroseInvoiceDialog;
+        if (typeof orig !== 'function' || orig.__brd) return typeof orig === 'function';
+        var w = function () { var r = orig.apply(this, arguments); setTimeout(function () { if (document.getElementById('bri-tb')) loadDocks(); }, 60); return r; };
+        w.__brd = true; window.openBroseInvoiceDialog = w; return true;
+    }
+    wrap(); var tm = setInterval(function () { try { if (wrap() && window.openBroseInvoiceDialog.__brd) clearInterval(tm); } catch (e) { } }, 1000);
+ 
+    // กดปุ่มปริ้นในหน้าต่างแท็ก Invoice → ส่งค่า DOCK ของแถวที่ติ๊กไปจำไว้ในชีต (ไม่ต้องรอ ไม่กระทบการปริ้น)
+    document.addEventListener('click', function (e) {
+        var b = e.target && e.target.closest ? e.target.closest('.swal2-confirm') : null;
+        if (!b || !document.getElementById('bri-tb')) return;
+        var docks = {}, m = lsMap(), any = false;
+        document.querySelectorAll('#bri-tb tr').forEach(function (tr) {
+            var ck = tr.querySelector('.bri-ck'), inv = tr.querySelector('.bri-inv'), inp = tr.querySelector('.bri-dock');
+            if (!ck || !ck.checked || !inv || !inv.value.trim() || !inp) return;
+            var dk = inp.value.trim(); if (!dk || dk.length > 60) return;
+            partsOf(tr).forEach(function (p) { docks[p] = dk; m[p] = dk; any = true; });
+        });
+        if (!any) return;
+        setMap(m);
+        callAppsScript('saveBroseDocks', { docks: docks, by: (typeof currentUser !== 'undefined' && currentUser && currentUser.username) || '' }).catch(function () { });
+    }, true);
+})();
+/* ===== จบ BROSE-DOCK-V1 ===== */
+(function () {
+    if (window.__broseUiV1) return; window.__broseUiV1 = true;
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function $(s, r) { return (r || document).querySelector(s); }
+    function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+    function isT(v) { return v === true || String(v).toUpperCase() === 'TRUE'; }
+    function canUse() { var u = currentUser; return !!u && (u.username === 'admin' || u.role === 'admin' || isT(u.canManageDeliveryPlan) || isT(u.printTags)); }
+    function dmy(ymd) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(ymd || ''); return m ? (m[3] + '-' + m[2] + '-' + m[1]) : ymd; }
+    function fire(el, type) { el.dispatchEvent(new Event(type, { bubbles: true })); }
+ 
+    // ---------- CSS ----------
+    var A = '.swal2-popup:has(#bri-box)', B = '.swal2-popup:has(#bh-box)', C = '.swal2-popup.brx-rp';
+    function all(rest) { return [A, B, C].map(function (s) { return s + (rest ? ' ' + rest : ''); }).join(','); }
+    var css = ''
+        + [A, B, C].join(',') + '{padding:0!important;border-radius:22px!important;overflow:hidden!important;max-width:96vw!important;box-shadow:0 30px 80px rgba(15,23,42,.45)!important}'
+        + all('.swal2-title') + '{margin:0!important;padding:0!important;display:block!important;text-align:left!important;max-width:100%!important;font-size:inherit!important;background:linear-gradient(120deg,#0f172a,#312e81)}'
+        + B + ' .swal2-title{background:linear-gradient(120deg,#450a0a,#9a3412)}'
+        + '.brx-hd{display:flex;align-items:center;gap:14px;padding:20px 26px;color:#fff}'
+        + '.brx-ic{width:46px;height:46px;border-radius:14px;background:rgba(255,255,255,.15);display:grid;place-items:center;font-size:22px;flex:0 0 46px}'
+        + '.brx-tt{font-size:20px;font-weight:800;line-height:1.25}.brx-tt small{display:block;font-size:12.5px;font-weight:500;color:#c7d2fe;margin-top:2px}'
+        + B + ' .brx-tt small{color:#fed7aa}'
+        + all('.swal2-html-container') + '{margin:0!important;padding:0!important;text-align:left!important;background:#f1f5f9;overflow:visible!important;font-size:14px}'
+        + all('.swal2-actions') + '{margin:0!important;padding:16px 26px!important;background:#fff;border-top:1px solid #e2e8f0;justify-content:flex-end!important;width:100%!important;gap:10px;flex-wrap:nowrap!important}'
+        + all('.swal2-confirm') + '{order:2;background:linear-gradient(120deg,#4f46e5,#7c3aed)!important;border-radius:12px!important;font-weight:800!important;padding:10px 20px!important;box-shadow:0 8px 20px rgba(79,70,229,.35)!important;margin:0!important}'
+        + B + ' .swal2-confirm{background:linear-gradient(120deg,#dc2626,#ea580c)!important;box-shadow:0 8px 20px rgba(220,38,38,.3)!important}'
+        + all('.swal2-cancel') + '{order:1;background:#fff!important;color:#64748b!important;border:1px solid #e2e8f0!important;border-radius:12px!important;font-weight:800!important;padding:10px 18px!important;margin:0!important}'
+        + all('.swal2-validation-message') + '{margin:0!important;border-radius:0!important;justify-content:flex-start!important;padding:10px 26px!important;font-size:13px!important}'
+        + '#brx-fsum{order:0;margin-right:auto;font-size:13.5px;color:#64748b}#brx-fsum b{color:#0f172a;font-size:20px;margin:0 3px}#brx-fsum b.r{color:#dc2626}'
+        + '.brx-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:14px 26px;background:#fff;border-bottom:1px solid #e2e8f0;grid-column:1/-1}'
+        + '.brx-bar label{margin:0;font-size:12.5px;font-weight:700;color:#64748b}'
+        + '.brx-bar input[type=date],.brx-bar input[type=text]{border:1px solid #e2e8f0!important;border-radius:12px!important;background:#f8fafc!important;font-weight:700;padding:7px 12px!important;height:auto!important;font-size:13.5px!important}'
+        + '.brx-bar #bri-allcus{accent-color:#4f46e5}'
+        + '.brx-btn{border:0;border-radius:12px;padding:8px 14px;font-weight:800;font-size:13px;background:#eef2ff;color:#4f46e5;cursor:pointer}.brx-btn:hover{background:#e0e7ff}'
+        + '.brx-bar #bri-add{margin-left:auto;background:#eef2ff!important;color:#4f46e5!important;border:0!important;border-radius:12px!important;font-weight:800!important}'
+        + '.brx-note{font-size:12px!important;color:#64748b!important;padding:0 26px 14px!important}'
+        // ---- invoice ----
+        + '.swal2-html-container:has(#bri-box){display:grid!important;grid-template-columns:minmax(0,1fr) 330px;align-items:start}'
+        + '#bri-box{grid-column:1;padding:16px 10px 4px 26px}#bri-sum,#bri-dock-note{grid-column:1;padding:2px 10px 6px 26px;font-size:12.5px!important}'
+        + '#bri-box>div{max-height:54vh!important;overflow:auto!important;border:0!important;border-radius:0!important;padding:2px 8px 8px 2px}'
+        + '#bri-box table,#bri-box tbody{display:block;width:100%;background:none}#bri-box thead{display:none}'
+        + '#bri-tb{display:flex!important;flex-direction:column;gap:12px}'
+        + '#bri-tb tr{display:grid;grid-template-columns:26px minmax(0,1fr) auto;gap:4px 14px;align-items:center;background:#fff;border:1.5px solid #e2e8f0;border-radius:16px;padding:14px 16px;cursor:default}'
+        + '#bri-tb tr:has(.bri-ck:checked){border-color:#818cf8;box-shadow:0 0 0 3px #e0e7ff}'
+        + '#bri-tb tr:has(.bri-ck:not(:checked)){opacity:.62}'
+        + '#bri-tb tr.brx-cur{border-color:#4f46e5}'
+        + '#bri-tb td{display:block;padding:0!important;border:0!important;background:none!important;box-shadow:none!important}'
+        + '#bri-tb td:nth-child(1){grid-column:1;grid-row:1/3}#bri-tb td:nth-child(2){grid-column:2;grid-row:1}#bri-tb td:nth-child(3){grid-column:2;grid-row:2}'
+        + '#bri-tb td:nth-child(4){grid-column:3;grid-row:1/3;text-align:right;font-size:24px;font-weight:900;line-height:1}'
+        + '#bri-tb td:nth-child(4):not(:empty)::after{content:"ชิ้นรวม";display:block;font-size:11px;color:#64748b;font-weight:600;margin-top:2px}'
+        + '#bri-tb td:nth-child(5){grid-column:2;grid-row:3;margin-top:8px}#bri-tb td:nth-child(6){grid-column:3;grid-row:3;margin-top:8px;display:flex;align-items:center;gap:6px}'
+        + '#bri-tb .bri-ck{width:22px;height:22px;accent-color:#4f46e5;cursor:pointer}'
+        + '#bri-tb .bri-inv{border:0!important;background:transparent!important;box-shadow:none!important;padding:0!important;font-size:16px!important;font-weight:800!important;letter-spacing:.3px;min-width:0!important;width:100%}'
+        + '#bri-tb .bri-inv:placeholder-shown{border:1.5px dashed #cbd5e1!important;background:#f8fafc!important;border-radius:10px!important;padding:6px 10px!important;font-size:14px!important}'
+        + '#bri-tb td:nth-child(3){justify-self:start;font-size:12px!important;font-weight:700;color:#475569;background:#f1f5f9!important;border-radius:7px;padding:2px 8px!important}'
+        + '#bri-tb .bri-dock{width:100%;min-width:0!important;border:1.5px solid #fecaca!important;background:#fff5f5!important;color:#dc2626!important;border-radius:11px!important;padding:8px 12px!important;font-weight:800!important;font-size:14px!important}'
+        + '.brx-step{display:inline-flex;align-items:center;border:1.5px solid #e2e8f0;border-radius:11px;background:#fff;overflow:hidden}'
+        + '.brx-step b{width:32px;height:34px;display:grid;place-items:center;background:#f8fafc;color:#64748b;font-size:17px;cursor:pointer;user-select:none}.brx-step b:hover{background:#eef2ff;color:#4f46e5}'
+        + '#bri-tb .bri-n{width:44px!important;border:0!important;box-shadow:none!important;text-align:center;font-weight:800;padding:0!important;-moz-appearance:textfield}'
+        + '#bri-tb .bri-n::-webkit-inner-spin-button,#bri-tb .bri-n::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}'
+        + '#brx-prev{grid-column:2;grid-row:2/span 4;padding:16px 26px 14px 8px}'
+        + '.brx-pv{background:#fff;border:1.5px solid #e2e8f0;border-radius:16px;padding:14px}.brx-pv h4{margin:0 0 10px;font-size:11.5px;color:#64748b;letter-spacing:.5px;font-weight:800}'
+        + '.brx-pvw{width:268px;height:109px;overflow:hidden;max-width:100%}'
+        + '.brx-sc{position:relative;width:618px;height:251px;border:1.5px solid #000;background:#fff;transform:scale(.4337);transform-origin:0 0;font-family:Arial,Helvetica,sans-serif;color:#000}'
+        + '.brx-a{position:absolute;white-space:nowrap;line-height:1;font-weight:bold}'
+        + '.brx-sup{left:37px;top:18px;font-size:16.5px}.brx-sla{left:37px;top:63px;font-size:17px}.brx-il{left:36px;top:91px;font-size:12.5px}.brx-iv{left:178px;top:88px}'
+        + '.brx-dl{left:36px;top:132px;font-size:14.5px;font-weight:normal}.brx-dk{left:183px;top:124px;color:#f00}.brx-dt{left:91px;top:169px;font-size:18px}'
+        + '.brx-pl{left:36px;top:213px;font-size:12.5px}.brx-po{left:178px;top:209px;font-size:19px}.brx-to{left:363px;top:213px;font-size:12.5px}'
+        + '.brx-ql{left:424px;top:21px;font-size:14px}.brx-qb{left:420px;top:40px;width:170px;height:164px;border:1px solid #ddd;overflow:hidden;display:flex;align-items:center;justify-content:center}.brx-qb img{width:190px;height:190px;flex:0 0 auto}'
+        + '.brx-tip{margin-top:12px;font-size:12px;color:#64748b;line-height:1.65;background:#f8fafc;border-radius:11px;padding:10px 12px}'
+        // ---- lost tag ----
+        + '.swal2-html-container:has(#bh-box){display:block}'
+        + '.brx-stp{display:flex;gap:8px;align-items:center;padding:12px 26px;background:#fff;border-bottom:1px solid #e2e8f0;font-size:12.5px;font-weight:700;color:#64748b}'
+        + '.brx-stp span{display:flex;gap:6px;align-items:center}.brx-stp i{font-style:normal;width:22px;height:22px;border-radius:99px;background:#e2e8f0;display:grid;place-items:center;font-size:11px}'
+        + '.brx-stp .on{color:#4f46e5}.brx-stp .on i{background:#4f46e5;color:#fff}.brx-stp u{width:24px;height:2px;background:#e2e8f0;display:inline-block}'
+        + '#bh-box{padding:16px 26px 4px}#bh-sum{padding:2px 26px 6px;font-size:12.5px!important}'
+        + '#bh-fb{margin:0 26px 12px;padding:0;font-size:13px}#bh-fb:empty{display:none}#bh-fb:not(:empty){padding:10px 14px;border-radius:12px;background:#fff7ed;border:1.5px solid #fed7aa}'
+        + '#bh-box>div:has(>table){display:none}'
+        + '.brx-tl{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:#64748b;margin-bottom:10px}.brx-tl a{color:#4f46e5;font-weight:800;cursor:pointer}'
+        + '.brx-tl input{width:52px;border:1px solid #e2e8f0;border-radius:8px;padding:3px 6px;font-family:monospace;font-weight:700;text-align:center}'
+        + '.brx-scroll{max-height:calc(100vh - 570px);min-height:150px;overflow:auto;padding-right:4px}'
+        + '.brx-gh{display:flex;align-items:center;gap:10px;margin:12px 0 8px;font-size:14px}.brx-pt{background:#e2e8f0;border-radius:7px;padding:2px 8px;font-size:12px;font-weight:700;color:#475569}'
+        + '.brx-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:8px}'
+        + '.brx-tile{border:1.5px solid #e2e8f0;border-radius:10px;padding:7px 0;text-align:center;background:#fff;font-family:"DejaVu Sans Mono",Consolas,monospace;font-weight:800;font-size:14px;color:#475569;cursor:pointer}'
+        + '.brx-tile small{display:block;font-size:9.5px;color:#94a3b8;font-weight:600;font-family:inherit}'
+        + '.brx-tile:hover{border-color:#f87171}.brx-tile.x{background:#fef2f2;border-color:#f87171;color:#dc2626}.brx-tile.x small{color:#f87171}'
+        + '.brx-tile.u{background:#f1f5f9;color:#94a3b8;border-style:dashed;cursor:not-allowed}.brx-tile.n{border-color:#93c5fd}.brx-tile.n small{color:#3b82f6}'
+        + '.brx-flow{display:flex;align-items:center;gap:12px;background:#fff7ed;border:1.5px solid #fed7aa;border-radius:16px;padding:14px 18px;margin-top:16px;flex-wrap:wrap}'
+        + '.brx-flow.e{background:#f8fafc;border-color:#e2e8f0;color:#64748b;font-size:13px}'
+        + '.brx-fb{background:#fff;border-radius:12px;padding:8px 14px;border:1px solid #fca5a5;text-align:center}.brx-fb small{display:block;font-size:11px;color:#64748b}.brx-fb.g{border-color:#86efac;background:#f0fdf4}.brx-fb.g span{color:#16a34a}'
+        + '.brx-mono{font-family:"DejaVu Sans Mono",Consolas,monospace;font-weight:800}.brx-arr{font-size:26px;color:#d97706;font-weight:900}'
+        + '.brx-flow .brx-w{margin-left:auto;font-size:12.5px;color:#9a3412;line-height:1.6;max-width:300px}'
+        // ---- reprint ----
+        + C + ' .swal2-html-container{padding-bottom:6px!important}'
+        + '.brx-hero{margin:16px 26px 0;border-radius:18px;background:linear-gradient(120deg,#eef2ff,#faf5ff);border:1px solid #ddd6fe;padding:18px 20px;display:flex;gap:22px;align-items:center}'
+        + '.brx-hero .n{font-size:54px;font-weight:900;color:#4f46e5;line-height:1}.brx-hero .n small{font-size:16px;color:#64748b;font-weight:700;margin-left:4px}'
+        + '.brx-hero .m{font-size:13px;color:#475569;line-height:1.9}'
+        + '.brx-sec{padding:14px 26px 0;font-size:12px;color:#64748b;font-weight:800}'
+        + '.brx-grp{margin:8px 26px 0;background:#fff;border:1.5px solid #e2e8f0;border-radius:14px;padding:11px 16px;display:flex;align-items:center;gap:14px}'
+        + '.brx-bar2{height:8px;border-radius:99px;background:#e2e8f0;flex:1;overflow:hidden}.brx-bar2 i{display:block;height:100%;background:linear-gradient(90deg,#6366f1,#a78bfa)}'
+        + '.brx-seg{display:flex;background:#e2e8f0;border-radius:12px;padding:4px;gap:4px;width:max-content;margin:8px 26px 0}'
+        + '.brx-seg button{border:0;background:transparent;padding:8px 16px;border-radius:9px;font-weight:800;font-size:13px;color:#64748b;cursor:pointer}.brx-seg button.on{background:#fff;color:#4f46e5;box-shadow:0 2px 8px rgba(0,0,0,.1)}'
+        + '.brx-rng{display:none;margin:10px 26px 0;font-size:13px;color:#475569;align-items:center;gap:8px}.brx-rng.on{display:flex}'
+        + '.brx-rng input{width:70px;border:1px solid #cbd5e1;border-radius:9px;padding:6px 8px;font-family:monospace;font-weight:800;text-align:center}';
+    var st = document.createElement('style'); st.id = 'brx-css'; st.textContent = css; document.head.appendChild(st);
+ 
+    // ---------- ส่วนหัว / ท้ายป๊อบอัพ ----------
+    function skin(icon, title, sub) {
+        var t = Swal.getTitle(); if (t) t.innerHTML = '<div class="brx-hd"><span class="brx-ic"><i class="bi ' + icon + '"></i></span><span class="brx-tt">' + title + '<small>' + sub + '</small></span></div>';
+        var act = Swal.getActions() || $('.swal2-actions');
+        if (act && !$('#brx-fsum', act)) { var f = document.createElement('div'); f.id = 'brx-fsum'; act.insertBefore(f, act.firstChild); }
+    }
+    function setConfirm(html) { try { if (!Swal.isLoading()) { var b = Swal.getConfirmButton(); if (b) b.innerHTML = html; } } catch (e) { } }
+    function waitFor(sel, fn, tries) { var n = 0, iv = setInterval(function () { var el = $(sel); if (el) { clearInterval(iv); try { fn(el); } catch (e) { if (window.console) console.error(e); } } else if (++n > (tries || 40)) clearInterval(iv); }, 50); }
+ 
+    // ================= 1) ปริ้นอินวอย =================
+    var qrCache = {};
+    function qrUrl(txt) {
+        if (!txt) return ''; if (qrCache[txt] !== undefined) return qrCache[txt];
+        var u = '', h = document.createElement('div'); h.style.cssText = 'position:fixed;left:-9999px'; document.body.appendChild(h);
+        try { safeCreateQRCode(h, txt); var cv = h.querySelector('canvas'); if (cv) u = cv.toDataURL('image/png'); } catch (e) { } finally { document.body.removeChild(h); }
+        return (qrCache[txt] = u);
+    }
+    function fit(txt, base, maxLen) { var n = String(txt).length; return n > maxLen ? Math.max(9, Math.floor(base * maxLen / n * 10) / 10) : base; }
+    var invCur = null;
+    function invRows() { return $$('#bri-tb tr'); }
+    function invRefresh() {
+        var rows = invRows(), sel = rows.filter(function (r) { var c = $('.bri-ck', r); return c && c.checked; }), tags = 0;
+        sel.forEach(function (r) { var inv = $('.bri-inv', r).value.trim(), n = parseInt($('.bri-n', r).value, 10) || 0; if (inv && n > 0) tags += n; });
+        var f = $('#brx-fsum'); if (f) f.innerHTML = 'เลือก <b>' + sel.length + '</b> Invoice · รวม <b>' + tags + '</b> แท็ก · ' + Math.ceil(tags / 3) + ' หน้า A4';
+        setConfirm('<i class="bi bi-printer-fill"></i> ปริ้นแท็ก Invoice ' + tags + ' ใบ');
+        var cur = (invCur && invCur.isConnected) ? invCur : (sel[0] || rows[0]);
+        rows.forEach(function (r) { r.classList.toggle('brx-cur', r === cur && rows.length > 1); });
+        var pv = $('#brx-prev'); if (!pv) return;
+        if (!cur) { pv.style.visibility = 'hidden'; return; } pv.style.visibility = '';
+        var inv = $('.bri-inv', cur).value.trim(), dock = $('.bri-dock', cur).value.trim(), d = ($('#bri-date') || {}).value || '';
+        $('#brx-pv-t').textContent = 'ตัวอย่างแท็กที่จะได้ · ' + (inv || 'ยังไม่มีเลข Invoice');
+        $('#brx-pv-iv').textContent = inv || '-'; $('#brx-pv-iv').style.fontSize = fit(inv, 19, 20) + 'px';
+        $('#brx-pv-dk').textContent = dock; $('#brx-pv-dk').style.fontSize = fit(dock, 21, 17) + 'px';
+        $('#brx-pv-dt').textContent = dmy(d);
+        var u = qrUrl(inv), qb = $('#brx-pv-qb'); qb.innerHTML = u ? '<img src="' + u + '">' : '';
+    }
+    function invEnhance() {
+        invRows().forEach(function (tr) {
+            if (tr.getAttribute('data-brx')) return; tr.setAttribute('data-brx', '1');
+            var n = $('.bri-n', tr); if (!n) return;
+            var sp = document.createElement('span'); sp.className = 'brx-step'; sp.innerHTML = '<b data-d="-1">−</b><b data-d="1">＋</b>';
+            var td = n.parentNode; sp.insertBefore(n, sp.lastChild); td.appendChild(sp);
+            var u = document.createElement('small'); u.textContent = 'ใบ'; u.style.cssText = 'font-weight:700;color:#64748b'; td.appendChild(u);
+        });
+        invRefresh();
+    }
+    function invSetup() {
+        var box = $('#bri-box'), pop = Swal.getPopup(); if (!box || !pop || pop.getAttribute('data-brx')) return; pop.setAttribute('data-brx', '1');
+        skin('bi-receipt', 'ออกแท็ก Invoice · BROSE THAILAND', 'เลือกใบ Invoice ที่จะปริ้น — QR คือเลข Invoice, DOCK ระบบจำให้ตามรหัสสินค้า');
+        var cont = box.parentNode, bar = cont.firstElementChild; bar.classList.add('brx-bar');
+        var note = cont.lastElementChild; if (note && note.className.indexOf('text-muted') >= 0) { note.classList.add('brx-note'); note.textContent = 'แถวสีเทา = ยังไม่ได้เลือก · แถวที่ไม่มีเลข Invoice ในแผนต้องพิมพ์เลขเอง · ปริ้นได้ไม่เกิน 90 ใบต่อครั้ง'; }
+        var all = document.createElement('button'); all.type = 'button'; all.className = 'brx-btn'; all.id = 'brx-all'; all.textContent = 'เลือกทั้งหมด';
+        var add = $('#bri-add'); bar.insertBefore(all, add);
+        all.addEventListener('click', function () { var rows = invRows(), on = rows.some(function (r) { return !$('.bri-ck', r).checked; }); rows.forEach(function (r) { $('.bri-ck', r).checked = on; }); fire(box, 'change'); invRefresh(); });
+        var pv = document.createElement('div'); pv.id = 'brx-prev';
+        pv.innerHTML = '<div class="brx-pv"><h4 id="brx-pv-t">ตัวอย่างแท็ก</h4><div class="brx-pvw"><div class="brx-sc">'
+            + '<div class="brx-a brx-sup">SUPPLIER: A TECH AUTOMOTIVE CO.,LTD.</div><div class="brx-a brx-sla">SLA0048</div><div class="brx-a brx-il">Invoice No.</div><div class="brx-a brx-iv" id="brx-pv-iv"></div>'
+            + '<div class="brx-a brx-dl">DELIVERY DATE:</div><div class="brx-a brx-dk" id="brx-pv-dk"></div><div class="brx-a brx-dt" id="brx-pv-dt"></div>'
+            + '<div class="brx-a brx-pl">PURCHASE ORDER:</div><div class="brx-a brx-po">SLA00481</div><div class="brx-a brx-to">To: Brose (Thailand) Co.,Ltd.</div>'
+            + '<div class="brx-a brx-ql">QR Code:</div><div class="brx-a brx-qb" id="brx-pv-qb"></div></div></div>'
+            + '<div class="brx-tip">✔ แท็ก 3 ใบ/หน้า A4 · ขนาด 18.5 × 7.5 ซม.<br>✎ แก้ DOCK / เลข Invoice แล้วตัวอย่างเปลี่ยนทันที<br>แตะแถวไหน ตัวอย่างจะแสดงแถวนั้น</div></div>';
+        cont.appendChild(pv);
+        box.addEventListener('click', function (e) {
+            var d = e.target && e.target.getAttribute && e.target.getAttribute('data-d');
+            if (d) { var n = $('.bri-n', e.target.closest('tr')), v = (parseInt(n.value, 10) || 1) + parseInt(d, 10); n.value = Math.max(1, Math.min(50, v)); fire(n, 'input'); fire(n, 'change'); }
+            var tr = e.target.closest && e.target.closest('#bri-tb tr'); if (tr) invCur = tr; invRefresh();
+        });
+        box.addEventListener('focusin', function (e) { var tr = e.target.closest && e.target.closest('#bri-tb tr'); if (tr) { invCur = tr; invRefresh(); } });
+        box.addEventListener('input', function () { setTimeout(invRefresh, 0); });
+        box.addEventListener('change', function () { setTimeout(invRefresh, 0); });
+        new MutationObserver(invEnhance).observe(box, { childList: true, subtree: true });
+        invEnhance();
+    }
+    function wrapInv() {
+        var o = window.openBroseInvoiceDialog; if (typeof o !== 'function') return false; if (o.__brx) return true;
+        var w = function () { var r = o.apply(this, arguments); invCur = null; waitFor('#bri-box', invSetup); return r; }; w.__brx = true;
+        for (var k in o) { try { w[k] = o[k]; } catch (e) { } } window.openBroseInvoiceDialog = w; return true;
+    }
+ 
+    // ================= 2) แท็กหาย =================
+    function hRows() { return $$('#bh-tb tr'); }
+    function hSuffix(s) { return String(s).slice(-3); }
+    function hBuild() {
+        var box = $('#bh-box'); if (!box) return; var tb = $('#bh-tb'), old = $('.brx-tiles', box);
+        if (!tb) { if (old) old.remove(); return; }
+        if (!old) {
+            var groups = [], map = {};
+            hRows().forEach(function (tr) {
+                var td = tr.children, s = tr.getAttribute('data-s'), part = td[2].textContent.trim(), qty = td[3].textContent.trim(), inv = td[4].textContent.trim(), note = td[6].textContent.trim();
+                var lost = !!$('.bh-ck', tr).disabled, key = inv + '|' + part + '|' + qty, g = map[key];
+                if (!g) { g = map[key] = { inv: inv, part: part, qty: qty, items: [] }; groups.push(g); }
+                g.items.push({ s: s, lost: lost, rep: /ใบแทน/.test(note), note: note });
+            });
+            var h = '<div class="brx-tiles"><div class="brx-tl"><span>แตะเลขแท็กที่หาย</span><a data-a="all">เลือกทั้งหมด</a><a data-a="none">ล้าง</a><span>ช่วง <input id="brx-rf" placeholder="001"> – <input id="brx-rt" placeholder="010"> <a data-a="range">เลือก</a></span></div>';
+            h += '<div class="brx-scroll">';
+            groups.forEach(function (g) {
+                h += '<div class="brx-gh"><b>' + esc(g.inv) + '</b><span class="brx-pt">' + esc(g.part) + ' × ' + esc(g.qty) + '</span></div><div class="brx-grid">';
+                g.items.forEach(function (it) { h += '<button type="button" class="brx-tile' + (it.lost ? ' u' : (it.rep ? ' n' : '')) + '" data-s="' + esc(it.s) + '" title="' + esc(it.s + (it.note ? ' · ' + it.note : '')) + '"><small>' + (it.lost ? 'หายแล้ว' : (it.rep ? 'ใบแทน' : 'ใช้งาน')) + '</small>' + esc(hSuffix(it.s)) + '</button>'; });
+                h += '</div>';
+            });
+            h += '</div><div id="brx-flow"></div></div>'; box.insertAdjacentHTML('beforeend', h);
+        }
+        hSync();
+    }
+    function hSelected() { return hRows().filter(function (tr) { var c = $('.bh-ck', tr); return c && c.checked && !c.disabled; }).map(function (tr) { return tr.getAttribute('data-s'); }); }
+    function rangesTxt(serials) {
+        var ns = serials.map(function (x) { return parseInt(hSuffix(x), 10); }).sort(function (a, b) { return a - b; }), out = [], i = 0;
+        function p3(n) { return ('00' + n).slice(-3); }
+        while (i < ns.length) { var j = i; while (j + 1 < ns.length && ns[j + 1] === ns[j] + 1) j++; out.push(j > i ? p3(ns[i]) + '–' + p3(ns[j]) : p3(ns[i])); i = j + 1; }
+        var t = out.join(', '); return '…' + (t.length > 46 ? t.slice(0, 44) + ' …' : t);
+    }
+    function hSync() {
+        var sel = hSelected(), set = {}; sel.forEach(function (s) { set[s] = 1; });
+        $$('.brx-tile').forEach(function (t) { if (t.classList.contains('u')) return; var on = !!set[t.getAttribute('data-s')]; t.classList.toggle('x', on); $('small', t).textContent = on ? 'เลือก' : (t.classList.contains('n') ? 'ใบแทน' : 'ใช้งาน'); });
+        var f = $('#brx-fsum'); if (f) f.innerHTML = 'เลือกใบที่หาย <b class="r">' + sel.length + '</b> ใบ';
+        var fbEl = $('#bh-fb'), armed = !!(fbEl && /⚠/.test(fbEl.textContent));
+        setConfirm(sel.length ? '<i class="bi bi-printer-fill"></i> ' + (armed ? 'ยืนยัน — ' : '') + 'ออกเลขใหม่ ' + sel.length + ' ใบ + ปริ้น' : '<i class="bi bi-printer-fill"></i> ออกเลขใหม่แทนใบที่ติ๊ก + ปริ้น');
+        var st3 = $('#brx-st3'); if (st3) st3.classList.toggle('on', armed);
+        var fl = $('#brx-flow'); if (!fl) return;
+        if (!sel.length) { fl.className = 'brx-flow e'; fl.innerHTML = 'แตะเลขแท็กที่หายด้านบน ระบบจะแสดงเลขใหม่ที่จะได้ตรงนี้'; return; }
+        var sm = $('#bh-sum b[style*="monospace"]'), mx = sm ? parseInt(sm.textContent, 10) : NaN, sorted = sel.slice().sort();
+        fl.className = 'brx-flow';
+        var lostTxt = rangesTxt(sorted);
+        var h = '<div class="brx-fb"><small>ใบที่หาย</small><span class="brx-mono">' + esc(lostTxt) + '</span><small>' + sel.length + ' ใบ</small></div>';
+        if (isFinite(mx)) { var a = String(mx + 1).slice(-3), b = String(mx + sel.length).slice(-3); h += '<div class="brx-arr">➜</div><div class="brx-fb g"><small>เลขใหม่ที่จะได้</small><span class="brx-mono">…' + a + (sel.length > 1 ? ' – …' + b : '') + '</span><small>' + sel.length + ' ใบ · ข้อมูลเดิมทุกอย่าง</small></div>'; }
+        h += '<div class="brx-w">ใบเก่าจะถูกจดว่า <b>หาย</b><br>กดปุ่มแดง 2 ครั้งเพื่อยืนยัน</div>'; fl.innerHTML = h;
+    }
+    function hSetup() {
+        var box = $('#bh-box'), pop = Swal.getPopup(); if (!box || !pop || pop.getAttribute('data-brx')) return; pop.setAttribute('data-brx', '1');
+        skin('bi-exclamation-triangle', 'แท็กหาย — ออกเลขใหม่', 'ใบที่หายจะถูกจดว่า “หาย” แล้วออกใบใหม่ รหัสสินค้า/จำนวน/Invoice เดิม เลขลำดับต่อท้ายของวัน');
+        var cont = box.parentNode, bar = cont.firstElementChild; bar.classList.add('brx-bar'); var hint = bar.nextElementSibling; if (hint && hint !== box) hint.style.display = 'none';
+        var stp = document.createElement('div'); stp.className = 'brx-stp'; stp.innerHTML = '<span class="on"><i>1</i>เลือกวัน / ค้นหา Invoice</span><u></u><span class="on"><i>2</i>แตะใบที่หาย</span><u></u><span id="brx-st3"><i>3</i>ยืนยัน</span>'; cont.insertBefore(stp, bar);
+        box.addEventListener('click', function (e) {
+            var t = e.target.closest && e.target.closest('.brx-tile'), a = e.target.closest && e.target.closest('[data-a]');
+            if (t && !t.classList.contains('u')) { var tr = hRows().filter(function (r) { return r.getAttribute('data-s') === t.getAttribute('data-s'); })[0], ck = tr && $('.bh-ck', tr); if (ck && !ck.disabled) { ck.checked = !ck.checked; fire(ck, 'change'); } }
+            else if (a) {
+                var act = a.getAttribute('data-a'), allc = $('#bh-all');
+                if (act === 'all' && allc) { allc.checked = true; fire(allc, 'change'); } else if (act === 'none' && allc) { allc.checked = false; fire(allc, 'change'); }
+                else if (act === 'range') {
+                    var f = parseInt($('#brx-rf').value, 10), t2 = parseInt($('#brx-rt').value, 10); if (!(f > 0)) return; if (!(t2 >= f)) t2 = f;
+                    hRows().forEach(function (r) { var c = $('.bh-ck', r), n = parseInt(hSuffix(r.getAttribute('data-s')), 10); if (c && !c.disabled && n >= f && n <= t2 && !c.checked) { c.checked = true; fire(c, 'change'); } });
+                }
+            }
+            setTimeout(hSync, 0);
+        });
+        box.addEventListener('change', function () { setTimeout(hSync, 0); });
+        var fbEl = $('#bh-fb'); if (fbEl) new MutationObserver(function () { hSync(); setTimeout(hSync, 400); }).observe(fbEl, { childList: true, characterData: true, subtree: true });
+        new MutationObserver(function () { hBuild(); }).observe(box, { childList: true });
+        hBuild();
+    }
+    function wrapHist() {
+        var o = window.openBroseHistoryDialog; if (typeof o !== 'function') return false; if (o.__brx) return true;
+        var w = function () { var r = o.apply(this, arguments); waitFor('#bh-box', hSetup); return r; }; w.__brx = true;
+        for (var k in o) { try { w[k] = o[k]; } catch (e) { } } window.openBroseHistoryDialog = w; return true;
+    }
+ 
+    // ================= 3) รีปริ้นชุดล่าสุด =================
+    var LS_LAST = 'broseLastBatch_v1';
+    function norm(t) { return { serial: t.serial, qr: t.qr || t.qrData, partNo: t.partNo, qtyPerPack: t.qtyPerPack, invoiceNumber: t.invoiceNumber, productName: t.productName }; }
+    function showReprint(tags, date, by, at) {
+        var gs = [], map = {};
+        tags.forEach(function (t) { var k = t.partNo + '|' + t.qtyPerPack, g = map[k]; if (!g) { g = map[k] = { part: t.partNo, qty: t.qtyPerPack, n: 0, inv: [] }; gs.push(g); } g.n++; var iv = t.invoiceNumber || ''; if (iv && g.inv.indexOf(iv) < 0) g.inv.push(iv); });
+        var first = tags[0].serial, last = tags[tags.length - 1].serial, mode = 'all';
+        var h = '<div class="brx-hero"><div class="n">' + tags.length + '<small>ใบ</small></div><div class="m">เลข <span class="brx-mono">' + esc(first) + '</span>' + (tags.length > 1 ? ' → <span class="brx-mono">' + esc(last) + '</span>' : '') + '<br>วันที่ส่ง <b>' + esc(dmy(date) || '-') + '</b>' + (by ? ' · ออกโดย <b>' + esc(by) + '</b>' : '') + (at ? '<br>เมื่อ ' + esc(at) : '') + '</div></div>'
+            + '<div class="brx-sec">ในชุดนี้มี</div>'
+            + gs.map(function (g) { return '<div class="brx-grp"><b style="min-width:110px">' + esc(g.part) + '</b><span class="brx-pt">× ' + esc(g.qty) + ' ชิ้น</span><div class="brx-bar2"><i style="width:' + Math.round(g.n * 100 / tags.length) + '%"></i></div><b>' + g.n + ' ใบ</b></div>' + (g.inv.length ? '<div style="margin:3px 30px 0;font-size:11.5px;color:#94a3b8">Invoice: ' + esc(g.inv.slice(0, 3).join(', ')) + (g.inv.length > 3 ? ' …' : '') + '</div>' : ''); }).join('')
+            + '<div class="brx-sec">จะพิมพ์</div><div class="brx-seg"><button type="button" data-m="all" class="on">ทั้งชุด ' + tags.length + ' ใบ</button><button type="button" data-m="range">เลือกช่วงเลข</button></div>'
+            + '<div class="brx-rng" id="brx-rng">เลขท้าย <input id="brx-rpf" value="' + esc(first.slice(-3)) + '"> ถึง <input id="brx-rpt" value="' + esc(last.slice(-3)) + '"> <span style="color:#94a3b8">(3 หลักท้ายของเลขแท็ก)</span></div><div style="height:14px"></div>';
+        function pick() {
+            if (mode === 'all') return tags;
+            var f = parseInt($('#brx-rpf').value, 10), t = parseInt($('#brx-rpt').value, 10); if (!(f >= 0)) return [];
+            if (!(t >= f)) t = f; return tags.filter(function (x) { var n = parseInt(String(x.serial).slice(-3), 10); return n >= f && n <= t; });
+        }
+        function upd() { var n = pick().length, f = $('#brx-fsum'); if (f) f.innerHTML = '≈ <b>' + Math.ceil(n / 3) + '</b> หน้า A4 · 3 ใบ/หน้า'; setConfirm('<i class="bi bi-printer-fill"></i> พิมพ์ซ้ำ ' + n + ' ใบ'); }
+        Swal.fire({
+            title: 'รีปริ้นชุดล่าสุด', html: h, width: 760, showCancelButton: true, confirmButtonText: 'พิมพ์ซ้ำ', cancelButtonText: 'ยกเลิก', focusConfirm: false, customClass: { popup: 'brx-rp' },
+            didOpen: function () {
+                skin('bi-printer', 'รีปริ้นชุดล่าสุด', 'ดึงจาก Google Sheet · เลขแท็กเดิมทุกใบ ไม่ออกเลขใหม่');
+                var pop = Swal.getPopup();
+                pop.addEventListener('click', function (e) { var m = e.target.getAttribute && e.target.getAttribute('data-m'); if (!m) return; mode = m; $$('.brx-seg button', pop).forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-m') === m); }); $('#brx-rng').classList.toggle('on', m === 'range'); upd(); });
+                pop.addEventListener('input', upd); upd();
+            },
+            preConfirm: function () {
+                var sub = pick(); if (!sub.length) { Swal.showValidationMessage('ไม่พบแท็กในช่วงเลขที่เลือก'); return false; }
+                var w = window.open('', '_blank');
+                try { if (typeof window.__broseTagPrint !== 'function') throw new Error('ยังไม่ได้วางบล็อกออกแท็ก BROSE'); window.__broseTagPrint(sub, date, w); return true; }
+                catch (e) { if (w) { try { w.close(); } catch (x) { } } Swal.showValidationMessage('พิมพ์ไม่สำเร็จ: ' + (e && e.message ? e.message : e)); return false; }
+            }
+        });
+    }
+    function reprintNew() {
+        if (!canUse()) { Swal.fire('ไม่มีสิทธิ์', 'ต้องมีสิทธิ์จัดการแผนการจัดส่ง หรือสิทธิ์ปริ้นแท็ก', 'warning'); return; }
+        Swal.fire({ title: 'กำลังดึงชุดล่าสุดจาก Google Sheet…', allowOutsideClick: false, showConfirmButton: false, didOpen: function () { Swal.showLoading(); } });
+        callAppsScript('getBroseLastBatch', {}).then(function (r) {
+            if (!r || r.status === 'error') throw new Error((r && r.message) || 'ดึงข้อมูลไม่สำเร็จ');
+            if (!r.tags || !r.tags.length) { Swal.fire('ยังไม่มีชุดล่าสุด', 'ยังไม่เคยออกแท็ก BROSE (ไม่พบข้อมูลในชีต BROSE_TagLog)', 'info'); return; }
+            showReprint(r.tags.map(norm), r.deliveryDate, r.printedBy, r.printedAt);
+        }).catch(function (e) {
+            var b = null; try { b = JSON.parse(localStorage.getItem(LS_LAST) || 'null'); } catch (x) { }
+            if (b && b.tags && b.tags.length) {
+                Swal.fire({ title: 'ดึงจาก Google Sheet ไม่สำเร็จ', icon: 'warning', showCancelButton: true, confirmButtonText: 'ใช้ชุดที่จำไว้ในเครื่องนี้ (' + b.tags.length + ' ใบ)', cancelButtonText: 'ยกเลิก', text: (e && e.message ? e.message : e) + ' — ใช้สำเนาล่าสุดที่เครื่องนี้เคยพิมพ์แทนได้' })
+                    .then(function (x) { if (x.isConfirmed) showReprint(b.tags.map(norm), b.date, '', ''); });
+            } else Swal.fire('ดึงชุดล่าสุดไม่สำเร็จ', (e && e.message ? e.message : e) + ' (ตรวจว่า Deploy Apps Script เวอร์ชันใหม่แล้ว)', 'error');
+        });
+    }
+    reprintNew.__brx = true;
+    function setReprint() { if (!window.__broseReprintLast || !window.__broseReprintLast.__brx) window.__broseReprintLast = reprintNew; }
+ 
+    // ปุ่ม "พิมพ์ชุดล่าสุดซ้ำ" ในหน้าแท็กชิ้นงาน ให้เปิดหน้าใหม่ด้วย
+    function wrapPiece() {
+        var o = window.openBroseTagDialog; if (typeof o !== 'function') return false; if (o.__brx) return true;
+        var w = function () { var r = o.apply(this, arguments); waitFor('#brt-last', function (b) { var c = b.cloneNode(true); b.parentNode.replaceChild(c, b); c.addEventListener('click', function () { reprintNew(); }); }); return r; }; w.__brx = true;
+        for (var k in o) { try { w[k] = o[k]; } catch (e) { } } window.openBroseTagDialog = w; return true;
+    }
+ 
+    setReprint(); var n = 0, tm = setInterval(function () {
+        try { setReprint(); var a = wrapInv(), b = wrapHist(), c = wrapPiece(); if (a && b && c && ++n > 10) clearInterval(tm); else if (++n > 60) clearInterval(tm); } catch (e) { }
+    }, 1000);
+    wrapInv(); wrapHist(); wrapPiece();
+})();
+/* ===== จบ BROSE-UI-V1 ===== */
+(function () {
+    if (window.__broseUixV1) return; window.__broseUixV1 = true;
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function $(s, r) { return (r || document).querySelector(s); }
+    function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+    function fire(el, type) { el.dispatchEvent(new Event(type, { bubbles: true })); }
+    var xArmed = '', groups = [];
+    var st = document.createElement('style');
+    st.textContent = '.brx-extra{margin-top:14px;background:#fff;border:1.5px dashed #cbd5e1;border-radius:16px;padding:12px 16px}.brx-xt{font-size:12.5px;color:#475569;margin-bottom:8px}.brx-xt b{color:#0f172a}'
+        + '.brx-xr{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.brx-xr select{border:1px solid #e2e8f0;border-radius:11px;background:#f8fafc;padding:7px 10px;font-weight:700;font-size:13px;max-width:100%}'
+        + '.brx-xs{display:inline-flex;align-items:center;border:1.5px solid #e2e8f0;border-radius:11px;background:#fff;overflow:hidden}.brx-xs b{width:32px;height:34px;display:grid;place-items:center;background:#f8fafc;color:#64748b;font-size:17px;cursor:pointer;user-select:none}.brx-xs b:hover{background:#eef2ff;color:#4f46e5}'
+        + '#brx-xn{width:44px;border:0;text-align:center;font-weight:800;padding:0;-moz-appearance:textfield;outline:0}#brx-xn::-webkit-inner-spin-button,#brx-xn::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}'
+        + '#brx-xgo{border:0;border-radius:12px;padding:8px 14px;font-weight:800;font-size:13px;background:#eef2ff;color:#4f46e5;cursor:pointer}#brx-xgo:hover{background:#e0e7ff}'
+        + '.swal2-popup:has(#bh-box) .brx-scroll{max-height:calc(100vh - 690px)}';
+    document.head.appendChild(st);
+ 
+    function deriveGroups() {
+        var out = [], map = {};
+        $$('#bh-tb tr').forEach(function (tr) {
+            var td = tr.children; if (td.length < 5) return;
+            var part = td[2].textContent.trim(), qty = td[3].textContent.trim(), inv = td[4].textContent.trim(), key = inv + '|' + part + '|' + qty;
+            if (!map[key]) { map[key] = { inv: inv, part: part, qty: qty }; out.push(map[key]); }
+        });
+        return out;
+    }
+    function ensure() {
+        var box = $('#bh-box'); if (!box) return;
+        if (!$('#bh-tb')) { var old0 = $('.brx-extra', box); if (old0) old0.remove(); return; }
+        if ($('.brx-extra', box)) return;
+        groups = deriveGroups(); if (!groups.length) return;
+        var h = '<div class="brx-extra"><div class="brx-xt"><b>ไม่รู้ว่าใบไหนหาย?</b> ออกเพิ่มตามจำนวนที่ต้องการได้เลย (เช่น หาย 1 ใบ ออกเพิ่ม 1 ใบ) — ไม่ต้องเลือกเลขแท็ก ใบเก่าไม่ถูกจดว่าหาย</div>'
+            + '<div class="brx-xr"><select id="brx-xg">' + groups.map(function (g, i) { return '<option value="' + i + '">' + esc(g.inv) + ' · ' + esc(g.part) + ' × ' + esc(g.qty) + '</option>'; }).join('') + '</select>'
+            + '<span class="brx-xs"><b data-x="-1">−</b><input id="brx-xn" type="number" min="1" max="50" value="1"><b data-x="1">＋</b></span><span style="font-weight:700;color:#64748b">ใบ</span>'
+            + '<button type="button" id="brx-xgo">ออกเพิ่ม + ปริ้น</button></div></div>';
+        var anchor = $('#brx-flow', box); if (anchor) anchor.insertAdjacentHTML('afterend', h); else box.insertAdjacentHTML('beforeend', h);
+    }
+    function resetBtn() { var b = $('#brx-xgo'); if (b) b.textContent = 'ออกเพิ่ม + ปริ้น'; }
+    function fb(msg, kind) { var e = $('#bh-fb'); if (e) { e.innerHTML = msg; e.style.color = kind === 'ok' ? '#198754' : (kind === 'warn' ? '#b45309' : '#dc3545'); } }
+    function nameOf(part) {
+        var f = (db.deliveryPlans || []).filter(function (p) { return p && String(p.productId).trim() === part && p.productName; }).pop(); if (f) return String(f.productName);
+        var q = (db.products || []).filter(function (p) { return p && (String(p.id).trim() === part || String(p.productId || '').trim() === part); })[0]; return q ? String(q.name || q.productName || '') : '';
+    }
+    function issue() {
+        var g = groups[parseInt(($('#brx-xg') || {}).value, 10)], n = parseInt(($('#brx-xn') || {}).value, 10);
+        if (!g || !(n >= 1 && n <= 50)) { fb('จำนวนที่ออกเพิ่มต้อง 1-50 ใบ', 'err'); return; }
+        if (typeof window.__broseTagPrint !== 'function') { fb('ยังไม่ได้วางบล็อกออกแท็ก BROSE (BROSE-TAG-V1 + จุดเสริม)', 'err'); return; }
+        var sm = $('#bh-sum b[style*="monospace"]'), mx = sm ? parseInt(sm.textContent, 10) : NaN, key = g.inv + '|' + g.part + '|' + n;
+        var inv = g.inv === '-' ? '' : g.inv, rng = isFinite(mx) ? ' เลขใหม่ …' + String(mx + 1).slice(-3) + (n > 1 ? ' – …' + String(mx + n).slice(-3) : '') : '';
+        if (xArmed !== key) {
+            xArmed = key; var b = $('#brx-xgo'); if (b) b.textContent = 'ยืนยัน ออกเพิ่ม ' + n + ' ใบ';
+            fb('❗ จะออกแท็กเพิ่ม <b>' + n + '</b> ใบ ของ ' + esc(g.inv) + ' · ' + esc(g.part) + ' × ' + esc(g.qty) + rng + ' (ใบเก่าไม่ถูกจดว่าหาย) — กดปุ่มเดิมอีกครั้งเพื่อยืนยัน', 'warn'); return;
+        }
+        xArmed = ''; resetBtn();
+        var date = $('#bh-date').value, pn = nameOf(g.part), w = window.open('', '_blank');   // ต้องเปิดทันทีที่กด ไม่งั้นเบราว์เซอร์บล็อกป๊อปอัพ
+        if (w) w.document.write('<html><body style="font-family:sans-serif;text-align:center;padding:60px;font-size:18px;">⏳ กำลังออกเลขแท็กเพิ่ม กรุณารอสักครู่...</body></html>');
+        var tags0 = []; for (var i = 0; i < n; i++) tags0.push({ partNo: g.part, qtyPerPack: parseInt(g.qty, 10), invoiceNumber: inv, planId: '', customer: 'BROSE THAILAND', productName: pn });
+        var issued = false;
+        callAppsScript('issueBroseTags', { deliveryDate: date, printedBy: (currentUser && currentUser.username) || '', tags: tags0 }).then(function (r) {
+            if (!r || r.status === 'error') throw new Error((r && r.message) || 'ออกเลขเพิ่มไม่สำเร็จ');
+            if (!r.tags || r.tags.length !== n) throw new Error('เซิร์ฟเวอร์ตอบกลับไม่ครบ กรุณาตรวจชีต BROSE_TagLog');
+            issued = true;
+            var tags = r.tags.map(function (t) { return { serial: t.serial, qr: t.qr, partNo: g.part, qtyPerPack: g.qty, invoiceNumber: inv, productName: pn }; });
+            try { localStorage.setItem('broseLastBatch_v1', JSON.stringify({ date: date, tags: tags })); } catch (e) { }
+            window.__broseTagPrint(tags, date, w);
+            fb('✔ ออกเพิ่ม ' + tags.length + ' ใบ: ' + esc(tags[0].serial) + (tags.length > 1 ? ' – ' + esc(tags[tags.length - 1].serial) : ''), 'ok');
+            var d = $('#bh-date'); if (d) fire(d, 'change');
+        }).catch(function (e) {
+            if (w) { try { w.close(); } catch (x) { } }
+            fb((issued ? 'ออกเลขแล้วแต่พิมพ์ไม่สำเร็จ — ใช้ "รีปริ้นชุดล่าสุด" ได้ · ' : 'ออกเลขเพิ่มไม่สำเร็จ: ') + esc(e && e.message ? e.message : e), 'err');
+        });
+    }
+    function setup(box) {
+        if (box.getAttribute('data-uix')) return; box.setAttribute('data-uix', '1');
+        xArmed = '';
+        box.addEventListener('click', function (e) {
+            var sx = e.target.getAttribute && e.target.getAttribute('data-x');
+            if (sx) { var xn = $('#brx-xn'); xn.value = Math.max(1, Math.min(50, (parseInt(xn.value, 10) || 1) + parseInt(sx, 10))); xArmed = ''; resetBtn(); }
+            else if (e.target.id === 'brx-xgo') issue();
+        });
+        box.addEventListener('change', function (e) { if (e.target.id === 'brx-xg' || e.target.id === 'brx-xn') { xArmed = ''; resetBtn(); } });
+        new MutationObserver(ensure).observe(box, { childList: true });
+        ensure(); setTimeout(ensure, 300);
+    }
+    function wrap() {
+        var o = window.openBroseHistoryDialog; if (typeof o !== 'function') return false; if (o.__uix) return true;
+        var w = function () { var r = o.apply(this, arguments), n = 0, iv = setInterval(function () { var b = $('#bh-box'); if (b) { clearInterval(iv); try { setup(b); } catch (e) { } } else if (++n > 60) clearInterval(iv); }, 50); return r; };
+        w.__uix = true; for (var k in o) { try { w[k] = o[k]; } catch (e) { } } window.openBroseHistoryDialog = w; return true;
+    }
+    wrap(); var n = 0, tm = setInterval(function () { try { if (wrap() && ++n > 10) clearInterval(tm); else if (++n > 60) clearInterval(tm); } catch (e) { } }, 1000);
+})();
+/* ===== จบ BROSE-UIX-V1 ===== */
+(function () {
+    if (window.__broseUi2V1) return; window.__broseUi2V1 = true;
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function $(s, r) { return (r || document).querySelector(s); }
+    function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+    function fire(el, type) { el.dispatchEvent(new Event(type, { bubbles: true })); }
+    var P = '.swal2-popup:has(#brt-box)';
+    var css = P + '{padding:0!important;border-radius:22px!important;overflow:hidden!important;max-width:96vw!important;box-shadow:0 30px 80px rgba(15,23,42,.45)!important}'
+        + P + ' .swal2-title{margin:0!important;padding:0!important;display:block!important;text-align:left!important;max-width:100%!important;font-size:inherit!important;background:linear-gradient(120deg,#0f172a,#1e3a8a)}'
+        + '.brt2-hd{display:flex;align-items:center;gap:14px;padding:20px 26px;color:#fff}'
+        + '.brt2-ic{width:46px;height:46px;border-radius:14px;background:rgba(255,255,255,.15);display:grid;place-items:center;font-size:22px;flex:0 0 46px}'
+        + '.brt2-tt{font-size:20px;font-weight:800;line-height:1.25}.brt2-tt small{display:block;font-size:12.5px;font-weight:500;color:#bfdbfe;margin-top:2px}'
+        + P + ' .swal2-html-container{margin:0!important;padding:0!important;text-align:left!important;background:#f1f5f9;overflow:visible!important;font-size:14px;display:block}'
+        + P + ' .swal2-actions{margin:0!important;padding:16px 26px!important;background:#fff;border-top:1px solid #e2e8f0;justify-content:flex-end!important;width:100%!important;gap:10px;flex-wrap:nowrap!important}'
+        + P + ' .swal2-confirm{order:2;background:linear-gradient(120deg,#2563eb,#4f46e5)!important;border-radius:12px!important;font-weight:800!important;padding:10px 20px!important;box-shadow:0 8px 20px rgba(37,99,235,.35)!important;margin:0!important}'
+        + P + ' .swal2-cancel{order:1;background:#fff!important;color:#64748b!important;border:1px solid #e2e8f0!important;border-radius:12px!important;font-weight:800!important;padding:10px 18px!important;margin:0!important}'
+        + P + ' .swal2-validation-message{margin:0!important;border-radius:0!important;justify-content:flex-start!important;padding:10px 26px!important;font-size:13px!important}'
+        + '#brt2-fsum{order:0;margin-right:auto;font-size:13.5px;color:#64748b}#brt2-fsum b{color:#0f172a;font-size:20px;margin:0 3px}'
+        + '.brt2-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:14px 26px;background:#fff;border-bottom:1px solid #e2e8f0}'
+        + '.brt2-bar label{margin:0;font-size:12.5px;font-weight:700;color:#64748b;display:flex;gap:6px;align-items:center}'
+        + '.brt2-bar input[type=date]{border:1px solid #e2e8f0!important;border-radius:12px!important;background:#f8fafc!important;font-weight:700;padding:7px 12px!important;height:auto!important;font-size:13.5px!important;color:#0f172a}'
+        + '.brt2-bar input[type=checkbox]{accent-color:#2563eb;width:16px;height:16px}'
+        + '.brt2-chip{border:1px solid #e2e8f0;border-radius:999px;padding:6px 12px;background:#fff;cursor:pointer}'
+        + '.brt2-btn{border:0;border-radius:12px;padding:8px 14px;font-weight:800;font-size:13px;background:#eff6ff;color:#2563eb;cursor:pointer}.brt2-btn:hover{background:#dbeafe}'
+        + '.brt2-bar #brt-last{margin-left:auto;background:#eff6ff!important;color:#2563eb!important;border:0!important;border-radius:12px!important;font-weight:800!important}'
+        + '#brt-box{padding:16px 26px 4px}#brt-sum{padding:2px 26px 4px;font-size:12.5px!important}'
+        + '#brt-box>div:not(.alert){max-height:52vh!important;overflow:auto!important;border:0!important;border-radius:0!important;padding:2px 8px 8px 2px}'
+        + '#brt-box .alert{margin:0!important;border-radius:14px}'
+        + '#brt-box table,#brt-box tbody{display:block;width:100%;background:none}#brt-box thead{display:none}'
+        + '#brt-box tbody{display:flex;flex-direction:column;gap:12px}'
+        + '#brt-box tbody tr{display:grid;grid-template-columns:26px minmax(0,1fr) auto;gap:4px 14px;align-items:center;background:#fff;border:1.5px solid #e2e8f0;border-radius:16px;padding:14px 16px}'
+        + '#brt-box tbody tr:has(.brt-ck:checked){border-color:#60a5fa;box-shadow:0 0 0 3px #dbeafe}'
+        + '#brt-box tbody tr:has(.brt-ck:not(:checked)){opacity:.55}'
+        + '#brt-box tbody tr.brt-warn{border-color:#fbbf24;box-shadow:0 0 0 3px #fef3c7}'
+        + '#brt-box td{display:block;padding:0!important;border:0!important;background:none!important;box-shadow:none!important}'
+        + '#brt-box td:nth-child(1){grid-column:1;grid-row:1/4}#brt-box td:nth-child(3){grid-column:2;grid-row:1;font-size:17px;font-weight:800;letter-spacing:.3px}'
+        + '#brt-box td:nth-child(4){grid-column:2;grid-row:2;color:#64748b;font-size:12.5px!important}'
+        + '#brt-box td:nth-child(5){grid-column:3;grid-row:1/3;text-align:right;font-size:26px;font-weight:900;line-height:1}'
+        + '#brt-box td:nth-child(5)::after{content:"ยอดแพลน (ชิ้น)";display:block;font-size:11px;color:#64748b;font-weight:600;margin-top:3px}'
+        + '#brt-box td:nth-child(2),#brt-box td:nth-child(6),#brt-box td:nth-child(7),#brt-box td:nth-child(8){display:none}'
+        + '#brt-box .brt-ck{width:22px;height:22px;accent-color:#2563eb;cursor:pointer}'
+        + '.brt2-chips{grid-column:2;grid-row:3;display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}.brt2-chips span{background:#f1f5f9;border-radius:7px;padding:2px 8px;font-size:12px;font-weight:700;color:#475569}.brt2-chips span.i{background:#eff6ff;color:#2563eb}'
+        + '.brt2-calc{grid-column:2/4;grid-row:4;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:9px 14px;font-size:13px;color:#475569}'
+        + '.brt2-calc label{display:flex;align-items:baseline;gap:6px;margin:0;font-weight:600}'
+        + '.brt2-calc input{width:64px!important;border:0!important;background:transparent!important;box-shadow:none!important;padding:0!important;text-align:right;font-size:20px!important;font-weight:900!important;color:#0f172a!important;-moz-appearance:textfield;outline:0}'
+        + '.brt2-calc input::-webkit-inner-spin-button,.brt2-calc input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}'
+        + '.brt2-calc input.ed{border:1.5px solid #fbbf24!important;background:#fffbeb!important;border-radius:8px!important;padding:3px 6px!important}'
+        + '.brt2-calc .a{color:#94a3b8;font-weight:800}.brt2-calc .lk{margin-left:auto;font-size:11.5px;color:#94a3b8}.brt2-calc .rm{font-size:12px;color:#b45309;font-weight:700}.brt2-calc .wn{font-size:12px;color:#b45309;font-weight:700}'
+        + '.brt2-note{font-size:12px!important;color:#64748b!important;padding:0 26px 14px!important}';
+    var st = document.createElement('style'); st.id = 'brt2-css'; st.textContent = css; document.head.appendChild(st);
+ 
+    function rows() { return $$('#brt-box tbody tr'); }
+    function enhance() {
+        rows().forEach(function (tr) {
+            if (tr.getAttribute('data-ui2')) return; tr.setAttribute('data-ui2', '1');
+            var td = tr.children, pb = $('.brt-pb', tr), cnt = $('.brt-cnt', tr); if (!pb || !cnt) return;
+            var has = !!String(pb.value).trim(), cus = td[1].textContent.trim(), inv = td[5].textContent.trim();
+            var ch = document.createElement('div'); ch.className = 'brt2-chips'; ch.innerHTML = '<span>' + esc(cus) + '</span>' + (inv && inv !== '-' ? '<span class="i">Invoice ' + esc(inv) + '</span>' : '<span>ไม่มีเลข Invoice</span>');
+            tr.appendChild(ch);
+            var c = document.createElement('div'); c.className = 'brt2-calc';
+            c.innerHTML = '<label></label><span class="a">×</span><label></label><span class="rm"></span><span class="lk"></span>';
+            var l1 = c.children[0], l2 = c.children[2];
+            l1.appendChild(pb); l1.appendChild(document.createTextNode('ชิ้น / กล่อง'));
+            l2.appendChild(cnt); l2.appendChild(document.createTextNode('กล่อง = แท็ก'));
+            tr.appendChild(c);
+            cnt.readOnly = true; cnt.tabIndex = -1; cnt.title = 'ระบบคำนวณจากยอดแพลน';
+            if (has) { pb.readOnly = true; pb.tabIndex = -1; pb.title = 'ดึงจากข้อมูลสินค้า'; $('.lk', c).textContent = '🔒 ระบบคำนวณจากแพลน'; }
+            else { pb.classList.add('ed'); $('.wn', c); $('.lk', c).innerHTML = '<span class="wn">⚠ ไม่พบจำนวน/กล่องในข้อมูลสินค้า — กรอกจำนวน/กล่องเอง ระบบจะคำนวณจำนวนแท็กให้</span>'; }
+        });
+        refresh();
+    }
+    function refresh() {
+        var rem = $('#brt-rem'), useRem = rem && rem.checked, sel = 0, tags = 0, pcs = 0;
+        rows().forEach(function (tr) {
+            var ck = $('.brt-ck', tr), pb = $('.brt-pb', tr), cnt = $('.brt-cnt', tr), qty = parseInt(tr.getAttribute('data-qty'), 10) || 0; if (!ck || !pb || !cnt) return;
+            var p = parseInt(pb.value, 10), n = parseInt(cnt.value, 10), rm = $('.rm', tr);
+            if (rm) rm.textContent = (p > 0 && n > 0 && useRem && qty % p !== 0 && n === Math.ceil(qty / p)) ? 'ใบสุดท้าย ' + (qty % p) + ' ชิ้น (เศษ)' : '';
+            if (ck.checked && p > 0 && n > 0) { sel++; tags += n; pcs += (useRem && n === Math.ceil(qty / p) && qty % p !== 0) ? p * (n - 1) + qty % p : p * n; }
+        });
+        var f = $('#brt2-fsum'); if (f) f.innerHTML = 'เลือก <b>' + sel + '</b> รายการ · รวม <b>' + tags + '</b> แท็ก · ' + pcs + ' ชิ้น · ' + Math.ceil(tags / 3) + ' หน้า A4';
+        try { if (!Swal.isLoading()) { var b = Swal.getConfirmButton(); if (b) b.innerHTML = '<i class="bi bi-printer-fill"></i> ออกเลข + ปริ้นแท็ก ' + tags + ' ใบ'; } } catch (e) { }
+    }
+    function setup() {
+        var box = $('#brt-box'), pop = Swal.getPopup(); if (!box || !pop || pop.getAttribute('data-ui2')) return; pop.setAttribute('data-ui2', '1');
+        var t = Swal.getTitle(); if (t) t.innerHTML = '<div class="brt2-hd"><span class="brt2-ic"><i class="bi bi-box-seam"></i></span><span class="brt2-tt">ออกแท็กชิ้นงาน · BROSE THAILAND<small>ติดแร็ค/กล่อง · QR มีเลขลำดับไม่ซ้ำ · ระบบคำนวณจำนวนกล่อง/แท็กจากแผนส่งของให้อัตโนมัติ</small></span></div>';
+        var act = Swal.getActions() || $('.swal2-actions');
+        if (act && !$('#brt2-fsum', act)) { var f = document.createElement('div'); f.id = 'brt2-fsum'; act.insertBefore(f, act.firstChild); }
+        var cont = box.parentNode, bar = cont.firstElementChild; bar.classList.add('brt2-bar');
+        $$('label', bar).forEach(function (l) { if ($('#brt-rem', l) || $('#brt-allcus', l)) l.classList.add('brt2-chip'); });
+        var rl = $('#brt-rem', bar); if (rl && rl.parentNode.lastChild) rl.parentNode.lastChild.textContent = ' ใบสุดท้ายใช้จำนวนเศษที่เหลือ';
+        var all = document.createElement('button'); all.type = 'button'; all.className = 'brt2-btn'; all.textContent = 'เลือกทั้งหมด'; bar.insertBefore(all, $('#brt-last', bar));
+        all.addEventListener('click', function () { var rs = rows(), on = rs.some(function (r) { return !$('.brt-ck', r).checked; }); rs.forEach(function (r) { $('.brt-ck', r).checked = on; }); fire(box, 'change'); refresh(); });
+        var note = cont.lastElementChild; if (note && note.className.indexOf('text-muted') >= 0) note.classList.add('brt2-note');
+        box.addEventListener('pointerdown', function (e) { var i = e.target; if (i && i.classList && i.classList.contains('brt-pb') && i.readOnly) i.blur(); });
+        box.addEventListener('input', function (e) {   // กรณีไม่มีจำนวน/กล่องในข้อมูลสินค้า (กรอกเอง) -> คำนวณจำนวนแท็กให้ ไม่ต้องกรอกเอง
+            var i = e.target; if (!i || !i.classList || !i.classList.contains('brt-pb')) return;
+            var tr = i.closest('tr'), qty = parseInt(tr.getAttribute('data-qty'), 10) || 0, p = parseInt(i.value, 10), c = $('.brt-cnt', tr);
+            c.value = p > 0 && qty > 0 ? Math.ceil(qty / p) : ''; fire(c, 'input');
+        });
+        box.addEventListener('input', function () { setTimeout(refresh, 0); }); box.addEventListener('change', function () { setTimeout(refresh, 0); });
+        var rm = $('#brt-rem'); if (rm) rm.addEventListener('change', refresh);
+        new MutationObserver(enhance).observe(box, { childList: true, subtree: true });
+        enhance(); setTimeout(refresh, 200);
+    }
+    function wrap() {
+        var o = window.openBroseTagDialog; if (typeof o !== 'function') return false; if (o.__ui2) return true;
+        var w = function () { var r = o.apply(this, arguments), n = 0, iv = setInterval(function () { if ($('#brt-box')) { clearInterval(iv); try { setup(); } catch (e) { if (window.console) console.error(e); } } else if (++n > 60) clearInterval(iv); }, 50); return r; };
+        w.__ui2 = true; for (var k in o) { try { w[k] = o[k]; } catch (e) { } } window.openBroseTagDialog = w; return true;
+    }
+    wrap(); var n = 0, tm = setInterval(function () { try { if (wrap() && ++n > 10) clearInterval(tm); else if (++n > 60) clearInterval(tm); } catch (e) { } }, 1000);
+})();
+/* ===== จบ BROSE-UI2-V1 ===== */
+(function () {
+    if (window.__broseGuardV1) return; window.__broseGuardV1 = true;
+    var REASONS = ['แท็กหาย', 'เพิ่มกล่อง / ยอดเพิ่ม', 'ปริ้นผิด / ข้อมูลผิด', 'อื่นๆ (ระบุ)'];
+    var G = { pending: null, ok: false };
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function $(s, r) { return (r || document).querySelector(s); }
+    function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+    function fire(el, type) { el.dispatchEvent(new Event(type, { bubbles: true })); }
+    function isAdminU(u) { return !!u && (u.username === 'admin' || String(u.role).toLowerCase() === 'admin'); }
+    function me() { return (typeof currentUser !== 'undefined' && currentUser) || null; }
+    function dmy(ymd) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(ymd || ''); return m ? (m[3] + '-' + m[2] + '-' + m[1]) : ymd; }
+ 
+    var st = document.createElement('style');
+    st.textContent = '.brg-b{display:inline-block;margin-left:8px;vertical-align:middle;background:#fef3c7;color:#b45309;border:1px solid #fcd34d;border-radius:999px;padding:1px 10px;font-size:11.5px;font-weight:700;letter-spacing:0}'
+        + '#brg-panel{margin:0 26px 14px;background:#fff7ed;border:1.5px solid #fdba74;border-radius:16px;padding:14px 18px;font-size:13px;color:#7c2d12;text-align:left}'
+        + '#brg-panel .h{font-weight:800;font-size:14px;margin-bottom:8px}'
+        + '#brg-panel .r{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px}#brg-panel label{margin:0;font-weight:700;min-width:96px}'
+        + '#brg-panel select,#brg-panel input{border:1px solid #e2e8f0;border-radius:10px;padding:6px 10px;background:#fff;font-size:13px;color:#0f172a;min-width:170px}'
+        + '#brg-msg{margin-top:8px;font-weight:700;color:#dc2626}#brg-msg.ok{color:#16a34a}'
+        + '.swal2-popup:has(#brg-panel[data-shown="1"]) #brt-box>div:not(.alert){max-height:calc(100vh - 660px)!important;min-height:130px}'
+        + '.swal2-popup:has(#brg-panel[data-shown="1"]) .brx-scroll{max-height:calc(100vh - 850px)!important;min-height:90px}';
+    document.head.appendChild(st);
+ 
+    // ---------- แผงเหตุผล + อนุมัติ ----------
+    function panel(create, title) {
+        var p = $('#brg-panel');
+        if (!p && create) {
+            var cont = Swal.getHtmlContainer(); if (!cont) return null;
+            var admin = isAdminU(me());
+            p = document.createElement('div'); p.id = 'brg-panel';
+            p.innerHTML = '<div class="h">⚠ <span id="brg-t"></span></div>'
+                + '<div class="r"><label>เหตุผล</label><select id="brg-rs"><option value="">— เลือกเหตุผล —</option>' + REASONS.map(function (r, i) { return '<option value="' + i + '">' + esc(r) + '</option>'; }).join('') + '</select><input id="brg-rt" placeholder="ระบุเหตุผล" style="display:none;min-width:260px"></div>'
+                + (admin ? '<div class="r"><label>อนุมัติโดย</label><b>' + esc(me().username) + ' (admin — คุณเอง)</b></div>'
+                    : '<div class="r"><label>หัวหน้า (admin) อนุมัติ</label><input id="brg-au" placeholder="ชื่อผู้ใช้ admin" autocomplete="off"><input id="brg-ap" type="password" placeholder="รหัสผ่าน admin" autocomplete="new-password"></div>')
+                + '<div id="brg-msg"></div>';
+            cont.appendChild(p);
+            $('#brg-rs', p).addEventListener('change', function () { var o = this.value === String(REASONS.length - 1); $('#brg-rt', p).style.display = o ? '' : 'none'; if (o) $('#brg-rt', p).focus(); });
+        }
+        if (p && title) $('#brg-t', p).textContent = title;
+        return p;
+    }
+    function msg(t, ok) { var m = $('#brg-msg'); if (m) { m.textContent = t; m.className = ok ? 'ok' : ''; } }
+    // คืน true = ผ่านด่านแล้วทำต่อได้ / false = ยังไม่ผ่าน (แสดงแผงให้กรอก)
+    function gate(title, action) {
+        var p = panel(true, title); if (!p) return true;
+        var visible = p.getAttribute('data-shown') === '1';
+        if (!visible) { p.setAttribute('data-shown', '1'); p.style.display = ''; msg('ระบุเหตุผล' + (isAdminU(me()) ? '' : ' และให้หัวหน้า (admin) ยืนยัน') + ' แล้วกดปุ่มยืนยันอีกครั้ง'); try { p.scrollIntoView({ block: 'nearest' }); } catch (e) { } return false; }
+        var idx = $('#brg-rs', p).value, reason = '';
+        if (idx === '') { msg('กรุณาเลือกเหตุผล'); return false; }
+        reason = REASONS[parseInt(idx, 10)];
+        if (parseInt(idx, 10) === REASONS.length - 1) { var t = $('#brg-rt', p).value.trim(); if (t.length < 3) { msg('กรุณาระบุเหตุผล (อย่างน้อย 3 ตัวอักษร)'); return false; } reason = 'อื่นๆ: ' + t; }
+        var approver;
+        if (isAdminU(me())) approver = me().username;
+        else {
+            var un = $('#brg-au', p).value.trim(), pw = $('#brg-ap', p).value;
+            var u = (db.users || []).filter(function (x) { return x && x.username === un && String(x.password) === pw && isAdminU(x); })[0];
+            if (!u) { msg('ชื่อผู้ใช้/รหัสผ่านของ admin ไม่ถูกต้อง'); return false; }
+            approver = u.username;
+        }
+        msg('✔ อนุมัติโดย ' + approver, true);
+        G.pending = { action: action, reason: reason, approvedBy: approver, user: (me() && me().username) || '', at: Date.now() };
+        return true;
+    }
+    function resetPanel() { var p = $('#brg-panel'); if (p) { p.style.display = 'none'; p.setAttribute('data-shown', '0'); $('#brg-rs', p).value = ''; var rt = $('#brg-rt', p); rt.value = ''; rt.style.display = 'none'; var ap = $('#brg-ap', p); if (ap) ap.value = ''; msg(''); } }
+ 
+    // ---------- บันทึกประวัติ (ตอนระบบออกเลขสำเร็จ) ----------
+    function wrapCall() {
+        if (window.__brgCallWrapped || typeof callAppsScript !== 'function') return; window.__brgCallWrapped = true;
+        var _c = callAppsScript;
+        var w = async function (action, payload) {
+            var pend = G.pending; if (pend && (action === 'issueBroseTags' || action === 'reissueBroseTags')) G.pending = null;   // ใช้ครั้งเดียว กันบันทึกซ้ำ
+            var r = await _c.apply(this, arguments);
+            try {
+                if (pend && (action === 'issueBroseTags' || action === 'reissueBroseTags') && Date.now() - pend.at < 120000 && r && r.status !== 'error' && r.tags && r.tags.length) {
+                    var ser = r.tags.map(function (t) { return t.serial; });
+                    var ent = { user: pend.user, action: pend.action, reason: pend.reason, approvedBy: pend.approvedBy, deliveryDate: (payload && payload.deliveryDate) || '', count: ser.length,
+                        serials: ser[0] + (ser.length > 1 ? ' – ' + ser[ser.length - 1] : ''), detail: action === 'reissueBroseTags' ? 'แทนเลข: ' + (payload.oldSerials || []).join(',') : (pend.detail || '') };
+                    try { var arr = JSON.parse(localStorage.getItem('broseAudit_v1') || '[]'); arr.push(ent); localStorage.setItem('broseAudit_v1', JSON.stringify(arr.slice(-50))); } catch (e) { }
+                    _c.call(this, 'logBroseAudit', ent).catch(function () { });
+                    setTimeout(resetPanel, 0);
+                }
+            } catch (e) { }
+            return r;
+        };
+        w.__brg = true; callAppsScript = w;
+    }
+ 
+    // ---------- 1) หน้าออกแท็กชิ้นงาน: ป้าย "ออกแล้ว" + ด่านออกซ้ำ ----------
+    var issued = {};   // date -> { 'inv|part': {n, first, last, at, by} }
+    function loadIssued(date) {
+        if (issued[date]) return Promise.resolve(issued[date]);
+        return callAppsScript('getBroseTags', { deliveryDate: date }).then(function (r) {
+            var m = {}; if (r && r.tags) r.tags.forEach(function (t) {
+                if (t.status === 'lost') return; var k = String(t.invoiceNumber || '').trim() + '|' + String(t.partNo).trim(), e = m[k];
+                if (!e) e = m[k] = { n: 0, first: t.serial, last: t.serial, at: t.printedAt, by: t.printedBy };
+                e.n++; if (t.serial < e.first) e.first = t.serial; if (t.serial > e.last) e.last = t.serial; if (t.printedAt > e.at) { e.at = t.printedAt; e.by = t.printedBy; }
+            });
+            return (issued[date] = m);
+        }).catch(function () { return {}; });
+    }
+    function pieceMark() {
+        var box = $('#brt-box'), d = $('#brt-date'); if (!box || !d) return;
+        var date = d.value; var rows = $$('#brt-box tbody tr:not([data-brg])'); if (!rows.length) return;
+        loadIssued(date).then(function (m) {
+            if (!$('#brt-box') || $('#brt-date').value !== date) return;
+            var changed = false;
+            $$('#brt-box tbody tr:not([data-brg])').forEach(function (tr) {
+                tr.setAttribute('data-brg', '1');
+                var e = m[String(tr.getAttribute('data-inv') || '').trim() + '|' + String(tr.getAttribute('data-pn') || '').trim()]; if (!e) return;
+                tr.setAttribute('data-issued', e.n);
+                var ck = $('.brt-ck', tr); if (ck && ck.checked) { ck.checked = false; changed = true; }
+                var cell = tr.children[2]; if (cell) { var b = document.createElement('span'); b.className = 'brg-b'; b.textContent = 'ออกแล้ว ' + e.n + ' ใบ (…' + String(e.first).slice(-3) + (e.n > 1 ? '–' + String(e.last).slice(-3) : '') + ') ' + String(e.at || '').slice(11, 16) + ' โดย ' + (e.by || '-'); cell.appendChild(b); }
+            });
+            if (changed) fire(box, 'change');
+        });
+    }
+    function pieceSetup() {
+        var box = $('#brt-box'), pop = Swal.getPopup(); if (!box || !pop || pop.getAttribute('data-brg')) return; pop.setAttribute('data-brg', '1'); G.pending = null;
+        new MutationObserver(pieceMark).observe(box, { childList: true, subtree: true }); pieceMark();
+    }
+ 
+    // ---------- ด่านที่ปุ่มยืนยัน / ปุ่มออกเพิ่ม ----------
+    document.addEventListener('click', function (e) {
+        var t = e.target; if (!t || !t.closest) return;
+        var pop = t.closest('.swal2-popup'); if (!pop) return;
+        var block = false;
+        if (t.closest('.swal2-confirm')) {
+            if ($('#brt-box', pop)) {
+                var dups = $$('#brt-box tbody tr', pop).filter(function (tr) { var ck = $('.brt-ck', tr); return ck && ck.checked && parseInt(tr.getAttribute('data-issued'), 10) > 0; });
+                if (dups.length) {
+                    var det = dups.map(function (tr) { return tr.getAttribute('data-inv') + '/' + tr.getAttribute('data-pn') + ' (เคยออก ' + tr.getAttribute('data-issued') + ' ใบ)'; }).join('; ');
+                    block = !gate('มี ' + dups.length + ' รายการที่เคยออกแท็กไปแล้ว — ออกซ้ำต้องมีเหตุผลและการอนุมัติ', 'ออกซ้ำ (แท็กชิ้นงาน)');
+                    if (G.pending) G.pending.detail = det;
+                }
+            } else if ($('#bh-box', pop)) {
+                var sel = $$('#bh-tb .bh-ck:checked', pop).filter(function (c) { return !c.disabled; });
+                if (sel.length) block = !gate('แท็กหาย — ออกเลขใหม่ ' + sel.length + ' ใบ ต้องมีเหตุผลและการอนุมัติ', 'แท็กหาย-ออกเลขใหม่');
+            }
+        } else if (t.id === 'brx-xgo' || t.closest('#brx-xgo')) {
+            block = !gate('ออกแท็กเพิ่ม (ไม่ทราบใบที่หาย) ต้องมีเหตุผลและการอนุมัติ', 'ออกเพิ่ม (ไม่ทราบใบที่หาย)');
+            if (G.pending) G.pending.detail = (($('#brx-xg', pop) || {}).selectedOptions || [{}])[0].textContent + ' × ' + (($('#brx-xn', pop) || {}).value || '');
+        }
+        if (block) { e.preventDefault(); e.stopImmediatePropagation(); }
+    }, true);
+ 
+    // ---------- ผูกกับป๊อบอัพ ----------
+    function wrapDlg(name, sel, setup) {
+        var o = window[name]; if (typeof o !== 'function') return false; if (o.__brg) return true;
+        var w = function () { G.pending = null; issued = {}; var r = o.apply(this, arguments), n = 0, iv = setInterval(function () { if ($(sel)) { clearInterval(iv); try { setup && setup(); } catch (e) { if (window.console) console.error(e); } } else if (++n > 60) clearInterval(iv); }, 50); return r; };
+        w.__brg = true; for (var k in o) { try { w[k] = o[k]; } catch (e) { } } window[name] = w; return true;
+    }
+    function init() { wrapCall(); var a = wrapDlg('openBroseTagDialog', '#brt-box', pieceSetup), b = wrapDlg('openBroseHistoryDialog', '#bh-box', null); return a && b; }
+    init(); var n = 0, tm = setInterval(function () { try { if (init() && ++n > 10) clearInterval(tm); else if (++n > 60) clearInterval(tm); } catch (e) { } }, 1000);
+})();
+/* ===== จบ BROSE-GUARD-V1 ===== */
 // ดาวน์โหลดเทมเพลต Excel สำหรับอัปโหลดแพลน
 window.downloadLGPlanTemplate = function() {
     const ws_data = [
