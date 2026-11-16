@@ -154,7 +154,7 @@ th: {
   appName: 'ATECH · ขอใช้รถขนส่ง', title: 'จองรถขนส่ง', sub: 'กรอกข้อมูลสั้นๆ ทีมขนส่งจะตรวจสอบและตอบกลับในหน้านี้',
   editTitle: 'แก้ไขคำขอจองรถ', editSub: 'แก้ไขได้จนกว่าทีมขนส่งจะอนุมัติ · {c}', refreshTip: 'อัปเดตสถานะการจองและรถว่าง',
   cWho: 'ผู้จอง', cTrip: 'การเดินทาง', cDetail: 'รายละเอียด',
-  dPhone: 'เบอร์ติดต่อปลายทาง', optional: 'ไม่บังคับ', dContactPh: 'ชื่อผู้ติดต่อ (ถ้ามี)', dPhonePh: 'เช่น 038-123-456', dPhoneHint: 'เบอร์ของบริษัท/สถานที่ที่ต้องไปรับของ เพื่อให้คนขับโทรประสานได้', vDPhone: 'เบอร์ติดต่อปลายทางไม่ถูกต้อง (หรือเว้นว่างไว้)', dpL: 'เบอร์ปลายทาง', name: 'ชื่อ-นามสกุล', dept: 'แผนก', phone: 'เบอร์โทร', dest: 'ไปที่ไหน', destPh: 'ชื่อสถานที่ / ที่อยู่', date: 'วันที่', from: 'เวลาไป', to: 'เวลากลับ (โดยประมาณ)',
+  dPhone: 'เบอร์ติดต่อปลายทาง', optional: 'ไม่บังคับ', dContactPh: 'ชื่อผู้ติดต่อ', dPhonePh: 'เช่น 038-123-456', dPhoneHint: 'เบอร์ของบริษัท/สถานที่ที่ต้องไปรับของ เพื่อให้คนขับโทรประสานได้', vDPhone: 'เบอร์ติดต่อปลายทางไม่ถูกต้อง', dpL: 'เบอร์ปลายทาง', name: 'ชื่อ-นามสกุล', dept: 'แผนก', phone: 'เบอร์โทร', dest: 'ไปที่ไหน', destPh: 'ชื่อสถานที่ / ที่อยู่', date: 'วันที่', from: 'เวลาไป', to: 'เวลากลับ (โดยประมาณ)',
   purpose: 'ไปเพื่อ', detail: 'รายละเอียด / ของที่ขน', detailPh: 'เช่น กล่องตัวอย่าง 5 ลัง, ไปรับลูกค้า 3 คน',
   pDeliver: 'ส่งของ', pPick: 'รับของ', pPax: 'รับ-ส่งบุคคล', pOther: 'อื่นๆ',
   avT: 'รถว่างช่วงที่เลือก', avFree: 'ว่าง {n} จาก {m} คัน', avNone: 'ไม่มีรถว่าง', avLoad: 'กำลังโหลด...', avErr: 'ดูช่วงเวลารถไม่ว่างไม่ได้ในตอนนี้ (ยังส่งคำขอได้ตามปกติ)', avNoCar: 'ยังไม่มีข้อมูลรถในระบบ',
@@ -191,7 +191,7 @@ en: {
   appName: 'ATECH · Transport request', title: 'Book a vehicle', sub: 'Fill in a few details. The transport team will review and reply on this page',
   editTitle: 'Edit vehicle request', editSub: 'You can edit until the transport team approves · {c}', refreshTip: 'Update booking status and free vehicles',
   cWho: 'Requester', cTrip: 'Trip', cDetail: 'Details',
-  dPhone: 'Destination contact number', optional: 'optional', dContactPh: 'Contact person (if any)', dPhonePh: 'e.g. 038-123-456', dPhoneHint: 'Phone of the company / site where the goods are picked up, so the driver can call ahead', vDPhone: 'Destination contact number is not valid (or leave it blank)', dpL: 'Site phone', name: 'Full name', dept: 'Department', phone: 'Phone', dest: 'Destination', destPh: 'Place name / address', date: 'Date', from: 'Departure', to: 'Return (approx.)',
+  dPhone: 'Destination contact number', optional: 'optional', dContactPh: 'Contact person', dPhonePh: 'e.g. 038-123-456', dPhoneHint: 'Phone of the company / site where the goods are picked up, so the driver can call ahead', vDContact: 'Please enter the destination contact name', vDPhone: 'Please enter a valid destination contact number', dpL: 'Site phone', name: 'Full name', dept: 'Department', phone: 'Phone', dest: 'Destination', destPh: 'Place name / address', date: 'Date', from: 'Departure', to: 'Return (approx.)',
   purpose: 'Purpose', detail: 'Details / items to carry', detailPh: 'e.g. 5 boxes of samples, picking up 3 customers',
   pDeliver: 'Delivery', pPick: 'Pick-up', pPax: 'Passengers', pOther: 'Other',
   avT: 'Vehicles free in this window', avFree: '{n} of {m} free', avNone: 'None free', avLoad: 'Loading...', avErr: 'Cannot load vehicle availability right now (you can still send the request)', avNoCar: 'No vehicle data yet',
@@ -355,7 +355,7 @@ function renderForm() {
     '<div class="f"><label>' + esc(t('phone')) + ' <b>*</b></label><input class="in" name="phone" type="tel" inputmode="tel" autocomplete="off" maxlength="20" value="' + esc(form.phone) + '"></div></div></div>' +
     '<div class="card"><div class="ct"><i class="bi bi-geo-alt-fill"></i>' + esc(t('cTrip')) + '</div>' +
     '<div class="f"><label>' + esc(t('dest')) + ' <b>*</b></label><input class="in" name="destination" maxlength="200" placeholder="' + esc(t('destPh')) + '" value="' + esc(form.destination) + '"></div>' +
-    '<div class="f dp"><label><i class="bi bi-telephone-outbound-fill"></i> ' + esc(t('dPhone')) + ' <span class="opt">' + esc(t('optional')) + '</span></label><input class="in" name="destPhone" type="tel" inputmode="tel" autocomplete="off" maxlength="30" placeholder="' + esc(t('dPhonePh')) + '" value="' + esc(form.destPhone || '') + '"><input class="in" name="destContact" maxlength="60" style="margin-top:8px" placeholder="' + esc(t('dContactPh')) + '" value="' + esc(form.destContact || '') + '"><div class="hint"><i class="bi bi-info-circle"></i> ' + esc(t('dPhoneHint')) + '</div></div>' +
+    '<div class="f dp"><label><i class="bi bi-telephone-outbound-fill"></i> ' + esc(t('dPhone')) + '  <b>*</b></label><input class="in" name="destPhone" type="tel" inputmode="tel" autocomplete="off" maxlength="30" placeholder="' + esc(t('dPhonePh')) + '" value="' + esc(form.destPhone || '') + '"><input class="in" name="destContact" maxlength="60" style="margin-top:8px" placeholder="' + esc(t('dContactPh')) + '" value="' + esc(form.destContact || '') + '"><div class="hint"><i class="bi bi-info-circle"></i> ' + esc(t('dPhoneHint')) + '</div></div>' +
     '<div class="f"><label>' + esc(t('date')) + ' <b>*</b></label><input class="in" type="date" name="date" min="' + tdy + '" value="' + esc(form.date) + '"></div>' +
     '<div class="g2"><div class="f"><label>' + esc(t('from')) + ' <b>*</b></label><input class="in" type="time" name="startTime" value="' + esc(form.startTime) + '"></div>' +
     '<div class="f"><label>' + esc(t('to')) + ' <b>*</b></label><input class="in" type="time" name="endTime" value="' + esc(form.endTime) + '"></div></div>' +
@@ -493,7 +493,8 @@ function validate(o) {
   if (!o.dept) return bad('dept', 'vDept');
   if (o.phone.replace(/\D/g, '').length < 9) return bad('phone', 'vPhone');
   if (!o.destination) return bad('destination', 'vDest');
-  if (o.destPhone && (o.destPhone.replace(/\D/g, '').length < 5 || o.destPhone.replace(/\D/g, '').length > 20)) return bad('destPhone', 'vDPhone');
+  if (!o.destPhone || (o.destPhone.replace(/\D/g, '').length < 5 || o.destPhone.replace(/\D/g, '').length > 20)) return bad('destPhone', 'vDPhone');
+  if (!o.destContact) return bad('destContact', 'vDContact');
   if (!o.date) return bad('date', 'vDate');
   if (o.date < todayStr()) return bad('date', 'vPast');
   if (!o.startTime) return bad('startTime', 'vFrom');
