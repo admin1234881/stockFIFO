@@ -16236,9 +16236,9 @@ function computeLGMatchStatus() {
         scannedTotals[key] = (scannedTotals[key] || 0) + (parseFloat(s.rackQty) || 0);
     });
 
-    return (db.lgPlan || []).map(plan => {
+    return (db.lgPlan || []).filter(p => window.__lgIncExt || !(typeof lgIsExtPlan === 'function' && lgIsExtPlan(p))).map(plan => {   // LG-EXT
         const key = String(plan.WO).trim() + '|' + String(plan.partNo).trim();
-        const scanned = scannedTotals[key] || 0;
+        const scanned = (typeof lgSplitShare === 'function') ? lgSplitShare(plan, scannedTotals[key] || 0) : (scannedTotals[key] || 0);   // LG-SPLIT
         const orderQty = parseFloat(plan.orderQty) || 0;
         const isComplete = orderQty > 0 && scanned >= orderQty;
         return { ...plan, scanned, orderQty, isComplete, remaining: Math.max(0, orderQty - scanned) };
@@ -16262,7 +16262,7 @@ function lgSortPlans(arr) {
         .sort((a, b) => a.k - b.k || a.i - b.i).map(x => x.p);
 }
 function getLGPlanForDate(date) {
-    return lgSortPlans((db.lgPlan || []).filter(p => lgPlanDateOf(p) === date));
+    return lgSortPlans((db.lgPlan || []).filter(p => lgPlanDateOf(p) === date && !(window.__lgHideExt && typeof lgIsExtPlan === 'function' && lgIsExtPlan(p))));   // LG-EXT
 }
 
 // เลื่อนแถวแพลนขึ้น/ลง (dir = -1 ขึ้น, +1 ลง)
@@ -18215,6 +18215,315 @@ window.renderLGMatchTable = function() {
             wrap('lgdSaveImage'); wrap('lgdSavePdf'); clearInterval(iv);
         } else if (tries > 60) clearInterval(iv);
     }, 500);
+})();
+(function () {
+    if (window.__lgSplitV1) return; window.__lgSplitV1 = true;
+    const kOf = (p) => String(p.WO).trim().toUpperCase() + '|' + String(p.partNo == null ? '' : p.partNo).trim().toUpperCase();
+    const same = (a, b) => a === b || (a && b && a.id != null && b.id != null && String(a.id) === String(b.id));
+    // ส่วนของยอดรวม (total) ที่ตกเป็นของแถวแพลนนี้
+    // - ถ้า WO+พาร์ทนี้มีแถวเดียว (ไม่ซ้ำข้ามวัน) → ได้ยอดเต็มเหมือนเดิม
+    // - ถ้ามีหลายแถว → เติมแถววันเก่าสุดก่อน (ไม่เกินแพลนของแถวนั้น) ที่เหลือไหลไปแถวถัดไป แถวสุดท้ายรับส่วนเกิน
+    window.lgSplitShare = function (plan, total) {
+        try {
+            if (!plan || plan.planCancelledAt) return total;
+            const k = kOf(plan);
+            const sibs = [];
+            (db.lgPlan || []).forEach((p, i) => { if (p && !p.planCancelledAt && kOf(p) === k) sibs.push({ p, i }); });
+            if (sibs.length < 2) return total;
+            sibs.sort((a, b) => {
+                const da = lgPlanDateOf(a.p), dbb = lgPlanDateOf(b.p);
+                if (da !== dbb) return da < dbb ? -1 : 1;
+                const sa = parseFloat(a.p.sortOrder), sb = parseFloat(b.p.sortOrder);
+                const ka = isNaN(sa) ? a.i / 1e6 : sa, kb = isNaN(sb) ? b.i / 1e6 : sb;
+                return ka - kb || a.i - b.i;
+            });
+            let pool = Math.max(0, parseFloat(total) || 0);
+            for (let n = 0; n < sibs.length; n++) {
+                const o = parseFloat(sibs[n].p.orderQty) || 0;
+                const a = (n === sibs.length - 1) ? pool : Math.min(o, pool);
+                if (same(sibs[n].p, plan)) return a;
+                pool -= a;
+            }
+        } catch (e) { }
+        return total;
+    };
+    // ข้อมูลสแกนออก/LG รับ/ระหว่างทาง ของแถวแพลนนี้ (ใช้ในแดชบอร์ด)
+    window.lgSplitE = function (plan, e) {
+        if (!e) return e;
+        const out = window.lgSplitShare(plan, e.out), inn = window.lgSplitShare(plan, e.inn);
+        if (out === e.out && inn === e.inn) return e;
+        const tr = Math.max(0, Math.min(e.transit, out - inn));
+        return Object.assign({}, e, { out, inn, transit: tr, tDocs: tr > 0 ? e.tDocs : [] });
+    };
+    // ใช้ในรูป/PDF ที่บันทึก (ได้แค่ WO กับพาร์ทจากตาราง → หาแถวแพลนของวันที่เลือก)
+    window.lgSplitRow = function (wo, part, e) {
+        try {
+            const dt = document.getElementById('lgd-date');
+            const d = (dt && dt.value) || lgTodayStr();
+            const k = String(wo).trim().toUpperCase() + '|' + String(part == null ? '' : part).trim().toUpperCase();
+            const row = (db.lgPlan || []).find(p => p && !p.planCancelledAt && lgPlanDateOf(p) === d && kOf(p) === k);
+            return row ? window.lgSplitE(row, e) : e;
+        } catch (err) { return e; }
+    };
+})();
+// ===== LG-EXT: แถวแพลน "ของเจ้าอื่น" (ใส่ในแพลนเพื่อดูคิว แต่ไม่ออกแท็ก ไม่นับยอด ไม่ขึ้นแดง) =====
+(function () {
+    if (window.__lgExtV1) return; window.__lgExtV1 = true;
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const num = (n) => (Number(n) || 0).toLocaleString('en-US');
+    const isEn = () => { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e) { return false; } };
+    const TX = {
+        th: { tag: 'ของเจ้าอื่น', title: 'ของเจ้าอื่นในแพลน', sub: 'ไม่นับรวมในยอด / สถานะของ ATECH', items: 'รายการ', pcs: 'ชิ้น', more: (n) => `และอีก ${n} รายการ`, line: 'ไลน์',
+              tgOn: 'ทำเครื่องหมายเป็นของเจ้าอื่น', tgOff: 'เปลี่ยนกลับเป็นของ ATECH', cb: 'ของเจ้าอื่น (ไม่ออกแท็ก ไม่นับในแดชบอร์ด)',
+              cfOn: (w) => `ทำเครื่องหมาย WO ${w} เป็น "ของเจ้าอื่น"?`, cfOnTx: 'แถวนี้จะไม่ถูกนับในยอด/สถานะของ ATECH ไม่ขึ้นแดง และจะไม่มีในรายการพิมพ์แท็ก',
+              cfOff: (w) => `เปลี่ยน WO ${w} กลับเป็นของ ATECH?`, cfOffTx: 'แถวนี้จะกลับมานับในยอดและสถานะตามปกติ', ok: 'ยืนยัน', cancel: 'ยกเลิก', fail: 'บันทึกไม่สำเร็จ', noPerm: 'ต้องมีสิทธิ์แก้ไขแพลน LG', tmpl: 'ของเจ้าอื่น (ใส่ x ถ้าใช่)' },
+        en: { tag: 'Other supplier', title: 'Other suppliers in the plan', sub: 'Not counted in ATECH totals / status', items: 'items', pcs: 'pcs', more: (n) => `and ${n} more`, line: 'Line',
+              tgOn: 'Mark as other supplier', tgOff: 'Change back to ATECH', cb: 'Other supplier (no tags, not counted in dashboard)',
+              cfOn: (w) => `Mark WO ${w} as "other supplier"?`, cfOnTx: 'This row will not count in ATECH totals/status, will not turn red, and is left out of tag printing.',
+              cfOff: (w) => `Change WO ${w} back to ATECH?`, cfOffTx: 'This row will count in totals and status again.', ok: 'Confirm', cancel: 'Cancel', fail: 'Save failed', noPerm: 'LG plan edit permission required', tmpl: 'Other supplier (x if yes)' }
+    };
+    const L = () => TX[isEn() ? 'en' : 'th'];
+    const isExt = (p) => { const v = p && p.extOwner; return v === true || /^(1|true|y|yes|x|ext)$/i.test(String(v == null ? '' : v).trim()); };
+    window.lgIsExtPlan = isExt;
+    const lineOf = (p) => (String(p.line == null ? '' : p.line).trim() || '-');
+    const hm = (s) => { const m = /(\d{1,2}):(\d{2})/.exec(String(s || '')); return m ? m[1].padStart(2, '0') + ':' + m[2] : ''; };
+    const dateSel = () => { const d = document.getElementById('lgd-date'); return (d && d.value) || (typeof lgTodayStr === 'function' ? lgTodayStr() : ''); };
+    const selLines = () => Array.from(document.querySelectorAll('#lgd-linemenu input:checked')).map(i => String(i.value).trim());
+    function extItems(date) {
+        const sel = selLines();
+        const list = (db.lgPlan || []).filter(p => p && !p.planCancelledAt && isExt(p) && lgPlanDateOf(p) === date && (!sel.length || sel.indexOf(lineOf(p)) >= 0));
+        return (typeof lgSortPlans === 'function' ? lgSortPlans(list) : list);
+    }
+ 
+    // ---------- 1) ตารางแพลน: โชว์แถวของเจ้าอื่น (ติดป้าย) + ปุ่มสลับ ----------
+    function canEdit() { try { return !!(window.lgPlanEditAllowed && window.lgPlanEditAllowed()); } catch (e) { return false; } }
+    function decorateRows() {
+        const tb = document.getElementById('lg-match-tbody');
+        if (!tb) return;
+        const T = L(), ok = canEdit();
+        tb.querySelectorAll('tr').forEach(tr => {
+            const mv = tr.querySelector('button[onclick*="moveLGPlan"]');
+            if (!mv) return;
+            const m = /moveLGPlan\('([^']*)'/.exec(mv.getAttribute('onclick') || '');
+            if (!m) return;
+            const id = m[1];
+            const p = (db.lgPlan || []).find(x => String(x.id) === id);
+            if (!p) return;
+            const ext = isExt(p);
+            tr.classList.toggle('lgx-row', ext);
+            const c = tr.children;
+            if (ext && c.length > 8 && !tr.querySelector('.lgx-tag')) {
+                c[0].insertAdjacentHTML('beforeend', ` <span class="lgx-tag">${esc(T.tag)}</span>`);
+                c[6].textContent = num(p.orderQty);
+                c[7].innerHTML = '';
+                c[8].innerHTML = `<span class="lgx-tag">${esc(T.tag)}</span>`;
+            } else if (!ext && tr.querySelector('.lgx-tag')) { /* กลับเป็นของ ATECH: ให้ตารางวาดใหม่ */ }
+            const box = tr.querySelector('.lgep-box');
+            let b = tr.querySelector('.lgx-tg');
+            if (!ok || !box) { if (b) b.remove(); return; }
+            if (!b) {
+                b = document.createElement('button');
+                b.type = 'button'; b.className = 'btn btn-sm py-0 px-2 lgx-tg'; b.setAttribute('data-id', id);
+                b.innerHTML = '<i class="bi bi-building"></i>';
+                box.appendChild(b);
+            }
+            b.classList.toggle('btn-secondary', ext); b.classList.toggle('btn-outline-secondary', !ext);
+            b.title = ext ? T.tgOff : T.tgOn;
+        });
+    }
+    function injectCss() {
+        if (document.getElementById('lgx-css')) return;
+        const st = document.createElement('style'); st.id = 'lgx-css';
+        st.textContent = `
+        .lgx-tag{display:inline-block;background:#ede9fe;color:#6d28d9;border-radius:20px;padding:1px 9px;font-size:.7rem;font-weight:800;white-space:nowrap}
+        #lg-match-tbody tr.lgx-row>td{background:#f8f7fd}
+        #lgx-card{margin-top:14px;border:1px dashed #c4b5fd;background:#faf8ff;border-radius:14px;padding:10px 14px}
+        #lgx-card .h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+        #lgx-card .h b{font-size:.9rem;color:#5b21b6}
+        #lgx-card .h span{font-size:.72rem;color:#7a8799}
+        #lgx-card .r{display:flex;gap:8px;align-items:center;padding:4px 0;border-top:1px solid #ede9fe;font-size:.78rem}
+        #lgx-card .r:first-of-type{margin-top:6px}
+        #lgx-card .r .ln{flex:none;min-width:48px;text-align:center;background:#6d28d9;color:#fff;border-radius:6px;font-weight:800;font-size:.72rem;padding:1px 6px}
+        #lgx-card .r .wo{font-weight:800}
+        #lgx-card .r .q{margin-left:auto;font-weight:800;white-space:nowrap}
+        #lgx-card .r .tm{color:#7a8799;white-space:nowrap}
+        #lgx-ext-col label{cursor:pointer}`;
+        document.head.appendChild(st);
+    }
+    // ปุ่มสลับ ของเจ้าอื่น <-> ของ ATECH
+    document.addEventListener('click', async (e) => {
+        const b = e.target && e.target.closest ? e.target.closest('.lgx-tg') : null;
+        if (!b) return;
+        e.preventDefault(); e.stopPropagation();
+        const T = L();
+        if (!canEdit()) { try { Swal.fire(T.cancel, T.noPerm, 'warning'); } catch (er) { } return; }
+        const id = b.getAttribute('data-id');
+        const p = (db.lgPlan || []).find(x => String(x.id) === String(id));
+        if (!p) return;
+        const to = !isExt(p);
+        const r = await Swal.fire({ icon: 'question', title: to ? T.cfOn(p.WO) : T.cfOff(p.WO), text: to ? T.cfOnTx : T.cfOffTx, showCancelButton: true, confirmButtonText: T.ok, cancelButtonText: T.cancel });
+        if (!r.isConfirmed) return;
+        try {
+            const u = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.username : '';
+            await callAppsScript('setLGPlanExt', { id: p.id, ext: to, by: u });
+            p.extOwner = to ? '1' : '';
+            refreshAll();
+        } catch (er) { try { Swal.fire(T.fail, String(er && er.message || er), 'error'); } catch (e2) { } }
+    }, true);
+    function refreshAll() {
+        try { if (typeof window.renderLGMatchTable === 'function') window.renderLGMatchTable(); } catch (e) { }
+        try { if (typeof window.renderLGDashboard === 'function' && document.getElementById('view-dash-lg') && !document.getElementById('view-dash-lg').classList.contains('d-none')) window.renderLGDashboard(); } catch (e) { }
+        try { decorateRows(); } catch (e) { }
+    }
+ 
+    // ---------- 2) ฟอร์มเพิ่มแพลนด้วยมือ: ช่องติ๊ก ----------
+    function ensureCheckbox() {
+        const btn = document.getElementById('lg-mp-btn');
+        if (!btn) return;
+        if (document.getElementById('lgx-ext-cb')) return;
+        const col = btn.closest('.col-md-3') || btn.parentNode;
+        const d = document.createElement('div');
+        d.className = 'col-md-3 d-flex align-items-end'; d.id = 'lgx-ext-col';
+        d.innerHTML = `<label class="small fw-bold text-secondary mb-2 d-flex align-items-center gap-2"><input type="checkbox" id="lgx-ext-cb" class="form-check-input mt-0"><span id="lgx-ext-tx"></span></label>`;
+        col.parentNode.insertBefore(d, col);
+    }
+    document.addEventListener('submit', (e) => {
+        if (!e.target || e.target.id !== 'lg-manual-form') return;
+        const cb = document.getElementById('lgx-ext-cb');
+        window.__lgxNext = !!(cb && cb.checked);
+        if (cb) setTimeout(() => { cb.checked = false; }, 0);   // ติ๊กทีละรายการ กันลืมค้าง
+    }, true);
+ 
+    // ---------- 3) การ์ดของเจ้าอื่นในแดชบอร์ด ----------
+    let cardSig = '';
+    function cardHtml(items, T, pref) {
+        const pcs = items.reduce((a, p) => a + (parseFloat(p.orderQty) || 0), 0);
+        const max = 10;
+        const rows = items.slice(0, max).map(p => `<div class="r"><span class="ln">${esc(lineOf(p))}</span><span class="wo">${esc(p.WO)}</span><span style="color:#51627a">${esc(p.partNo)}</span><span class="tm">${esc(hm(p.startDateTime))}</span><span class="q">${num(p.orderQty)} ${esc(T.pcs)}</span></div>`).join('');
+        const more = items.length > max ? `<div class="r" style="color:#7a8799">${esc(T.more(items.length - max))}</div>` : '';
+        return `<div class="h"><b>${esc(T.title)} · ${items.length} ${esc(T.items)} · ${num(pcs)} ${esc(T.pcs)}</b><span>${esc(T.sub)}</span></div>${rows}${more}`;
+    }
+    function paintCard() {
+        const ring = document.getElementById('lgd-ring');
+        const view = document.getElementById('view-dash-lg');
+        if (!ring || !view) return;
+        const T = L(), date = dateSel();
+        const items = extItems(date);
+        const sig = date + '|' + selLines().join(',') + '|' + (isEn() ? 'en' : 'th') + '|' + items.map(p => p.id + ':' + p.orderQty + ':' + p.sortOrder).join(',');
+        let card = document.getElementById('lgx-card');
+        if (!items.length) { if (card) card.remove(); cardSig = ''; return; }
+        if (card && sig === cardSig && ring.contains(card)) return;
+        if (card) card.remove();
+        card = document.createElement('div'); card.id = 'lgx-card';
+        card.innerHTML = cardHtml(items, T);
+        ring.appendChild(card);
+        cardSig = sig;
+    }
+ 
+    // ---------- 4) การ์ดในรูป / PDF ที่บันทึก ----------
+    function buildReport(rep) {
+        const table = rep.querySelector('table'); if (!table) return;
+        const T = L(), items = extItems(dateSel());
+        if (!items.length) return;
+        const pcs = items.reduce((a, p) => a + (parseFloat(p.orderQty) || 0), 0);
+        const max = 8;
+        const rows = items.slice(0, max).map(p => `<div style="display:flex;gap:8px;align-items:center;padding:3px 0;border-top:1px solid #ede9fe;font-size:12px;"><span style="flex:none;min-width:50px;text-align:center;background:#6d28d9;color:#fff;border-radius:6px;font-weight:800;font-size:11px;padding:1px 6px;">${esc(lineOf(p))}</span><b>${esc(p.WO)}</b><span style="color:#51627a;">${esc(p.partNo)}</span><span style="color:#7a8799;">${esc(hm(p.startDateTime))}</span><b style="margin-left:auto;">${num(p.orderQty)} ${esc(T.pcs)}</b></div>`).join('');
+        const more = items.length > max ? `<div style="font-size:11px;color:#7a8799;padding-top:3px;">${esc(T.more(items.length - max))}</div>` : '';
+        const box = document.createElement('div');
+        box.id = 'lgx-rep';
+        box.style.cssText = 'border:1px dashed #c4b5fd;background:#faf8ff;border-radius:12px;padding:8px 14px;margin:0 0 12px;';
+        box.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;"><b style="font-size:13px;color:#5b21b6;">${esc(T.title)} · ${items.length} ${esc(T.items)} · ${num(pcs)} ${esc(T.pcs)}</b><span style="font-size:10.5px;color:#7a8799;">${esc(T.sub)}</span></div>${rows}${more}`;
+        table.insertAdjacentElement('beforebegin', box);
+    }
+    function wrapExport(name) {
+        const orig = window[name];
+        if (typeof orig !== 'function' || orig.__lgxW) return;
+        const w = function () {
+            const self = this, args = arguments, body = document.body, realAppend = body.appendChild;
+            body.appendChild = function (node) {
+                try { const rep = node && node.querySelector ? node.querySelector('#lgd-report') : null; if (rep && !rep.getAttribute('data-lgx')) { rep.setAttribute('data-lgx', '1'); buildReport(rep); } } catch (err) { console.warn('LG-EXT report', err); }
+                return realAppend.call(body, node);
+            };
+            try { return orig.apply(self, args); }
+            finally { body.appendChild = realAppend; delete body.appendChild; }
+        };
+        w.__lgxW = true; window[name] = w;
+    }
+ 
+    // ---------- 5.1) ปริ้นแท็ก: ซ่อนแถวของเจ้าอื่นจากรายการที่ให้เลือกปริ้น ----------
+    // (ตั้งธงตอนกดปุ่ม "ปริ้นแท็ก" แล้วปลดเองเมื่อหน้าต่างเลือกล็อตขึ้นมา / ถูกปิด / ครบเวลา)
+    document.addEventListener('click', (e) => {
+        const bt = e.target && e.target.closest ? e.target.closest('button[onclick*="printLGTags"]') : null;
+        if (!bt) return;
+        window.__lgHideExt = true;
+        const t0 = Date.now();
+        const iv = setInterval(() => {
+            const pick = document.querySelector('.lg-pick'), pop = document.querySelector('.swal2-popup');
+            if (pick || (!pop && Date.now() - t0 > 2500) || Date.now() - t0 > 120000) { clearInterval(iv); window.__lgHideExt = false; }
+        }, 300);
+    }, true);
+ 
+    // ---------- 5) ครอบฟังก์ชันเดิม (ทำครั้งเดียว หลังทุกบล็อกโหลดครบ) ----------
+    function wrapOnce() {
+        // ตารางแพลน: ให้ computeLGMatchStatus ส่งแถวของเจ้าอื่นมาด้วย (หน้าอื่นไม่เห็น)
+        const r0 = window.renderLGMatchTable;
+        if (typeof r0 === 'function' && !r0.__lgxW) {
+            const w = function () { window.__lgIncExt = true; try { return r0.apply(this, arguments); } finally { window.__lgIncExt = false; try { decorateRows(); } catch (e) { } } };
+            w.__lgxW = true; window.renderLGMatchTable = w;
+        }
+        // แดชบอร์ด: วาดการ์ดต่อท้าย
+        const d0 = window.renderLGDashboard;
+        if (typeof d0 === 'function' && !d0.__lgxW) {
+            const w = function () { const x = d0.apply(this, arguments); try { cardSig = ''; paintCard(); } catch (e) { } return x; };
+            w.__lgxW = true; window.renderLGDashboard = w;
+        }
+        // รูป / PDF
+        wrapExport('lgdSaveImage'); wrapExport('lgdSavePdf');
+        // เทมเพลต Excel: เพิ่มคอลัมน์ ของเจ้าอื่น
+        const t0 = window.downloadLGPlanTemplate;
+        if (window.XLSX && XLSX.utils && !XLSX.utils.aoa_to_sheet.__lgxW) {
+            const a0 = XLSX.utils.aoa_to_sheet;
+            const wx = function (d) {
+                try {
+                    if (d && d[0] && d[0].length === 10 && d[0][0] === 'WO' && d[0][1] === 'Part No' && d[0][9] === 'Locator Group ปลายทาง') {
+                        d[0].push(L().tmpl); for (let i = 1; i < d.length; i++) d[i].push('');
+                    }
+                } catch (e) { }
+                return a0.apply(this, arguments);
+            };
+            wx.__lgxW = true; XLSX.utils.aoa_to_sheet = wx;
+        }
+        if (false && typeof t0 === 'function' && !t0.__lgxW && window.XLSX && XLSX.utils) {
+            const w = function () {
+                const orig = XLSX.utils.aoa_to_sheet;
+                XLSX.utils.aoa_to_sheet = function (d) { try { if (d && d[0]) { d[0].push(L().tmpl); for (let i = 1; i < d.length; i++) d[i].push(''); } } catch (e) { } return orig.apply(this, arguments); };
+                try { return t0.apply(this, arguments); } finally { XLSX.utils.aoa_to_sheet = orig; }
+            };
+            w.__lgxW = true; window.downloadLGPlanTemplate = w;
+        }
+        // บันทึกแพลน: ใส่ extOwner ให้แถวที่เพิ่มจากฟอร์มด้วยมือ
+        if (typeof callAppsScript === 'function' && !callAppsScript.__lgxW) {
+            const c0 = callAppsScript;
+            const w = function (action, payload) {
+                try {
+                    if (action === 'uploadLGPlan' && Array.isArray(payload) && window.__lgxNext !== undefined) {
+                        payload.forEach(it => { if (it && it.extOwner === undefined) it.extOwner = window.__lgxNext ? '1' : ''; });
+                        window.__lgxNext = undefined;
+                    }
+                } catch (e) { }
+                return c0.apply(this, arguments);
+            };
+            w.__lgxW = true; callAppsScript = w;
+        }
+    }
+    setTimeout(wrapOnce, 1500);
+    setInterval(() => {
+        try {
+            injectCss(); ensureCheckbox();
+            const tx = document.getElementById('lgx-ext-tx'); if (tx) tx.textContent = L().cb;
+            decorateRows(); paintCard();
+        } catch (e) { }
+    }, 1000);
 })();
 // ดาวน์โหลดเทมเพลต Excel สำหรับอัปโหลดแพลน
 window.downloadLGPlanTemplate = function() {
@@ -23102,7 +23411,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
             seen.add(k);
         });
         const entry = (k) => idx.byKey.get(k) || emptyE;
-        planRows.forEach(p => { p.e = entry(p.k); p.stuckDocs = stuckOfE(p.e, idx); });
+        planRows.forEach(p => { p.e = (typeof lgSplitE === 'function') ? lgSplitE(p.row, entry(p.k)) : entry(p.k); p.stuckDocs = stuckOfE(p.e, idx); });   // LG-SPLIT
         last.idx = idx; last.rows = planRows; last.date = date;
 
         // เอกสารที่อยู่ระหว่างทางในแพลนที่เห็น
@@ -23367,7 +23676,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
         rows.forEach(tr => {
             const c = tr.children;
             const wo = c[1].textContent, part = (c[2].firstChild ? c[2].firstChild.textContent : c[2].textContent);
-            const e = idx.byKey.get(key(wo, part)) || emptyE;
+            const e = (typeof lgSplitRow === 'function') ? lgSplitRow(wo, part, idx.byKey.get(key(wo, part)) || emptyE) : (idx.byKey.get(key(wo, part)) || emptyE);   // LG-SPLIT
             const o = parseFloat(String(c[6].textContent).replace(/,/g, '')) || 0;
             sumO += o; sumIn += Math.min(e.inn, o);
             trQty += e.transit; e.tDocs.forEach(d => { if (!trD.has(d)) { trD.add(d); if (idx.outDocs.get(d).stuck) stuck++; } });
@@ -23686,7 +23995,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
             seen.add(k);
         });
         const entry = (k) => idx.byKey.get(k) || emptyE;
-        planRows.forEach(p => { p.e = entry(p.k); p.stuckDocs = stuckOfE(p.e, idx); });
+        planRows.forEach(p => { p.e = (typeof lgSplitE === 'function') ? lgSplitE(p.row, entry(p.k)) : entry(p.k); p.stuckDocs = stuckOfE(p.e, idx); });   // LG-SPLIT
         last.idx = idx; last.rows = planRows; last.date = date;
 
         // เอกสารที่อยู่ระหว่างทางในแพลนที่เห็น
@@ -23954,7 +24263,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
             const c = tr.children;
             const wo = c[1].textContent, part = (c[2].firstChild ? c[2].firstChild.textContent : c[2].textContent);
             const k = key(wo, part); keys.add(k);
-            const e = idx.byKey.get(k) || emptyE;
+            const e = (typeof lgSplitRow === 'function') ? lgSplitRow(wo, part, idx.byKey.get(k) || emptyE) : (idx.byKey.get(k) || emptyE);   // LG-SPLIT
             const o = parseFloat(String(c[6].textContent).replace(/,/g, '')) || 0;
             sumO += o; sumIn += Math.min(e.inn, o); sumOut += Math.min(parseFloat(String(c[7].textContent).replace(/,/g, '')) || 0, o);
             trQty += e.transit; e.tDocs.forEach(d => { if (!trD.has(d)) { trD.add(d); if (idx.outDocs.get(d).stuck) stuck++; } });
@@ -40901,7 +41210,8 @@ window.handleLGPlanFileUpload = function(event) {
                 startDateTime: formatLGDateTime(r[6]),
                 modelSuffix: String(r[7] || '').trim(),
                 carrierQty: parseFloat(r[8]) || 0,
-                locatorGroup: String(r[9] || '').trim()
+                locatorGroup: String(r[9] || '').trim(),
+                extOwner: /^(1|true|y|yes|x|ext|ใช่|ของเจ้าอื่น)$/i.test(String(r[10] || '').trim()) ? '1' : ''   // LG-EXT
             }));
 
             if (rows.length === 0) {
