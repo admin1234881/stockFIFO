@@ -18130,6 +18130,92 @@ window.renderLGMatchTable = function() {
     };
 })();
 /* ===== จบ BROSE-LANG-V1 ===== */
+(function () {
+    if (window.__lguRep) return; window.__lguRep = true;
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const num = (n) => (Number(n) || 0).toLocaleString('en-US');
+    const isEn = () => { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e) { return false; } };
+    const TXT = {
+        th: { h: 'UPH และงานเหลือที่ LG', sub: 'UPH = ชิ้นที่ไลน์รันได้ต่อชั่วโมง · อยู่ได้ = เหลือ ÷ UPH', min: 'ขั้นต่ำที่ควรอยู่ได้', hr: 'ชม.', ln: 'ไลน์',
+              cUph: 'UPH', cUnit: 'ชิ้น/ชม.', cSent: 'ส่งเข้า', cMade: 'ผลิตแล้ว', cRem: 'เหลือให้ผลิต', cLeft: 'อยู่ได้อีก',
+              noUph: 'ยังไม่ตั้ง UPH', doneAll: (a, b) => `ผลิตครบ ${a}/${b} WO`, sentAll: 'ส่งครบแพลน 100%', where: 'ผลิตถึง', noWhere: 'ยังไม่ระบุว่าผลิตถึงไหน', low: 'ต่ำกว่าขั้นต่ำ', ok: 'ปกติ', warn: 'ใกล้ต่ำ' },
+        en: { h: 'UPH & remaining work at LG', sub: 'UPH = pieces the line can run per hour · Lasts = remaining ÷ UPH', min: 'Minimum cover', hr: 'h', ln: 'Line',
+              cUph: 'UPH', cUnit: 'pcs/h', cSent: 'Sent', cMade: 'Made', cRem: 'Left to make', cLeft: 'Lasts',
+              noUph: 'UPH not set', doneAll: (a, b) => `All made ${a}/${b} WO`, sentAll: 'Plan 100% sent', where: 'Made up to', noWhere: 'Progress not reported', low: 'Below minimum', ok: 'OK', warn: 'Getting low' }
+    };
+    const COL = { ok: ['#dcfce7', '#15803d', '#16a34a'], warn: ['#fef3c7', '#b45309', '#f59e0b'], bad: ['#dc2626', '#ffffff', '#dc2626'], none: ['#e8edf5', '#5a6a80', '#98a4b6'] };
+ 
+    function build(rep) {
+        const A = window.__lguApi; if (!A) return;
+        const table = rep.querySelector('table'); if (!table) return;
+        const T = TXT[isEn() ? 'en' : 'th'];
+        const dt = document.getElementById('lgd-date');
+        const date = (dt && dt.value) || (typeof lgTodayStr === 'function' ? lgTodayStr() : '');
+        const minH = A.minH();
+        const items = [];
+        const selLines = Array.from(document.querySelectorAll('#lgd-linemenu input:checked')).map(i => String(i.value).trim());   // ไลน์ที่เลือกในแดชบอร์ด (ว่าง = ทุกไลน์)
+        A.planLines().forEach(l => {
+            if (selLines.length && selLines.indexOf(String(l).trim()) < 0) return;
+            const st = A.lineState(l, date);
+            if (!st.rows.length) return;
+            const u = A.uhtOf(l);
+            let kind = 'hours', cls = 'none', h = 0, chipTxt = '';
+            if (st.complete) { kind = 'done'; cls = 'ok'; chipTxt = T.doneAll(st.doneN, st.rows.length); }
+            else if (A.fullSent(st)) { kind = 'sent'; cls = 'ok'; chipTxt = T.sentAll; }
+            else if (!u) { kind = 'nouph'; chipTxt = T.noUph; }
+            else { h = st.rem / u; cls = (st.sent > 0 || st.hasProg) ? A.status(h) : 'none'; chipTxt = A.hh(h) + ' ' + T.hr; }
+            items.push({ l, st, u, kind, cls, h, chipTxt });
+        });
+        if (!items.length) return;
+ 
+        const cols = items.length >= 4 ? 2 : 1;
+        const rows = items.map(it => {
+            const c = COL[it.cls];
+            const uph = it.u ? `<b style="font-size:14px;color:#1d4ed8;">${num(it.u)}</b><span style="font-size:10.5px;color:#7a8799;"> ${esc(T.cUnit)}</span>` : `<span style="color:#98a4b6;">-</span>`;
+            const calc = `<span style="font-size:11px;color:#6b7a90;">${esc(T.cSent)} ${num(it.st.sent)} − ${esc(T.cMade)} ${num(it.st.produced)} = <b style="color:#1b2a41;">${num(it.st.rem)}</b></span>`;
+            return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid #e6ebf2;">
+                <span style="flex:none;width:62px;text-align:center;background:#1b2a41;color:#fff;font-weight:800;font-size:12px;padding:2px 0;border-radius:6px;">${esc(T.ln)} ${esc(it.l)}</span>
+                <span style="flex:none;width:92px;white-space:nowrap;">UPH ${uph}</span>
+                <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;">${calc}</span>
+                <span style="flex:none;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:800;background:${c[0]};color:${c[1]};white-space:nowrap;">${esc(it.chipTxt)}</span>
+            </div>`;
+        }).join('');
+        const low = items.filter(it => it.cls === 'bad');
+        const box = document.createElement('div');
+        box.id = 'lgu-rep';
+        box.style.cssText = 'background:#f7f9fc;border:1px solid #e3e8f0;border-radius:12px;padding:8px 14px 4px;margin:0 0 12px;';
+        box.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+                <div style="font-size:13px;font-weight:800;color:#1b2a41;">${esc(T.h)}</div>
+                <div style="font-size:10.5px;color:#7a8799;">${esc(T.sub)} · ${esc(T.min)} ${A.hh(minH)} ${esc(T.hr)}</div></div>
+            ${low.length ? `<div style="background:#fee2e2;color:#b91c1c;border-radius:8px;padding:4px 10px;font-weight:800;font-size:12px;margin:4px 0;">${low.map(x => `${esc(T.ln)} ${esc(x.l)} · ${A.hh(x.h)} ${esc(T.hr)}`).join('  |  ')} — ${esc(T.low)}</div>` : ''}
+            <div style="display:grid;grid-template-columns:repeat(${cols},1fr);column-gap:22px;">${rows}</div>`;
+        table.insertAdjacentElement('beforebegin', box);
+    }
+ 
+    function wrap(name) {
+        const orig = window[name];
+        if (typeof orig !== 'function' || orig.__lguW) return;
+        const w = function () {
+            const self = this, args = arguments, body = document.body, realAppend = body.appendChild;
+            body.appendChild = function (node) {
+                try { const rep = node && node.querySelector ? node.querySelector('#lgd-report') : null; if (rep && !rep.getAttribute('data-lgu')) { rep.setAttribute('data-lgu', '1'); build(rep); } } catch (err) { console.warn('LGU report', err); }
+                return realAppend.call(body, node);
+            };
+            try { return orig.apply(self, args); }
+            finally { body.appendChild = realAppend; delete body.appendChild; }
+        };
+        w.__lguW = true;
+        window[name] = w;
+    }
+    // รอให้บล็อกแดชบอร์ด LG โหลดครบก่อน แล้วค่อยครอบ (ครอบเป็นชั้นนอกสุด)
+    let tries = 0;
+    const iv = setInterval(() => {
+        tries++;
+        if (typeof window.lgdSaveImage === 'function' && typeof window.lgdSavePdf === 'function' && tries >= 3) {
+            wrap('lgdSaveImage'); wrap('lgdSavePdf'); clearInterval(iv);
+        } else if (tries > 60) clearInterval(iv);
+    }, 500);
+})();
 // ดาวน์โหลดเทมเพลต Excel สำหรับอัปโหลดแพลน
 window.downloadLGPlanTemplate = function() {
     const ws_data = [
@@ -22918,7 +23004,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
         const E = (k) => { let e = byKey.get(k); if (!e) { e = { out: 0, inn: 0, transit: 0, tDocs: [], lastOut: null, lastIn: null }; byKey.set(k, e); } return e; };
         outDocs.forEach(g => {
             const received = recDocs.has(g.doc);
-            const counts = trackFrom !== null && (!g.t || g.t >= trackFrom);
+            const counts = trackFrom !== null && (!g.t || g.t >= trackFrom) && (window.__lgrTrk || !g.t || dayOf(g.t) === dateVal());   // LGR-DAY
             g.transit = !received && counts;
             g.stuck = g.transit && g.t && (now - g.t) > STUCK_MS;
             g.rows.forEach(r => {
@@ -23210,7 +23296,8 @@ renderLGTagPrintWindow = function(tags, printWin) {
     }
 
     // ---------- ค้นหาแท็ก + ไทม์ไลน์ ----------
-    function trackHtml(q) {
+    function trackHtml(q) { window.__lgrTrk = true; try { return trackHtml0(q); } finally { window.__lgrTrk = false; } }
+    function trackHtml0(q) {
         q = up(q);
         if (q.length < 3) return `<div class="text-muted py-2" style="font-size:.85rem;">${esc(L('trackHint'))}</div>`;
         const idx = buildIndex();
@@ -23501,7 +23588,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
         const E = (k) => { let e = byKey.get(k); if (!e) { e = { out: 0, inn: 0, transit: 0, tDocs: [], lastOut: null, lastIn: null }; byKey.set(k, e); } return e; };
         outDocs.forEach(g => {
             const received = recDocs.has(g.doc);
-            const counts = trackFrom !== null && (!g.t || g.t >= trackFrom);
+            const counts = trackFrom !== null && (!g.t || g.t >= trackFrom) && (window.__lgrTrk || !g.t || dayOf(g.t) === dateVal());   // LGR-DAY
             g.transit = !received && counts;
             g.stuck = g.transit && g.t && (now - g.t) > STUCK_MS;
             g.rows.forEach(r => {
@@ -23793,7 +23880,8 @@ renderLGTagPrintWindow = function(tags, printWin) {
     }
 
     // ---------- ค้นหาแท็ก + ไทม์ไลน์ ----------
-    function trackHtml(q) {
+    function trackHtml(q) { window.__lgrTrk = true; try { return trackHtml0(q); } finally { window.__lgrTrk = false; } }
+    function trackHtml0(q) {
         q = up(q);
         if (q.length < 3) return `<div class="text-muted py-2" style="font-size:.85rem;">${esc(L('trackHint'))}</div>`;
         const idx = buildIndex();
@@ -29868,6 +29956,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
         return v > 0 ? v : 2;
     }
     function status(h) { const m = minH(); return h >= m ? 'ok' : (h >= m * 0.5 ? 'warn' : 'bad'); }
+    window.__lguApi = { minH, planLines, lineState, uhtOf, fullSent, status, hh, whereText: (st) => String(whereHtml(st) || '').replace(/<[^>]+>/g, '') };   // LGU-REPORT
     function canEdit() {
         try { return !!(window.lgPlanEditAllowed && window.lgPlanEditAllowed()); } catch (e) { return false; }
     }
@@ -30540,6 +30629,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
         return v > 0 ? v : 2;
     }
     function status(h) { const m = minH(); return h >= m ? 'ok' : (h >= m * 0.5 ? 'warn' : 'bad'); }
+    window.__lguApi = { minH, planLines, lineState, uhtOf, fullSent, status, hh, whereText: (st) => String(whereHtml(st) || '').replace(/<[^>]+>/g, '') };   // LGU-REPORT
     function canEdit() {
         try { return !!(window.lgPlanEditAllowed && window.lgPlanEditAllowed()); } catch (e) { return false; }
     }
