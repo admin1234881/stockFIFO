@@ -18675,6 +18675,110 @@ window.renderLGMatchTable = function() {
         else if (tries > 80) clearInterval(iv);
     }, 500);
 })();
+(function () {
+    if (window.__lgPct) return; window.__lgPct = true;
+    const up = (s) => String(s == null ? '' : s).trim().toUpperCase();
+    const num = (n) => (Number(n) || 0).toLocaleString('en-US');
+    const isEn = () => { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e) { return false; } };
+    const TX = {
+        th: { sent: 'ส่งแล้ว', recv: 'LG รับแล้ว', recvShort: 'LG รับ', pcs: 'ชิ้น', ring: 'ส่งแล้วตามแพลน', wait: 'รอ LG รับ' },
+        en: { sent: 'Sent', recv: 'Received at LG', recvShort: 'LG recv', pcs: 'pcs', ring: 'Sent vs plan', wait: 'awaiting LG' }
+    };
+    const L = () => TX[isEn() ? 'en' : 'th'];
+    const dateSel = () => { const d = document.getElementById('lgd-date'); return (d && d.value) || (typeof lgTodayStr === 'function' ? lgTodayStr() : ''); };
+    const COL = '#0891b2';
+    const pctOf = (a, b) => (b > 0 ? Math.min(100, Math.round(a / b * 100)) : 0);
+ 
+    function recvMap() {
+        const m = {};
+        (db.lgReceiveLog || []).forEach(x => { const k = up(x.WO) + '|' + up(x.partNo); m[k] = (m[k] || 0) + (parseFloat(x.qty) || 0); });
+        return m;
+    }
+    function build(rep) {
+        const A = window.__lguApi; if (!A) return;
+        const T = L(), date = dateSel(), RV = recvMap();
+        // รวมยอดรายไลน์ + รายแถว
+        const byLine = {}, byRow = {};
+        A.planLines().forEach(l => {
+            const st = A.lineState(l, date);
+            if (!st.rows.length) return;
+            const o = byLine[l] = { plan: 0, recv: 0 };
+            st.rows.forEach(r => {
+                const ord = parseFloat(r.orderQty) || 0, k = up(r.WO) + '|' + up(r.partNo), a = Math.min(ord, RV[k] || 0);
+                o.plan += ord; o.recv += a;
+                byRow[k] = { ord, recv: RV[k] || 0, sent: parseFloat(r.scanned) || 0 };
+            });
+        });
+ 
+        // 1) วงกลมรวม + รายไลน์
+        const ring = rep.querySelector('[data-lgrp="1"]');
+        if (ring) {
+            const items = Array.from(ring.querySelectorAll(':scope > div:last-child > div'));
+            let tp = 0, tr = 0;
+            items.forEach(it => {
+                const nm = (it.querySelector('span') || {}).textContent || '';
+                const line = nm.replace(/^\s*(ไลน์|Line)\s*/i, '').trim();
+                const o = byLine[line]; if (!o) return;
+                tp += o.plan; tr += o.recv;
+                const p = pctOf(o.recv, o.plan);
+                const right = it.querySelector('span:nth-child(2)');
+                if (right && right.parentNode && !it.getAttribute('data-lgpct')) {
+                    it.setAttribute('data-lgpct', '1');
+                    right.insertAdjacentHTML('afterbegin', `${esc(T.sent)} `);
+                    const bar = it.lastElementChild;
+                    bar.insertAdjacentHTML('afterend',
+                        `<div style="display:flex;justify-content:space-between;font-size:11.5px;font-weight:700;margin:5px 0 3px;"><span style="color:${COL};">${esc(T.recv)}</span><span style="color:#6b7a90;font-weight:400;">${num(o.recv)} / ${num(o.plan)} ${esc(T.pcs)} · <b style="color:${COL};">${p}%</b></span></div>` +
+                        `<div style="height:9px;background:#e8edf5;border-radius:9px;overflow:hidden;"><div style="width:${p}%;height:100%;background:${COL};"></div></div>`);
+                }
+            });
+            // ข้อความใต้ตัวเลขใหญ่
+            const info = ring.children[1];
+            if (info && tp > 0 && !info.getAttribute('data-lgpct')) {
+                info.setAttribute('data-lgpct', '1');
+                const cap = info.firstElementChild; if (cap) cap.textContent = T.ring;
+                info.insertAdjacentHTML('beforeend', `<div style="margin-top:6px;font-size:12px;font-weight:800;color:${COL};">${esc(T.recv)} ${num(tr)} ${esc(T.pcs)} · ${pctOf(tr, tp)}%</div>`);
+            }
+        }
+ 
+        // 2) ตารางรายแถว: คอลัมน์ "LG รับ" เติม % (+ แจ้งถ้าส่งครบแต่ยังไม่รับครบ)
+        const table = rep.querySelector('table'); if (!table) return;
+        const ths = Array.from(table.querySelectorAll('thead th')).map(t => t.textContent.trim());
+        const iWo = ths.findIndex(t => /^WO$/i.test(t)), iPart = ths.findIndex(t => /^Part/i.test(t)), iRecv = ths.findIndex(t => /LG\s*(รับ|recv|in)/i.test(t));
+        if (iWo < 0 || iPart < 0 || iRecv < 0) return;
+        table.querySelectorAll('tbody tr').forEach(tr => {
+            const c = tr.children; if (c.length <= Math.max(iWo, iPart, iRecv)) return;
+            const wo = c[iWo].textContent.trim(), part = c[iPart].textContent.trim().split(/\s+/)[0];
+            const o = byRow[up(wo) + '|' + up(part)]; if (!o || c[iRecv].getAttribute('data-lgpct')) return;
+            c[iRecv].setAttribute('data-lgpct', '1');
+            const p = pctOf(o.recv, o.ord), col = p >= 100 ? '#15803d' : (p > 0 ? '#b45309' : '#b91c1c');
+            const waiting = o.sent >= o.ord && o.ord > 0 && p < 100;
+            c[iRecv].innerHTML = `<div style="font-weight:800;">${num(o.recv)}</div><div style="font-size:10.5px;font-weight:800;color:${col};white-space:nowrap;">${p}%${waiting ? ' · ' + esc(T.wait) : ''}</div>`;
+        });
+    }
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch])); }
+ 
+    function wrap(name) {
+        const orig = window[name];
+        if (typeof orig !== 'function' || orig.__lgpW) return;
+        const w = function () {
+            const self = this, args = arguments, body = document.body, realAppend = body.appendChild;
+            body.appendChild = function (node) {
+                try { const rep = node && node.querySelector ? node.querySelector('#lgd-report') : null; if (rep && !rep.getAttribute('data-lgpctrep')) { rep.setAttribute('data-lgpctrep', '1'); build(rep); } } catch (err) { console.warn('LG-PCT report', err); }
+                return realAppend.call(body, node);
+            };
+            try { return orig.apply(self, args); }
+            finally { body.appendChild = realAppend; delete body.appendChild; }
+        };
+        w.__lgpW = true;
+        window[name] = w;
+    }
+    let tries = 0;
+    const iv = setInterval(() => {
+        tries++;
+        if (typeof window.lgdSaveImage === 'function' && typeof window.lgdSavePdf === 'function' && tries >= 8) { wrap('lgdSaveImage'); wrap('lgdSavePdf'); clearInterval(iv); }
+        else if (tries > 80) clearInterval(iv);
+    }, 500);
+})();
 // ดาวน์โหลดเทมเพลต Excel สำหรับอัปโหลดแพลน
 window.downloadLGPlanTemplate = function() {
     const ws_data = [
