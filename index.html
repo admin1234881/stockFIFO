@@ -18525,6 +18525,156 @@ window.renderLGMatchTable = function() {
         } catch (e) { }
     }, 1000);
 })();
+// ===== LG-RUN: โชว์ "LG กำลังผลิตถึง WO ไหน ยอดเท่าไหร่" ในแดชบอร์ด LG Delivery Status และในรูป / PDF ที่บันทึก (วางต่อท้ายบล็อก LG ทั้งหมด) =====
+(function () {
+    if (window.__lgRunV1) return; window.__lgRunV1 = true;
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const num = (n) => (Number(n) || 0).toLocaleString('en-US');
+    const isEn = () => { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e) { return false; } };
+    const TX = {
+        th: { title: 'LG กำลังผลิตอยู่ตอนนี้', sub: 'ตามที่อัปเดตความคืบหน้าล่าสุด (ปุ่ม "ติ๊ก WO ที่ LG ผลิตแล้ว")', line: 'ไลน์',
+              run: 'กำลังผลิต', next: 'ถัดไป', idle: 'ยังไม่เริ่มผลิต', all: 'ผลิตครบทุก WO', none: 'ยังไม่มีข้อมูล',
+              made: 'ผลิตแล้ว', pcs: 'ชิ้น', sent: 'ส่งเข้า', left: 'เหลือ', done: (a, b) => `ผลิตครบ ${a}/${b} WO`, nextWo: 'คิวถัดไป', first: 'WO แรก',
+              noQty: 'ยังไม่ระบุยอดที่ผลิตแล้ว', upd: 'อัปเดต', by: 'โดย', stale: 'นานแล้ว', noRep: 'ยังไม่มีการอัปเดตว่า LG ผลิตถึงไหน', and: (n) => `และอีก ${n} WO`, none2: 'ไม่มีแพลนของไลน์ที่เลือก', hint: (d) => `วันที่ ${d} ยังไม่มีไลน์ที่อัปเดตว่า LG กำลังผลิต WO ไหน — ที่หน้าแพลน LG กดปุ่ม "ติ๊ก WO ที่ LG ผลิตแล้ว" แล้วใส่ยอดในช่องของ WO ที่กำลังผลิตอยู่ (ไม่ต้องติ๊กถูก)` },
+        en: { title: 'Where LG is running', sub: 'As of the latest progress update ("Tick WOs LG finished" button)', line: 'Line',
+              run: 'Running', next: 'Up next', idle: 'Not started', all: 'All WOs made', none: 'No data',
+              made: 'Made', pcs: 'pcs', sent: 'Sent', left: 'Left', done: (a, b) => `${a}/${b} WO made`, nextWo: 'Next in queue', first: 'First WO',
+              noQty: 'Made qty not reported', upd: 'Updated', by: 'by', stale: 'a while ago', noRep: 'No update on where LG is running', and: (n) => `and ${n} more WO`, none2: 'No plan for the selected lines', hint: (d) => `No line has an update for ${d} yet — on the LG plan page press "Tick WOs LG finished" and type the made qty on the WO that is running now (leave the tick box empty)` }
+    };
+    const L = () => TX[isEn() ? 'en' : 'th'];
+    const rk = (r) => String(r.WO).trim() + '|' + String(r.partNo == null ? '' : r.partNo).trim();
+    const pad = (n) => String(n).padStart(2, '0');
+    const dateSel = () => { const d = document.getElementById('lgd-date'); return (d && d.value) || (typeof lgTodayStr === 'function' ? lgTodayStr() : ''); };
+    const selLines = () => Array.from(document.querySelectorAll('#lgd-linemenu input:checked')).map(i => String(i.value).trim());
+    const COL = { run: ['#2563eb', '#dbeafe', '#1d4ed8'], next: ['#f59e0b', '#fef3c7', '#92580a'], idle: ['#94a3b8', '#eef2f7', '#475569'], all: ['#16a34a', '#dcfce7', '#15803d'], none: ['#cbd5e1', '#f1f5f9', '#64748b'] };
+ 
+    function stamp(pg) {
+        if (!pg || !pg.updatedAt) return { txt: '', stale: false };
+        const d = new Date(pg.updatedAt); if (isNaN(d)) return { txt: '', stale: false };
+        const n = new Date(), same = d.toDateString() === n.toDateString();
+        const age = (n - d) / 3600000;
+        return { txt: (same ? '' : `${pad(d.getDate())}/${pad(d.getMonth() + 1)} `) + `${pad(d.getHours())}:${pad(d.getMinutes())}`, stale: same && age > 4 };
+    }
+    // รวมข้อมูล "กำลังผลิตอะไร" ของไลน์หนึ่ง
+    function info(line, date) {
+        const A = window.__lguApi; if (!A) return null;
+        const st = A.lineState(line, date);
+        if (!st.rows.length) return null;
+        const done = new Set();
+        let run = [];
+        if (st.hasProg) {
+            if (st.nv) {
+                String(st.pg.doneWOs == null ? '' : st.pg.doneWOs).split(',').map(x => x.trim()).filter(Boolean).forEach(k => done.add(k));
+                run = st.partRows.map(x => ({ r: x.r, q: x.q }));
+            } else if (st.idx >= 0) {
+                st.rows.forEach((r, i) => { if (i < st.idx) done.add(rk(r)); });
+                const o = parseFloat(st.cur.orderQty) || 0, q = Math.min(o, parseFloat(st.pg.producedQty) || 0);
+                if (q >= o && o > 0) done.add(rk(st.cur)); else run = [{ r: st.cur, q }];
+            }
+        }
+        const runKeys = new Set(run.map(x => rk(x.r)));
+        const queue = st.rows.filter(r => !done.has(rk(r)) && !runKeys.has(rk(r)));
+        let kind;
+        if (!st.hasProg) kind = 'none';
+        else if (run.length) kind = 'run';
+        else if (!queue.length) kind = 'all';
+        else if (done.size) kind = 'next';
+        else kind = 'idle';
+        return { line, st, run: run.slice(0, 2), runMore: Math.max(0, run.length - 2), queue, doneN: done.size, total: st.rows.length, kind, ts: stamp(st.pg), by: (st.pg && st.pg.updatedBy) || '' };
+    }
+    function allInfo(date) {
+        const A = window.__lguApi; if (!A) return [];
+        const sel = selLines();
+        const out = [];
+        A.planLines().forEach(l => { if (sel.length && sel.indexOf(String(l).trim()) < 0) return; const i = info(l, date); if (i && i.kind === 'run') out.push(i); });
+        return out;
+    }
+ 
+    // ---------- วาดการ์ดของแต่ละไลน์ (ใช้ style ในตัว → ใช้ได้ทั้งแดชบอร์ดและรูปที่บันทึก) ----------
+    function cardHtml(it, T) {
+        const rows = it.run.map(x => {
+            const r = x.r, q = x.q, o = parseFloat(r.orderQty) || 0, p = o > 0 ? Math.round(q / o * 100) : 0;
+            return `<div style="margin-top:6px;">
+                <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
+                    <span style="font-size:18px;font-weight:800;color:#0b1b33;">${esc(r.WO)}</span>
+                    <span style="font-size:11.5px;color:#64748b;">${esc(r.partNo || '')}${r.model ? ' · ' + esc(r.model) : ''}</span>
+                    <span style="margin-left:auto;font-size:14px;font-weight:800;color:#1d4ed8;white-space:nowrap;">${num(q)} <span style="color:#64748b;font-weight:600;">/ ${num(o)} ${esc(T.pcs)}</span></span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+                    <div style="flex:1;height:9px;background:#e2e8f0;border-radius:99px;overflow:hidden;"><div style="width:${Math.min(100, p)}%;height:100%;background:#2563eb;border-radius:99px;"></div></div>
+                    <span style="font-size:12px;font-weight:800;color:#1d4ed8;">${p}%</span>
+                </div></div>`;
+        }).join('');
+        const upd = it.ts.txt ? `<div style="text-align:right;font-size:10.5px;margin-top:4px;${it.ts.stale ? 'color:#b91c1c;font-weight:800;' : 'color:#94a3b8;'}">${esc(T.upd)} ${esc(it.ts.txt)}${it.by ? ' ' + esc(T.by) + ' ' + esc(it.by) : ''}${it.ts.stale ? ' · ' + esc(T.stale) : ''}</div>` : '';
+        return `<div style="border:1px solid #e3e8f0;border-left:5px solid #2563eb;border-radius:12px;padding:9px 14px;background:#fff;break-inside:avoid;">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span style="background:#1b2a41;color:#fff;font-weight:800;font-size:12px;padding:2px 10px;border-radius:6px;">${esc(T.line)} ${esc(it.line)}</span>
+                <span style="margin-left:auto;font-size:11.5px;font-weight:800;color:#1d4ed8;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#2563eb;margin-right:5px;"></span>${esc(T.run)}</span>
+            </div>${rows}${upd}
+        </div>`;
+    }
+    function boxHtml(items, T, cols) {
+        return `<div style="font-size:14px;font-weight:800;color:#1b2a41;margin-bottom:8px;">${esc(T.title)}</div>
+            <div style="display:grid;grid-template-columns:${cols};gap:10px;">${items.map(i => cardHtml(i, T)).join('')}</div>`;
+    }
+ 
+    // ---------- 1) แดชบอร์ด ----------
+    let lastSig = '';
+    function paint() {
+        const view = document.getElementById('view-dash-lg'), kp = document.getElementById('lgd-kpis');
+        if (!view || !kp || !window.__lguApi) return;
+        const T = L();
+        let items = [];
+        try { items = allInfo(dateSel()); } catch (e) { items = []; }
+        let box = document.getElementById('lgrun-card');
+        let html = '';
+        if (!items.length) {
+            let anyPlan = false;
+            try { const A = window.__lguApi; anyPlan = A.planLines().some(l => { const sel = selLines(); return (!sel.length || sel.indexOf(String(l).trim()) >= 0) && A.lineState(l, dateSel()).rows.length > 0; }); } catch (e) { }
+            if (!anyPlan) { if (box) box.remove(); lastSig = ''; return; }
+            html = `<div style="font-size:14px;font-weight:800;color:#1b2a41;margin-bottom:4px;">${esc(T.title)}</div><div style="font-size:12.5px;color:#64748b;">${esc(T.hint(dateSel().split('-').reverse().join('/')))}</div>`;
+        }
+        if (items.length) html = boxHtml(items, T, 'repeat(auto-fill,minmax(300px,1fr))');
+        if (box && box.parentNode === kp.parentNode && lastSig === html) return;
+        if (!box) { box = document.createElement('div'); box.id = 'lgrun-card'; box.style.cssText = 'background:#fff;border-radius:20px;box-shadow:0 2px 12px rgba(20,40,80,.07);padding:16px 18px;margin-bottom:16px;'; }
+        box.innerHTML = html; lastSig = html;
+        if (box.previousElementSibling !== kp) kp.insertAdjacentElement('afterend', box);
+    }
+    setInterval(() => { try { paint(); } catch (e) { } }, 1500);
+ 
+    // ---------- 2) รูป / PDF ที่บันทึก ----------
+    function build(rep) {
+        const table = rep.querySelector('table'); if (!table || !window.__lguApi) return;
+        const items = allInfo(dateSel()); if (!items.length) return;
+        const box = document.createElement('div');
+        box.id = 'lgrun-rep';
+        box.style.cssText = 'background:#f7f9fc;border:1px solid #e3e8f0;border-radius:12px;padding:10px 14px 12px;margin:0 0 12px;';
+        box.innerHTML = boxHtml(items, L(), items.length === 1 ? '1fr' : (items.length === 2 ? 'repeat(2,1fr)' : 'repeat(3,1fr)'));
+        const anchor = rep.querySelector('#lgu-rep') || table;
+        anchor.insertAdjacentElement('beforebegin', box);
+    }
+    function wrap(name) {
+        const orig = window[name];
+        if (typeof orig !== 'function' || orig.__lgrW) return;
+        const w = function () {
+            const self = this, args = arguments, body = document.body, realAppend = body.appendChild;
+            body.appendChild = function (node) {
+                try { const rep = node && node.querySelector ? node.querySelector('#lgd-report') : null; if (rep && !rep.getAttribute('data-lgrun')) { rep.setAttribute('data-lgrun', '1'); build(rep); } } catch (err) { console.warn('LG-RUN report', err); }
+                return realAppend.call(body, node);
+            };
+            try { return orig.apply(self, args); }
+            finally { body.appendChild = realAppend; delete body.appendChild; }
+        };
+        w.__lgrW = true;
+        window[name] = w;
+    }
+    let tries = 0;
+    const iv = setInterval(() => {
+        tries++;
+        if (typeof window.lgdSaveImage === 'function' && typeof window.lgdSavePdf === 'function' && tries >= 6) { wrap('lgdSaveImage'); wrap('lgdSavePdf'); clearInterval(iv); }
+        else if (tries > 80) clearInterval(iv);
+    }, 500);
+})();
 // ดาวน์โหลดเทมเพลต Excel สำหรับอัปโหลดแพลน
 window.downloadLGPlanTemplate = function() {
     const ws_data = [
