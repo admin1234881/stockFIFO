@@ -18163,7 +18163,7 @@ window.renderLGMatchTable = function() {
             if (st.complete) { kind = 'done'; cls = 'ok'; chipTxt = T.doneAll(st.doneN, st.rows.length); }
             else if (A.fullSent(st)) { kind = 'sent'; cls = 'ok'; chipTxt = T.sentAll; }
             else if (!u) { kind = 'nouph'; chipTxt = T.noUph; }
-            else { h = st.rem / u; cls = (st.sent > 0 || st.hasProg) ? A.status(h) : 'none'; chipTxt = A.hh(h) + ' ' + T.hr; }
+            else { h = (st.rem + st.extGap) / u; cls = (st.sent > 0 || st.hasProg) ? A.status(h) : 'none'; chipTxt = A.hh(h) + ' ' + T.hr; }
             items.push({ l, st, u, kind, cls, h, chipTxt });
         });
         if (!items.length) return;
@@ -18778,6 +18778,255 @@ window.renderLGMatchTable = function() {
         if (typeof window.lgdSaveImage === 'function' && typeof window.lgdSavePdf === 'function' && tries >= 8) { wrap('lgdSaveImage'); wrap('lgdSavePdf'); clearInterval(iv); }
         else if (tries > 80) clearInterval(iv);
     }, 500);
+})();
+(function () {
+    if (window.__lgQueue) return; window.__lgQueue = true;
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const num = (n) => (Number(n) || 0).toLocaleString('en-US');
+    const up = (s) => String(s == null ? '' : s).trim().toUpperCase();
+    const isEn = () => { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e) { return false; } };
+    const TX = {
+        th: { title: 'คิวผลิตที่ LG · ไลน์ที่มีของเจ้าอื่นคั่น', sub: 'เรียงตามลำดับแถวในแพลน · ความกว้าง = เวลาที่ใช้ผลิต (ชิ้น ÷ UPH)', line: 'ไลน์', uph: 'UPH',
+              mine: 'ของ ATECH (ถึง LG แล้ว)', miss: 'ของ ATECH ยังไม่ถึง LG', ext: 'ของเจ้าอื่น', hr: 'ชม.', pcs: 'ชิ้น', left: 'เหลือ', made: 'ผลิตแล้ว', ownOf: (c, t) => `ถึง LG ${c}/${t}`,
+              must: 'ต้องส่งล็อตถัดไปถึง LG ก่อน', inH: (h) => `อีก ${h} ชม.`, allOk: 'ของ ATECH ครบทั้งคิวแล้ว', needMore: (w, q) => `${w} ต้องการอีก ${q} ชิ้น`,
+              gain: (g, q, w) => `มีเวลาเพิ่ม +${g} ชม. เพราะ LG ผลิตของเจ้าอื่น ${q} ชิ้นคั่นอยู่ (ถ้าไม่มีจะอยู่ได้ ${w} ชม.)`, tmr: 'พรุ่งนี้', now: 'ตอนนี้', noUph: 'ยังไม่ตั้ง UPH' },
+        en: { title: 'LG production queue · lines with other-supplier lots', sub: 'In plan order · width = run time (pcs ÷ UPH)', line: 'Line', uph: 'UPH',
+              mine: 'ATECH (arrived at LG)', miss: 'ATECH not at LG yet', ext: 'Other supplier', hr: 'h', pcs: 'pcs', left: 'left', made: 'made', ownOf: (c, t) => `at LG ${c}/${t}`,
+              must: 'Next ATECH lot must reach LG before', inH: (h) => `in ${h} h`, allOk: 'All ATECH lots in the queue are covered', needMore: (w, q) => `${w} needs ${q} more pcs`,
+              gain: (g, q, w) => `+${g} h extra because LG runs ${q} pcs of other suppliers in between (otherwise ${w} h)`, tmr: 'tomorrow', now: 'now', noUph: 'No UPH set' }
+    };
+    const L = () => TX[isEn() ? 'en' : 'th'];
+    const lineOf = (p) => (String(p.line == null ? '' : p.line).trim() || '-');
+    const isExt = (p) => (typeof window.lgIsExtPlan === 'function' ? window.lgIsExtPlan(p) : false);
+    const rk = (r) => up(r.WO) + '|' + up(r.partNo);
+    const dateSel = () => { const d = document.getElementById('lgd-date'); return (d && d.value) || (typeof lgTodayStr === 'function' ? lgTodayStr() : ''); };
+    const selLines = () => Array.from(document.querySelectorAll('#lgd-linemenu input:checked')).map(i => String(i.value).trim());
+    const COL = { ok: ['#16a34a', '#dcfce7', '#15803d'], warn: ['#f59e0b', '#fef3c7', '#92580a'], bad: ['#dc2626', '#fee2e2', '#b91c1c'] };
+    const clock = (h, T) => {
+        const d = new Date(Date.now() + h * 3600e3), n = new Date();
+        const t = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+        return d.toDateString() === n.toDateString() ? t : T.tmr + ' ' + t;
+    };
+    const f1 = (h) => (Math.round(h * 10) / 10).toFixed(1);
+ 
+    function recvMap() { const m = {}; (db.lgReceiveLog || []).forEach(x => { const k = up(x.WO) + '|' + up(x.partNo); m[k] = (m[k] || 0) + (parseFloat(x.qty) || 0); }); return m; }
+ 
+    // ---------- คำนวณคิวของไลน์ ----------
+    function lane(line, date, RV, stIn) {
+        const A = window.__lguApi; if (!A) return null;
+        const u = A.uhtOf(line); if (!u) return null;
+        const st = stIn || A.lineState(line, date);
+        const all = (typeof lgSortPlans === 'function' ? lgSortPlans : (x) => x)((db.lgPlan || []).filter(p => p && !p.planCancelledAt && lgPlanDateOf(p) === date && lineOf(p) === line));
+        if (!all.some(isExt)) return null;
+        // ความคืบหน้าการผลิตของ LG
+        const done = new Set(), part = {};
+        if (st.hasProg) {
+            if (st.nv) {
+                String(st.pg.doneWOs == null ? '' : st.pg.doneWOs).split(',').map(x => x.trim()).filter(Boolean).forEach(k => done.add(up(k.split('|')[0]) + '|' + up(k.split('|')[1])));
+                st.partRows.forEach(x => { part[rk(x.r)] = x.q; });
+            } else if (st.idx >= 0) {
+                st.rows.forEach((r, i) => { if (i < st.idx) done.add(rk(r)); });
+                const o = parseFloat(st.cur.orderQty) || 0, q = Math.min(o, parseFloat(st.pg.producedQty) || 0);
+                if (q >= o && o > 0) done.add(rk(st.cur)); else part[rk(st.cur)] = q;
+            }
+        }
+        // ตำแหน่งปัจจุบัน = WO ของเราตัวแรกที่ยังผลิตไม่ครบ (ของเจ้าอื่นที่อยู่ก่อนหน้านั้น ถือว่าผลิตจบแล้ว)
+        let cur = all.findIndex(p => !isExt(p) && !done.has(rk(p)));
+        if (cur < 0) return null;
+        const segs = []; let h = 0, short = null, extBefore = 0, extQty = 0, trailRun = 0, trailQty = 0;
+        for (let i = cur; i < all.length; i++) {
+            const p = all[i], ord = parseFloat(p.orderQty) || 0;
+            if (isExt(p)) {
+                const run = ord / u;
+                segs.push({ kind: 'ext', WO: p.WO, partNo: p.partNo, qty: ord, runH: run, endH: h + run });
+                h += run; if (!short) { extBefore += run; extQty += ord; }
+                trailRun += run; trailQty += ord;   // ของเจ้าอื่นที่ไม่มีของ ATECH ตามหลัง ไม่นับเป็นเวลาเพิ่ม
+                continue;
+            }
+            if (done.has(rk(p))) continue;
+            trailRun = 0; trailQty = 0;
+            const k = rk(p), made = Math.min(ord, part[k] || 0), rem = Math.max(0, ord - made);
+            const cov = Math.min(rem, Math.max(0, (RV[k] || 0) - made));
+            const run = rem / u, covH = cov / u;
+            segs.push({ kind: 'mine', WO: p.WO, partNo: p.partNo, qty: ord, made, rem, cov, runH: run, covH, endH: h + run, arrived: Math.min(ord, RV[k] || 0) });
+            if (!short && cov < rem) short = { WO: p.WO, atH: h + covH, need: rem - cov };
+            h += run;
+        }
+        if (!short) { extBefore -= trailRun; extQty -= trailQty; }
+        const off = date !== lgTodayStr(); let baseMs = 0;
+        if (off) all.forEach(p => { const t = new Date(String(p.startDateTime || '').trim().replace(' ', 'T')).getTime(); if (!isNaN(t) && (!baseMs || t < baseMs)) baseMs = t; });
+        return { line, u, segs, totalH: h, short, extBefore, extQty, off, baseMs, status: short ? A.status(short.atH) : 'ok' };
+    }
+    window.__lgqExtGap = (line, date, st) => { const x = lane(line, date, recvMap(), st); return x ? Math.max(0, x.extQty) : 0; };   // ให้กล่อง UPH เรียกใช้
+    function lanes(date) {
+        const sel = selLines(), RV = recvMap(), out = [];
+        const A = window.__lguApi; if (!A) return out;
+        A.planLines().forEach(l => { if (sel.length && sel.indexOf(String(l).trim()) < 0) return; const x = lane(l, date, RV); if (x) out.push(x); });
+        return out;
+    }
+ 
+    // ---------- วาด ----------
+    const STRIPE_EXT = 'repeating-linear-gradient(135deg,#ede9fe 0 7px,#ddd6fe 7px 14px)';
+    const STRIPE_MISS = 'repeating-linear-gradient(135deg,#fef3c7 0 7px,#fde68a 7px 14px)';
+    function segHtml(s, T, total) {
+        const w = Math.max(s.runH, total * 0.09);
+        const tick = `<div style="text-align:right;font-size:10px;color:#94a3b8;height:13px;line-height:13px;">${f1(s.endH)} ${esc(T.hr)}</div>`;
+        if (s.kind === 'ext') {
+            return `<div style="flex:${w.toFixed(3)} 1 0;min-width:96px;">${tick}
+                <div style="height:16px;border-radius:6px;background:${STRIPE_EXT};border:1.5px solid #a78bfa;"></div>
+                <div style="margin-top:4px;line-height:1.3;"><div style="font-size:10.5px;font-weight:800;color:#7c3aed;">${esc(T.ext)}</div>
+                <div style="font-size:13px;font-weight:800;color:#0b1b33;white-space:nowrap;">${esc(s.WO)}</div>
+                <div style="font-size:11px;color:#64748b;">${num(s.qty)} ${esc(T.pcs)}</div></div></div>`;
+        }
+        const pc = s.rem > 0 ? Math.round(s.cov / s.rem * 100) : 100, full = s.cov >= s.rem;
+        const sub = s.made > 0 ? `${esc(T.made)} ${num(s.made)} · ${esc(T.left)} ${num(s.rem)}` : `${num(s.rem)} ${esc(T.pcs)}`;
+        return `<div style="flex:${w.toFixed(3)} 1 0;min-width:96px;">${tick}
+                <div style="height:16px;border-radius:6px;overflow:hidden;display:flex;border:1.5px solid ${full ? '#2563eb' : '#f59e0b'};"><div style="width:${pc}%;background:#2563eb;"></div><div style="flex:1;background:${STRIPE_MISS};"></div></div>
+                <div style="margin-top:4px;line-height:1.3;"><div style="font-size:10.5px;font-weight:800;color:${full ? '#1d4ed8' : '#b45309'};">${esc(T.ownOf(num(s.arrived), num(s.qty)))}</div>
+                <div style="font-size:13px;font-weight:800;color:#0b1b33;white-space:nowrap;">${esc(s.WO)}</div>
+                <div style="font-size:11px;color:#64748b;">${sub}</div></div></div>`;
+    }
+    function pillInner(x, T) {
+        const h = f1(x.short.atH), en = isEn();
+        if (!x.off) return `${esc(T.must)} <b style="font-size:14px;">${esc(clock(x.short.atH, T))}</b> · ${esc(T.inH(h))}`;
+        if (!x.baseMs) return esc(en ? `Next lot must reach LG within ${h} h after production starts` : `ต้องส่งล็อตถัดไปถึง LG ภายใน ${h} ชม. หลังเริ่มผลิต`);
+        const d = new Date(x.baseMs + x.short.atH * 3600e3), p2 = (n) => String(n).padStart(2, '0');
+        const day = new Date(d).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0), dd = Math.round(day / 864e5);
+        const lbl = dd === 0 ? '' : (dd === 1 ? T.tmr + ' ' : p2(d.getDate()) + '/' + p2(d.getMonth() + 1) + ' ');
+        return `${esc(T.must)} <b style="font-size:14px;">${esc(lbl + p2(d.getHours()) + ':' + p2(d.getMinutes()))}</b> · ${esc(en ? 'after start +' + h + ' h' : 'หลังเริ่มผลิต +' + h + ' ชม.')}`;
+    }
+    function laneHtml(x, T) {
+        const c = COL[x.status];
+        let pill;
+        if (x.short) pill = `<span style="background:${c[1]};color:${c[2]};font-weight:800;font-size:12.5px;padding:4px 12px;border-radius:20px;">${pillInner(x, T)}</span>`;
+        else pill = `<span style="background:${COL.ok[1]};color:${COL.ok[2]};font-weight:800;font-size:12.5px;padding:4px 12px;border-radius:20px;">${esc(T.allOk)}</span>`;
+        const gain = x.extBefore > 0 && x.short ? `<div style="font-size:11.5px;color:#5b21b6;margin-top:6px;font-weight:700;">${esc(T.gain(f1(x.extBefore), num(x.extQty), f1(x.short.atH - x.extBefore)))}</div>`
+            : '';
+        const need = x.short ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">${esc(T.needMore(x.short.WO, num(x.short.need)))}</div>` : '';
+        return `<div style="border:1px solid #e3e8f0;border-radius:14px;padding:10px 14px;background:#fff;break-inside:avoid;">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+                <span style="background:#1b2a41;color:#fff;font-weight:800;font-size:12px;padding:2px 10px;border-radius:6px;">${esc(T.line)} ${esc(x.line)}</span>
+                <span style="font-size:11.5px;color:#64748b;">${esc(T.uph)} ${num(x.u)}</span>
+                <span style="margin-left:auto;">${pill}</span></div>
+            <div style="display:flex;gap:6px;align-items:flex-start;">${x.segs.map(s => segHtml(s, T, x.totalH)).join('')}</div>${gain}${need}</div>`;
+    }
+    function legend(T) {
+        const sw = (bg, bd) => `<span style="display:inline-block;width:14px;height:10px;border-radius:3px;background:${bg};border:1px solid ${bd};vertical-align:-1px;margin-right:4px;"></span>`;
+        return `<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:#64748b;margin-top:8px;">
+            <span>${sw('#2563eb', '#2563eb')}${esc(T.mine)}</span><span>${sw(STRIPE_MISS, '#f59e0b')}${esc(T.miss)}</span><span>${sw(STRIPE_EXT, '#a78bfa')}${esc(T.ext)}</span></div>`;
+    }
+    function repLane(x, T) {
+        const c = COL[x.status], en = isEn();
+        const inner = x.short ? (typeof pillInner === 'function' ? pillInner(x, T) : `${esc(T.must)} <b style="font-size:14px;">${esc(clock(x.short.atH, T))}</b> · ${esc(T.inH(f1(x.short.atH)))}`) : esc(T.allOk);
+        const pill = `<span style="background:${x.short ? c[1] : COL.ok[1]};color:${x.short ? c[2] : COL.ok[2]};font-weight:800;font-size:12.5px;padding:4px 12px;border-radius:20px;">${inner}</span>`;
+        const bar = x.segs.map(s => {
+            const w = Math.max(s.runH, 0.0001);
+            if (s.kind === 'ext') return `<div style="flex:${w.toFixed(4)} 1 0;min-width:3px;background:${STRIPE_EXT};border-right:1px solid #fff;"></div>`;
+            const pc = s.rem > 0 ? Math.round(s.cov / s.rem * 100) : 100;
+            return `<div style="flex:${w.toFixed(4)} 1 0;min-width:3px;display:flex;border-right:1px solid #fff;"><div style="width:${pc}%;background:#2563eb;"></div><div style="flex:1;background:${STRIPE_MISS};"></div></div>`;
+        }).join('');
+        const chips = x.segs.map((s, i) => {
+            const ext = s.kind === 'ext', full = !ext && s.cov >= s.rem;
+            const col = ext ? '#7c3aed' : (full ? '#1d4ed8' : '#b45309'), bd = ext ? '#a78bfa' : (full ? '#2563eb' : '#f59e0b'), bg = ext ? '#faf8ff' : (full ? '#f5f8ff' : '#fffbeb');
+            const l1 = ext ? T.ext : T.ownOf(num(s.arrived), num(s.qty));
+            const l3 = ext ? `${num(s.qty)} ${T.pcs}` : (s.made > 0 ? `${T.made} ${num(s.made)} · ${T.left} ${num(s.rem)}` : `${num(s.rem)} ${T.pcs}`);
+            return `<div style="border:1px solid ${bd};border-left:5px solid ${bd};background:${bg};border-radius:8px;padding:4px 8px;line-height:1.3;break-inside:avoid;">
+                <div style="display:flex;justify-content:space-between;gap:6px;font-size:10.5px;font-weight:800;color:${col};"><span>${esc(l1)}</span><span style="color:#94a3b8;font-weight:700;">#${i + 1}</span></div>
+                <div style="font-size:13px;font-weight:800;color:#0b1b33;word-break:break-all;">${esc(s.WO)}</div>
+                <div style="display:flex;justify-content:space-between;gap:6px;font-size:10.5px;color:#64748b;"><span>${esc(l3)}</span><span>${esc(en ? 'ends ' : 'เสร็จที่ ')}${f1(s.endH)} ${esc(T.hr)}</span></div></div>`;
+        }).join('');
+        const gain = x.extBefore > 0 && x.short ? `<div style="font-size:11.5px;color:#5b21b6;margin-top:8px;font-weight:700;">${esc(T.gain(f1(x.extBefore), num(x.extQty), f1(x.short.atH - x.extBefore)))}</div>` : '';
+        const need = x.short ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">${esc(T.needMore(x.short.WO, num(x.short.need)))}</div>` : '';
+        return `<div style="border:1px solid #e3e8f0;border-radius:14px;padding:10px 14px;background:#fff;break-inside:avoid;">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+                <span style="background:#1b2a41;color:#fff;font-weight:800;font-size:12px;padding:2px 10px;border-radius:6px;">${esc(T.line)} ${esc(x.line)}</span>
+                <span style="font-size:11.5px;color:#64748b;">${esc(T.uph)} ${num(x.u)}</span>
+                <span style="margin-left:auto;">${pill}</span></div>
+            <div style="display:flex;height:16px;border-radius:8px;overflow:hidden;border:1px solid #cbd5e1;">${bar}</div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;margin:2px 0 8px;"><span>0</span><span>${f1(x.totalH)} ${esc(T.hr)}</span></div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;">${chips}</div>${gain}${need}</div>`;
+    }
+    function repHtml(list, T) {
+        return `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+                <div style="font-size:14px;font-weight:800;color:#1b2a41;">${esc(T.title)}</div><div style="font-size:11px;color:#7a8799;">${esc(T.sub)}</div></div>
+            <div style="display:grid;gap:10px;">${list.map(x => repLane(x, T)).join('')}</div>${legend(T)}`;
+    }
+    function boxHtml(list, T) {
+        return `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+                <div style="font-size:14px;font-weight:800;color:#1b2a41;">${esc(T.title)}</div><div style="font-size:11px;color:#7a8799;">${esc(T.sub)}</div></div>
+            <div style="display:grid;gap:10px;">${list.map(x => laneHtml(x, T)).join('')}</div>${legend(T)}`;
+    }
+ 
+    // ---------- 1) แดชบอร์ด ----------
+    let lastSig = '';
+    function paint() {
+        const view = document.getElementById('view-dash-lg'), kp = document.getElementById('lgd-kpis');
+        if (!view || !kp || !window.__lguApi) return;
+        let box = document.getElementById('lgq-card');
+        let list = []; try { list = lanes(dateSel()); } catch (e) { list = []; }
+        if (!list.length) { if (box) box.remove(); lastSig = ''; return; }
+        const h = boxHtml(list, L());
+        if (!box) { box = document.createElement('div'); box.id = 'lgq-card'; box.style.cssText = 'background:#fff;border-radius:20px;box-shadow:0 2px 12px rgba(20,40,80,.07);padding:16px 18px;margin-bottom:16px;'; lastSig = ''; }
+        if (h !== lastSig) { box.innerHTML = h; lastSig = h; }
+        // วางต่อจากการ์ด "กำลังผลิต" (ถ้ามี) หรือใต้ KPI
+        const run = document.getElementById('lgx-box') || document.getElementById('lgrun-card');   // ต่อท้ายการ์ดของเจ้าอื่น / การ์ดกำลังผลิต
+        const target = run && run.parentNode === kp.parentNode ? run : kp;
+        if (box.previousElementSibling !== target) target.insertAdjacentElement('afterend', box);
+    }
+    setInterval(() => { try { paint(); } catch (e) { } }, 1500);
+ 
+    // ---------- 2) รูป / PDF ที่บันทึก ----------
+    function build(rep) {
+        const table = rep.querySelector('table'); if (!table || !window.__lguApi) return;
+        const list = lanes(dateSel()); if (!list.length) return;
+        const box = document.createElement('div');
+        box.id = 'lgq-rep';
+        box.style.cssText = 'background:#f7f9fc;border:1px solid #e3e8f0;border-radius:12px;padding:10px 14px 12px;margin:0 0 12px;';
+        box.innerHTML = repHtml(list, L());   // LG-QUEUE-IMG
+        const anchor = rep.querySelector('#lgu-rep') || table;
+        anchor.insertAdjacentElement('beforebegin', box);
+    }
+    function wrap(name) {
+        const orig = window[name];
+        if (typeof orig !== 'function' || orig.__lgqW) return;
+        const w = function () {
+            const self = this, args = arguments, body = document.body, realAppend = body.appendChild;
+            body.appendChild = function (node) {
+                try { const rep = node && node.querySelector ? node.querySelector('#lgd-report') : null; if (rep && !rep.getAttribute('data-lgq')) { rep.setAttribute('data-lgq', '1'); build(rep); } } catch (err) { console.warn('LG-QUEUE report', err); }
+                return realAppend.call(body, node);
+            };
+            try { return orig.apply(self, args); }
+            finally { body.appendChild = realAppend; delete body.appendChild; }
+        };
+        w.__lgqW = true;
+        window[name] = w;
+    }
+    let tries = 0;
+    const iv = setInterval(() => {
+        tries++;
+        if (typeof window.lgdSaveImage === 'function' && typeof window.lgdSavePdf === 'function' && tries >= 10) { wrap('lgdSaveImage'); wrap('lgdSavePdf'); clearInterval(iv); }
+        else if (tries > 80) clearInterval(iv);
+    }, 500);
+})();
+(function () {
+    if (window.__lgQueueFix) return; window.__lgQueueFix = true;
+    const st = document.createElement('style');
+    st.textContent = [
+        '#lgq-card,#lgq-card>div,#lgq-card div[style*="display:grid"]>div{min-width:0;max-width:100%;box-sizing:border-box}',
+        '#lgq-card div[style*="gap:6px;align-items:flex-start"]{overflow-x:auto;overflow-y:hidden;padding-bottom:8px;-webkit-overflow-scrolling:touch}',
+        '#lgq-card div[style*="gap:6px;align-items:flex-start"]::-webkit-scrollbar{height:8px}',
+        '#lgq-card div[style*="gap:6px;align-items:flex-start"]::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:8px}',
+        '#lgq-rep,#lgq-rep div[style*="display:grid"]>div{min-width:0;max-width:100%;box-sizing:border-box}',
+        '#lgq-rep div[style*="gap:6px;align-items:flex-start"]{overflow:hidden}',
+        '#lgq-rep div[style*="gap:6px;align-items:flex-start"]>div{min-width:52px!important}'
+    ].join('\n');
+    document.head.appendChild(st);
+})();
+(function () {
+    if (window.__lgExtHide) return; window.__lgExtHide = true;
+    const st = document.createElement('style');
+    st.textContent = '#lgx-card{display:none!important}';
+    document.head.appendChild(st);
 })();
 // ดาวน์โหลดเทมเพลต Excel สำหรับอัปโหลดแพลน
 window.downloadLGPlanTemplate = function() {
@@ -30576,10 +30825,16 @@ renderLGTagPrintWindow = function(tags, printWin) {
             rem += Math.max(0, aRow - pr); planLeft += Math.max(0, o - pr);   // LG-UPH-RECV
             unsent += Math.max(0, Math.max(0, o - pr) - Math.max(0, sRow - pr));
         });
-        return { rows, pg, idx, hasProg, nv: pp.nv, doneN, partRows, sent, produced, rem, planTotal, planLeft, unsent, cur: idx >= 0 ? rows[idx] : null, complete: pp.nv && rows.length > 0 && doneN === rows.length };
+       const stObj = { rows, pg, idx, hasProg, nv: pp.nv, doneN, partRows, sent, produced, rem, planTotal, planLeft, unsent, cur: idx >= 0 ? rows[idx] : null, complete: pp.nv && rows.length > 0 && doneN === rows.length };
+        try { stObj.extGap = typeof window.__lgqExtGap === 'function' ? window.__lgqExtGap(line, date, stObj) : 0; } catch (e) { stObj.extGap = 0; }   // LG-QUEUE-UPH: เวลาที่ LG ผลิตของเจ้าอื่นคั่น (หน่วยชิ้น)
+        return stObj;
     }
     // ข้อความ "LG ผลิตถึงไหน" (html)
-    function whereHtml(st) {
+    function whereHtml(st) {   // LG-QUEUE-UPH
+        const b = whereHtml0(st), e = st.extGap > 0 ? `<b>+เจ้าอื่นคั่น ${num(st.extGap)} ชิ้น</b>` : '';
+        return b && e ? b + ' · ' + e : (b || e);
+    }
+    function whereHtml0(st) {
         if (!st.hasProg) return '';
         if (st.nv) {
             if (!st.doneN && !st.partRows.length) return 'ยังไม่เริ่มผลิต';
@@ -30940,7 +31195,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
                      if (st.complete) { pv.className = 'lgu-pv lgu-ok'; pv.innerHTML = `ผลิตครบ ${st.doneN}/${st.rows.length} WO<small>ถึง LG ${num(st.sent)} · LG ผลิตแล้ว ${num(st.produced)}</small>`; return; }
                      if (fullSent(st)) { pv.className = 'lgu-pv lgu-ok'; pv.innerHTML = `ส่งครบแพลน 100%<small>ถึง LG ${num(st.sent)} · LG ผลิตแล้ว ${num(st.produced)} · ไม่มีแพลนค้างส่งแล้ว</small>`; return; }
                     if (!u) { pv.className = 'lgu-pv lgu-none'; pv.innerHTML = `ผลิตครบ ${st.doneN}/${st.rows.length} WO · ถึง LG ${num(st.sent)} · เหลือ ${num(st.rem)} ชิ้น<small>ยังไม่ได้ตั้ง UPH ของไลน์นี้ จึงยังคำนวณชั่วโมงไม่ได้</small>`; return; }
-                    const h = st.rem / u, s = status(h);
+                    const h = (st.rem + st.extGap) / u, s = status(h);
                     pv.className = 'lgu-pv lgu-' + s;
                     pv.innerHTML = `เหลืองานอยู่ได้ ${hh(h)} ชม.<small>ถึง LG ${num(st.sent)} − LG ผลิตแล้ว ${num(st.produced)} = เหลือ ${num(st.rem)} ชิ้น ÷ UPH ${num(u)}</small>`;
                 }
@@ -30987,7 +31242,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
             db.lgLineProgress = base;
             try { localStorage.setItem(PLSK, JSON.stringify(db.lgLineProgress)); } catch (e) { }
             const body = list.map(v => {
-                const st = lineState(v.line, date), u = uhtOf(v.line), full = fullSent(st), h = u ? st.rem / u : 0, s = full ? 'ok' : (u ? status(h) : 'none');
+                const st = lineState(v.line, date), u = uhtOf(v.line), full = fullSent(st), h = u ? (st.rem + st.extGap) / u : 0, s = full ? 'ok' : (u ? status(h) : 'none');
                 return `<div class="lgu-rs ${s}"><span class="nm">ไลน์ ${esc(v.line)}</span><span style="font-size:.78rem;color:#475569;flex:1">ผลิตครบ <b>${st.doneN}/${st.rows.length}</b> WO<small>เหลือ ${num(st.rem)} ชิ้น${u ? ' ÷ UPH ' + num(u) : ''}</small></span><span class="hr">${full ? '100%' : (u ? hh(h) + ' ชม.' : 'ยังไม่ตั้ง UPH')}</span></div>`;
             }).join('');
             popDone('อัปเดตแล้ว', 'บันทึกความคืบหน้าการผลิต ' + list.length + ' ไลน์', body);
@@ -31077,13 +31332,13 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
              else if (fullSent(st)) html = `<div class="lgu-ln ok"><i class="bi bi-check-circle-fill"></i> <b>ส่งครบแพลน 100%</b> <span style="opacity:.75">(ถึง LG ${num(st.sent)} / แพลน ${num(st.planTotal)})</span></div>`;
             else if (!u) html = `<div class="lgu-ln none"><i class="bi bi-speedometer2"></i> ยังไม่ตั้ง UPH</div>`;
             else {
-                const h = st.rem / u, s = (st.sent > 0 || st.hasProg) ? status(h) : 'none';
+                const h = (st.rem + st.extGap) / u, s = (st.sent > 0 || st.hasProg) ? status(h) : 'none';
                 const age = st.hasProg ? agoMin(st.pg.updatedAt) : null;
                 const where = whereHtml(st);
                 const stale = age !== null && age > 60 ? ` <span class="lgu-stale">· อัปเดตนานแล้ว ${Math.floor(age / 60)} ชม.</span>` : '';
                 const upd = st.hasProg && st.pg.updatedAt ? ` · อัปเดต ${hm2(st.pg.updatedAt)}` : '';
                 html = `<div class="lgu-ln ${s}"><i class="bi bi-speedometer2"></i> เหลืองานอยู่ได้ <b>${hh(h)} ชม.</b> <span style="opacity:.75">(ถึง LG ${num(st.sent)} − LG ผลิตแล้ว ${num(st.produced)} = ${num(st.rem)} ÷ UPH ${num(u)}${where ? ' · ' + where : ' · ยังไม่ระบุว่าผลิตถึงไหน'}${upd})</span>${stale}${canProg() ? ` <button type="button" class="lgu-mini" data-lgu-prog="${esc(l)}">อัปเดต</button>` : ''}</div>`;
-                if ((st.sent > 0 || st.hasProg) && h < minH()) low.push({ l, h, need: Math.min(st.unsent, Math.ceil(minH() * u - st.rem)) });
+                if ((st.sent > 0 || st.hasProg) && h < minH()) low.push({ l, h, need: Math.min(st.unsent, Math.ceil(minH() * u - st.rem - st.extGap)) });
             }
             const bar = ln.querySelector('.lgd-bar');
             (bar || ln).insertAdjacentHTML(bar ? 'afterend' : 'beforeend', html);
@@ -31119,7 +31374,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
             if (st.complete) return `<div class="r"><span class="nm">ไลน์ ${esc(l)}</span><span class="lgu-chip lgu-ok"><i class="bi bi-check-circle-fill"></i> ผลิตครบ <b>${st.doneN}/${st.rows.length}</b> WO</span></div>`;
             if (fullSent(st)) return `<div class="r"><span class="nm">ไลน์ ${esc(l)}</span><span class="lgu-chip lgu-ok"><i class="bi bi-check-circle-fill"></i> ส่งครบแพลน <b>100%</b> <small>${num(st.sent)} / ${num(st.planTotal)}</small></span></div>`;
             if (!u) return `<div class="r"><span class="nm">ไลน์ ${esc(l)}</span><span class="lgu-chip lgu-none">ยังไม่ตั้ง UPH</span></div>`;
-            const h = st.rem / u, s = (st.sent > 0 || st.hasProg) ? status(h) : 'none';
+            const h = (st.rem + st.extGap) / u, s = (st.sent > 0 || st.hasProg) ? status(h) : 'none';
             const age = st.hasProg ? agoMin(st.pg.updatedAt) : null;
             const where = whereHtml(st) || 'ยังไม่ระบุว่า LG ผลิตถึงไหน';
             const stale = age !== null && age > 60 ? `<span class="lgu-stale">อัปเดตนานแล้ว ${Math.floor(age / 60)} ชม.</span>` : (age !== null ? `<span style="font-size:.7rem;color:#8a97ab">อัปเดต ${hm2(st.pg.updatedAt)}</span>` : '');
