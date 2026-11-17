@@ -18137,10 +18137,10 @@ window.renderLGMatchTable = function() {
     const isEn = () => { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e) { return false; } };
     const TXT = {
         th: { h: 'UPH และงานเหลือที่ LG', sub: 'UPH = ชิ้นที่ไลน์รันได้ต่อชั่วโมง · อยู่ได้ = เหลือ ÷ UPH', min: 'ขั้นต่ำที่ควรอยู่ได้', hr: 'ชม.', ln: 'ไลน์',
-              cUph: 'UPH', cUnit: 'ชิ้น/ชม.', cSent: 'ส่งเข้า', cMade: 'ผลิตแล้ว', cRem: 'เหลือให้ผลิต', cLeft: 'อยู่ได้อีก',
+              cUph: 'UPH', cUnit: 'ชิ้น/ชม.', cSent: 'ถึง LG', cMade: 'ผลิตแล้ว', cRem: 'เหลือให้ผลิต', cLeft: 'อยู่ได้อีก',
               noUph: 'ยังไม่ตั้ง UPH', doneAll: (a, b) => `ผลิตครบ ${a}/${b} WO`, sentAll: 'ส่งครบแพลน 100%', where: 'ผลิตถึง', noWhere: 'ยังไม่ระบุว่าผลิตถึงไหน', low: 'ต่ำกว่าขั้นต่ำ', ok: 'ปกติ', warn: 'ใกล้ต่ำ' },
         en: { h: 'UPH & remaining work at LG', sub: 'UPH = pieces the line can run per hour · Lasts = remaining ÷ UPH', min: 'Minimum cover', hr: 'h', ln: 'Line',
-              cUph: 'UPH', cUnit: 'pcs/h', cSent: 'Sent', cMade: 'Made', cRem: 'Left to make', cLeft: 'Lasts',
+              cUph: 'UPH', cUnit: 'pcs/h', cSent: 'At LG', cMade: 'Made', cRem: 'Left to make', cLeft: 'Lasts',
               noUph: 'UPH not set', doneAll: (a, b) => `All made ${a}/${b} WO`, sentAll: 'Plan 100% sent', where: 'Made up to', noWhere: 'Progress not reported', low: 'Below minimum', ok: 'OK', warn: 'Getting low' }
     };
     const COL = { ok: ['#dcfce7', '#15803d', '#16a34a'], warn: ['#fef3c7', '#b45309', '#f59e0b'], bad: ['#dc2626', '#ffffff', '#dc2626'], none: ['#e8edf5', '#5a6a80', '#98a4b6'] };
@@ -30448,7 +30448,9 @@ renderLGTagPrintWindow = function(tags, printWin) {
         return { nv: true, done, part };
     }
     // รวมสถานะของไลน์หนึ่งในวันแพลนหนึ่ง: ส่งเข้า / ผลิตแล้ว / เหลือให้ผลิต (เรียงตามลำดับแพลนของไลน์นั้น)
+    function recvQtyMap() { const m = {}; (db.lgReceiveLog || []).forEach(x => { const k = up(x.WO) + '|' + up(x.partNo); m[k] = (m[k] || 0) + (parseFloat(x.qty) || 0); }); return m; }   // LG-UPH-RECV
     function lineState(line, date, pgOverride) {
+        const RV = recvQtyMap();   // ยอดที่ LG สแกนรับแล้ว ต่อ WO|Part
         let rows = [];
         try { rows = lgSortPlans(computeLGMatchStatus().filter(r => lgPlanDateOf(r) === date && lineOfPlan(r) === line)); } catch (e) { }
         const pg = pgOverride !== undefined ? pgOverride : progOf(line, date);
@@ -30459,15 +30461,15 @@ renderLGTagPrintWindow = function(tags, printWin) {
         let sent = 0, produced = 0, rem = 0, planTotal = 0, planLeft = 0, doneN = 0, unsent = 0;
         const partRows = [];
         rows.forEach((r, i) => {
-            const sRow = parseFloat(r.scanned) || 0, o = parseFloat(r.orderQty) || 0;
+            const sRow = parseFloat(r.scanned) || 0, o = parseFloat(r.orderQty) || 0, aRow = RV[up(r.WO) + '|' + up(r.partNo)] || 0;   // LG-UPH-RECV
             let pr = 0;
             if (pp.nv) {
                 const k = rk(r);
                 if (pp.done.has(k)) { pr = Math.max(o, sRow); doneN++; }
                 else { pr = Math.min(o, parseFloat(pp.part[k]) || 0); if (pr > 0) partRows.push({ r, q: pr }); }
             } else if (hasProg && idx >= 0) pr = i < idx ? o : (i === idx ? Math.min(o, parseFloat(pg.producedQty) || 0) : 0);
-            sent += sRow; produced += Math.min(sRow, pr); planTotal += o;
-            rem += Math.max(0, sRow - pr); planLeft += Math.max(0, o - pr);
+            sent += aRow; produced += Math.min(aRow, pr); planTotal += o;   // LG-UPH-RECV
+            rem += Math.max(0, aRow - pr); planLeft += Math.max(0, o - pr);   // LG-UPH-RECV
             unsent += Math.max(0, Math.max(0, o - pr) - Math.max(0, sRow - pr));
         });
         return { rows, pg, idx, hasProg, nv: pp.nv, doneN, partRows, sent, produced, rem, planTotal, planLeft, unsent, cur: idx >= 0 ? rows[idx] : null, complete: pp.nv && rows.length > 0 && doneN === rows.length };
@@ -30831,12 +30833,12 @@ renderLGTagPrintWindow = function(tags, printWin) {
                 }
                 function preview() {
                     const pv = document.getElementById('lgu-pv'), pg = toPg(cur), st = lineState(cur, date, pg), u = uhtOf(cur);
-                     if (st.complete) { pv.className = 'lgu-pv lgu-ok'; pv.innerHTML = `ผลิตครบ ${st.doneN}/${st.rows.length} WO<small>ส่งเข้า ${num(st.sent)} · LG ผลิตแล้ว ${num(st.produced)}</small>`; return; }
-                     if (fullSent(st)) { pv.className = 'lgu-pv lgu-ok'; pv.innerHTML = `ส่งครบแพลน 100%<small>ส่งเข้า ${num(st.sent)} · LG ผลิตแล้ว ${num(st.produced)} · ไม่มีแพลนค้างส่งแล้ว</small>`; return; }
-                    if (!u) { pv.className = 'lgu-pv lgu-none'; pv.innerHTML = `ผลิตครบ ${st.doneN}/${st.rows.length} WO · ส่งเข้า ${num(st.sent)} · เหลือ ${num(st.rem)} ชิ้น<small>ยังไม่ได้ตั้ง UPH ของไลน์นี้ จึงยังคำนวณชั่วโมงไม่ได้</small>`; return; }
+                     if (st.complete) { pv.className = 'lgu-pv lgu-ok'; pv.innerHTML = `ผลิตครบ ${st.doneN}/${st.rows.length} WO<small>ถึง LG ${num(st.sent)} · LG ผลิตแล้ว ${num(st.produced)}</small>`; return; }
+                     if (fullSent(st)) { pv.className = 'lgu-pv lgu-ok'; pv.innerHTML = `ส่งครบแพลน 100%<small>ถึง LG ${num(st.sent)} · LG ผลิตแล้ว ${num(st.produced)} · ไม่มีแพลนค้างส่งแล้ว</small>`; return; }
+                    if (!u) { pv.className = 'lgu-pv lgu-none'; pv.innerHTML = `ผลิตครบ ${st.doneN}/${st.rows.length} WO · ถึง LG ${num(st.sent)} · เหลือ ${num(st.rem)} ชิ้น<small>ยังไม่ได้ตั้ง UPH ของไลน์นี้ จึงยังคำนวณชั่วโมงไม่ได้</small>`; return; }
                     const h = st.rem / u, s = status(h);
                     pv.className = 'lgu-pv lgu-' + s;
-                    pv.innerHTML = `เหลืองานอยู่ได้ ${hh(h)} ชม.<small>ส่งเข้า ${num(st.sent)} − LG ผลิตแล้ว ${num(st.produced)} = เหลือ ${num(st.rem)} ชิ้น ÷ UPH ${num(u)}</small>`;
+                    pv.innerHTML = `เหลืองานอยู่ได้ ${hh(h)} ชม.<small>ถึง LG ${num(st.sent)} − LG ผลิตแล้ว ${num(st.produced)} = เหลือ ${num(st.rem)} ชิ้น ÷ UPH ${num(u)}</small>`;
                 }
                 wos.addEventListener('click', (e) => {
                     const ck = e.target.closest && e.target.closest('input.ck'), tx = e.target.closest && e.target.closest('.tx');
@@ -30968,7 +30970,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
             const l = mm[1].trim(), st = lineState(l, date), u = uhtOf(l);
             let html;
              if (st.complete) html = `<div class="lgu-ln ok"><i class="bi bi-check-circle-fill"></i> ผลิตครบ <b>${st.doneN}/${st.rows.length}</b> WO</div>`;
-             else if (fullSent(st)) html = `<div class="lgu-ln ok"><i class="bi bi-check-circle-fill"></i> <b>ส่งครบแพลน 100%</b> <span style="opacity:.75">(ส่งเข้า ${num(st.sent)} / แพลน ${num(st.planTotal)})</span></div>`;
+             else if (fullSent(st)) html = `<div class="lgu-ln ok"><i class="bi bi-check-circle-fill"></i> <b>ส่งครบแพลน 100%</b> <span style="opacity:.75">(ถึง LG ${num(st.sent)} / แพลน ${num(st.planTotal)})</span></div>`;
             else if (!u) html = `<div class="lgu-ln none"><i class="bi bi-speedometer2"></i> ยังไม่ตั้ง UPH</div>`;
             else {
                 const h = st.rem / u, s = (st.sent > 0 || st.hasProg) ? status(h) : 'none';
@@ -30976,7 +30978,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
                 const where = whereHtml(st);
                 const stale = age !== null && age > 60 ? ` <span class="lgu-stale">· อัปเดตนานแล้ว ${Math.floor(age / 60)} ชม.</span>` : '';
                 const upd = st.hasProg && st.pg.updatedAt ? ` · อัปเดต ${hm2(st.pg.updatedAt)}` : '';
-                html = `<div class="lgu-ln ${s}"><i class="bi bi-speedometer2"></i> เหลืองานอยู่ได้ <b>${hh(h)} ชม.</b> <span style="opacity:.75">(ส่งเข้า ${num(st.sent)} − LG ผลิตแล้ว ${num(st.produced)} = ${num(st.rem)} ÷ UPH ${num(u)}${where ? ' · ' + where : ' · ยังไม่ระบุว่าผลิตถึงไหน'}${upd})</span>${stale}${canProg() ? ` <button type="button" class="lgu-mini" data-lgu-prog="${esc(l)}">อัปเดต</button>` : ''}</div>`;
+                html = `<div class="lgu-ln ${s}"><i class="bi bi-speedometer2"></i> เหลืองานอยู่ได้ <b>${hh(h)} ชม.</b> <span style="opacity:.75">(ถึง LG ${num(st.sent)} − LG ผลิตแล้ว ${num(st.produced)} = ${num(st.rem)} ÷ UPH ${num(u)}${where ? ' · ' + where : ' · ยังไม่ระบุว่าผลิตถึงไหน'}${upd})</span>${stale}${canProg() ? ` <button type="button" class="lgu-mini" data-lgu-prog="${esc(l)}">อัปเดต</button>` : ''}</div>`;
                 if ((st.sent > 0 || st.hasProg) && h < minH()) low.push({ l, h, need: Math.min(st.unsent, Math.ceil(minH() * u - st.rem)) });
             }
             const bar = ln.querySelector('.lgd-bar');
@@ -31018,9 +31020,9 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
             const where = whereHtml(st) || 'ยังไม่ระบุว่า LG ผลิตถึงไหน';
             const stale = age !== null && age > 60 ? `<span class="lgu-stale">อัปเดตนานแล้ว ${Math.floor(age / 60)} ชม.</span>` : (age !== null ? `<span style="font-size:.7rem;color:#8a97ab">อัปเดต ${hm2(st.pg.updatedAt)}</span>` : '');
             return `<div class="r"><span class="nm">ไลน์ ${esc(l)}</span>
-                <span class="lgu-chip lgu-${s}" title="ส่งเข้า ${num(st.sent)} − ผลิตแล้ว ${num(st.produced)}">เหลืองาน <b>${hh(h)} ชม.</b> <small>${num(st.rem)} ชิ้น</small></span>
+                <span class="lgu-chip lgu-${s}" title="ถึง LG ${num(st.sent)} − ผลิตแล้ว ${num(st.produced)}">เหลืองาน <b>${hh(h)} ชม.</b> <small>${num(st.rem)} ชิ้น</small></span>
                 <span style="font-size:.74rem;color:#475569">${where}</span>${stale}
-                <span style="font-size:.7rem;color:#8a97ab">ส่งเข้า ${num(st.sent)} · UPH ${num(u)}/ชม.</span>
+                <span style="font-size:.7rem;color:#8a97ab">ถึง LG ${num(st.sent)} · UPH ${num(u)}/ชม.</span>
                 ${canProg() ? `<button type="button" class="lgu-mini" data-lgu-prog="${esc(l)}">อัปเดตผลิต</button>` : ''}</div>`;
         }).join('') || `<div class="hint">ยังไม่ได้ตั้ง UPH ของไลน์ใดเลย${canEdit() ? ' — กด "ตั้งค่า UPH"' : ' (ให้หัวหน้าตั้งค่าให้)'}</div>`;
         const div = document.createElement('div');
