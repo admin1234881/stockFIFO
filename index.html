@@ -31560,7 +31560,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
             const l = mm[1].trim(), st = lineState(l, date), u = uhtOf(l);
             let html;
              if (st.complete) html = `<div class="lgu-ln ok"><i class="bi bi-check-circle-fill"></i> ผลิตครบ <b>${st.doneN}/${st.rows.length}</b> WO</div>`;
-             else if (fullSent(st)) html = `<div class="lgu-ln ok"><i class="bi bi-check-circle-fill"></i> <b>ส่งครบแพลน 100%</b> <span style="opacity:.75">(ถึง LG ${num(st.sent)} / แพลน ${num(st.planTotal)})</span></div>`;
+             else if (fullSent(st)) html = `<div class="lgu-ln ok"><i class="bi bi-check-circle-fill"></i> <b>ส่งครบแพลน 100%</b> <span style="opacity:.75">(ถึง LG ${num(st.sent)} / แพลน ${num(st.planTotal)})</span>${canProg() ? ` <button type="button" class="lgu-mini" data-lgu-prog="${esc(l)}">อัปเดต</button>` : ''}</div>`;   // LG-UPD-BTN
             else if (!u) html = `<div class="lgu-ln none"><i class="bi bi-speedometer2"></i> ยังไม่ตั้ง UPH</div>`;
             else {
                 const h = (st.rem + st.extGap) / u, s = (st.sent > 0 || st.hasProg) ? status(h) : 'none';
@@ -31603,7 +31603,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
         const rows = lines.map(l => {
             const u = uhtOf(l), st = lineState(l, date);
             if (st.complete) return `<div class="r"><span class="nm">ไลน์ ${esc(l)}</span><span class="lgu-chip lgu-ok"><i class="bi bi-check-circle-fill"></i> ผลิตครบ <b>${st.doneN}/${st.rows.length}</b> WO</span></div>`;
-            if (fullSent(st)) return `<div class="r"><span class="nm">ไลน์ ${esc(l)}</span><span class="lgu-chip lgu-ok"><i class="bi bi-check-circle-fill"></i> ส่งครบแพลน <b>100%</b> <small>${num(st.sent)} / ${num(st.planTotal)}</small></span></div>`;
+            if (fullSent(st)) return `<div class="r"><span class="nm">ไลน์ ${esc(l)}</span><span class="lgu-chip lgu-ok"><i class="bi bi-check-circle-fill"></i> ส่งครบแพลน <b>100%</b> <small>${num(st.sent)} / ${num(st.planTotal)}</small></span>${canProg() ? `<button type="button" class="lgu-mini" data-lgu-prog="${esc(l)}">อัปเดตผลิต</button>` : ''}</div>`;   // LG-UPD-BTN
             if (!u) return `<div class="r"><span class="nm">ไลน์ ${esc(l)}</span><span class="lgu-chip lgu-none">ยังไม่ตั้ง UPH</span></div>`;
             const h = (st.rem + st.extGap) / u, s = (st.sent > 0 || st.hasProg) ? status(h) : 'none';
             const age = st.hasProg ? agoMin(st.pg.updatedAt) : null;
