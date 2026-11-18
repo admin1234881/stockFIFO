@@ -19037,7 +19037,227 @@ window.renderLGMatchTable = function() {
     st.textContent = '#lgx-card{display:none!important}';
     document.head.appendChild(st);
 })();
+(function () {
+    if (window.__lgPopup) return; window.__lgPopup = true;
+    if (typeof Swal === 'undefined' || typeof Swal.fire !== 'function') return;
+    const isEn = () => { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e) { return false; } };
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    const num = (n) => (Number(n) || 0).toLocaleString('en-US');
+    const TX = {
+        th: {
+            tags: 'ใบ', pcs: 'ชิ้น', close: 'ปิด', by: 'ผู้สแกน', recBy: 'ผู้รับ', showTags: 'ดูเลขแท็ก',
+            trTitle: 'แท็กที่ยังอยู่ระหว่างทาง', trSub: 'ส่งออกจาก ATECH แล้ว แต่ LG ยังไม่ได้รับเข้า', kTags: 'แท็กที่กำลังขนส่ง', kQty: 'จำนวนรวม', kLong: 'รอนานที่สุด', legend: 'สีแดง = ค้างเกินกำหนด · สีเหลือง = รอเกิน 30 นาที',
+            tkTitle: 'ค้นหาแท็ก', tkSub: 'ดูว่าแท็กอยู่ตรงไหน — ส่งออกเมื่อไร LG รับหรือยัง',
+            atOut: 'ATECH สแกนออก', lgIn: 'LG รับเข้า', bRcv: 'LG รับแล้ว', bTr: 'ระหว่างทาง', bStuck: 'ค้างเกินกำหนด', bNoOut: 'ไม่พบสแกนออก',
+            noTitle: 'LG รับแล้ว แต่ไม่พบการสแกนออก', noSub: 'แท็กที่ LG รับเข้า แต่ฝั่ง ATECH ไม่มีบันทึกการสแกนออก', kRec: 'LG รับเข้า'
+        },
+        en: {
+            tags: 'tags', pcs: 'pcs', close: 'Close', by: 'Scanned by', recBy: 'Received by', showTags: 'Show tag numbers',
+            trTitle: 'Tags still in transit', trSub: 'Scanned out by ATECH, not yet received at LG', kTags: 'Tags in transit', kQty: 'Total qty', kLong: 'Longest wait', legend: 'Red = overdue · Amber = waiting over 30 min',
+            tkTitle: 'Find a tag', tkSub: 'See where a tag is — when it left and whether LG has received it',
+            atOut: 'ATECH scanned out', lgIn: 'LG received', bRcv: 'Received at LG', bTr: 'In transit', bStuck: 'Overdue', bNoOut: 'No scan-out',
+            noTitle: 'Received at LG but no scan-out found', noSub: 'Tags LG received that have no ATECH scan-out record', kRec: 'Received at LG'
+        }
+    };
+    const L = () => TX[isEn() ? 'en' : 'th'];
+    const T_TR = ['แท็กที่ยังอยู่ระหว่างทาง', 'Tags still in transit'];
+    const T_TK = ['ค้นหาแท็ก', 'Find a tag'];
+    const T_NO = ['LG รับแล้ว แต่ไม่พบการสแกนออก', 'Received at LG but no scan-out found'];
+ 
+    // ---------- CSS ----------
+    const css = document.createElement('style');
+    css.textContent = [
+        '.lgp-pop{border-radius:22px!important;padding:0!important;overflow:hidden!important;box-shadow:0 30px 80px rgba(15,23,42,.38)!important;max-width:96vw}',
+        '.lgp-hc{margin:0!important;padding:0!important;text-align:left!important;overflow:visible!important}',
+        '.lgp .hd{display:flex;align-items:center;gap:14px;padding:20px 24px 14px}',
+        '.lgp .ic{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;color:#fff;flex:none;font-size:22px}',
+        '.lgp .ic.amber{background:linear-gradient(135deg,#fbbf24,#f59e0b)}.lgp .ic.blue{background:linear-gradient(135deg,#60a5fa,#2563eb)}.lgp .ic.red{background:linear-gradient(135deg,#fb7185,#dc2626)}',
+        '.lgp .hd h2{margin:0;font-size:20px;font-weight:800;color:#0b1b33;line-height:1.25}.lgp .hd p{margin:2px 0 0;font-size:12.5px;color:#64748b}',
+        '.lgp .x{margin-left:auto;width:34px;height:34px;border-radius:50%;background:#f1f5f9;display:grid;place-items:center;color:#64748b;border:0;cursor:pointer;flex:none;font-size:15px}.lgp .x:hover{background:#e2e8f0}',
+        '.lgp .bd{padding:4px 24px 18px;max-height:62vh;overflow:auto}',
+        '.lgp .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}',
+        '.lgp .k{border-radius:14px;padding:11px 14px;background:#f8fafc;border:1px solid #e8edf5;min-width:0}.lgp .k small{display:block;font-size:11px;font-weight:700;color:#64748b}.lgp .k b{font-size:24px;font-weight:800;line-height:1.2;color:#0b1b33}.lgp .k span{font-size:11.5px;color:#64748b;margin-left:4px}',
+        '.lgp .k.warn{background:#fffbeb;border-color:#fde68a}.lgp .k.warn b{color:#b45309}.lgp .k.bad{background:#fff1f2;border-color:#fecdd3}.lgp .k.bad b{color:#b91c1c}',
+        '.lgp .grp{border:1px solid #e3e8f0;border-radius:16px;margin-bottom:10px;overflow:hidden}',
+        '.lgp .gh{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f8fafc;border-bottom:1px solid #e8edf5;flex-wrap:wrap}',
+        '.lgp .wo{font-weight:800;font-size:15px;color:#0b1b33}.lgp .pt{font-size:12px;color:#64748b}.lgp .gs{margin-left:auto;font-size:12px;font-weight:700;color:#334155}',
+        '.lgp details.b{border-bottom:1px solid #f1f5f9}.lgp details.b:last-child{border-bottom:0}',
+        '.lgp summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:12px;padding:10px 14px;flex-wrap:wrap}.lgp summary::-webkit-details-marker{display:none}',
+        '.lgp summary:hover{background:#fafcff}',
+        '.lgp .dot{width:10px;height:10px;border-radius:50%;flex:none}.lgp .dot.g{background:#22c55e;box-shadow:0 0 0 4px #dcfce7}.lgp .dot.a{background:#f59e0b;box-shadow:0 0 0 4px #fef3c7}.lgp .dot.r{background:#ef4444;box-shadow:0 0 0 4px #fee2e2}',
+        '.lgp .tm{font-weight:800;font-size:14px;min-width:54px;color:#0b1b33;line-height:1.2}.lgp .tm i{display:block;font-style:normal;font-size:11px;color:#94a3b8;font-weight:600}',
+        '.lgp .by{font-size:12.5px;color:#334155}.lgp .by i{font-style:normal;color:#94a3b8;margin-right:4px}',
+        '.lgp .chip{background:#eef2ff;color:#3730a3;border-radius:20px;padding:3px 10px;font-size:12px;font-weight:700;white-space:nowrap}',
+        '.lgp .wait{margin-left:auto;border-radius:20px;padding:4px 12px;font-size:12.5px;font-weight:800;white-space:nowrap}',
+        '.lgp .wait.g{background:#dcfce7;color:#15803d}.lgp .wait.a{background:#fef3c7;color:#b45309}.lgp .wait.r{background:#fee2e2;color:#b91c1c}',
+        '.lgp .chev{color:#94a3b8;font-size:11px;transition:transform .15s}.lgp details[open] .chev{transform:rotate(90deg)}',
+        '.lgp .tags{display:flex;flex-wrap:wrap;gap:5px;padding:0 14px 12px 36px}',
+        '.lgp .tg{font-family:ui-monospace,Consolas,monospace;font-size:11px;background:#f1f5f9;color:#334155;border-radius:7px;padding:3px 7px}',
+        '.lgp .ft{display:flex;align-items:center;gap:10px;padding:12px 24px 18px;border-top:1px solid #f1f5f9}.lgp .ft small{font-size:11.5px;color:#94a3b8}',
+        '.lgp .btn-x{margin-left:auto;border:0;background:#0f172a;color:#fff;border-radius:12px;padding:10px 26px;font-weight:800;font-size:14px;cursor:pointer}.lgp .btn-x:hover{background:#1e293b}',
+        '.lgp .empty{padding:26px;text-align:center;color:#94a3b8}',
+        /* list rows (no scan-out popup) */
+        '.lgp .li{display:flex;align-items:center;gap:12px;border:1px solid #e3e8f0;border-radius:14px;padding:10px 14px;margin-bottom:8px;flex-wrap:wrap}',
+        '.lgp .li .d{font-family:ui-monospace,Consolas,monospace;font-size:12.5px;font-weight:700;color:#0b1b33}.lgp .li .m{font-size:12px;color:#64748b}.lgp .li .rt{margin-left:auto;text-align:right;font-size:12.5px;font-weight:700;color:#334155}.lgp .li .rt small{display:block;font-weight:500;color:#94a3b8;font-size:11px}',
+        /* track popup */
+        '#lgr-track-q.form-control{border:2px solid #2563eb;border-radius:16px;padding:13px 16px 13px 48px;font-size:16px!important;box-shadow:0 0 0 5px #dbeafe;background:#fff url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'20\' height=\'20\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%232563eb\' stroke-width=\'2.4\' stroke-linecap=\'round\'%3E%3Ccircle cx=\'11\' cy=\'11\' r=\'7\'/%3E%3Cpath d=\'M21 21l-4.3-4.3\'/%3E%3C/svg%3E") no-repeat 16px center;margin:2px 4px 8px;width:calc(100% - 8px)}',
+        '.lgp.tk .bd{max-height:none;overflow:visible}',
+        '.lgp.tk #lgr-track-out{max-height:48vh!important;margin-top:8px!important;padding:2px 4px}',
+        '.lgp.tk #lgr-track-out>.text-muted{font-size:.82rem!important;text-align:center;padding:18px 0!important;color:#94a3b8!important}',
+        '.lgp .cd{border:1px solid #e3e8f0;border-radius:16px;padding:12px 14px;margin-bottom:10px;background:#fff}',
+        '.lgp .cdh{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}.lgp .cdh b{font-family:ui-monospace,Consolas,monospace;font-size:13px;color:#0b1b33;word-break:break-all}.lgp .cdh .m{font-size:12px;color:#64748b}',
+        '.lgp .badge{margin-left:auto;border-radius:20px;padding:3px 12px;font-size:12px;font-weight:800;white-space:nowrap}',
+        '.lgp .badge.g{background:#dcfce7;color:#15803d}.lgp .badge.a{background:#fef3c7;color:#b45309}.lgp .badge.r{background:#fee2e2;color:#b91c1c}',
+        '.lgp .tl{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px}',
+        '.lgp .st{border-radius:12px;padding:8px 12px;border:1px solid #e3e8f0;background:#f8fafc;min-width:0}.lgp .st small.l{display:block;font-size:10.5px;font-weight:800;letter-spacing:.3px;color:#64748b}.lgp .st b.v{font-size:14px;color:#0b1b33}.lgp .st em{display:block;font-style:normal;font-size:11.5px;color:#64748b}',
+        '.lgp .st.ok{background:#f0fdf4;border-color:#bbf7d0}.lgp .st.wt{background:#fffbeb;border-color:#fde68a;border-style:dashed}.lgp .st.bad{background:#fff1f2;border-color:#fecdd3;border-style:dashed}',
+        '.lgp .ar{color:#94a3b8;font-size:18px;font-weight:800}',
+        '@media (max-width:560px){.lgp .kpis{grid-template-columns:1fr 1fr}.lgp .tl{grid-template-columns:1fr}.lgp .ar{display:none}}'
+    ].join('\n');
+    document.head.appendChild(css);
+ 
+    document.addEventListener('click', (e) => { if (e.target && e.target.closest && e.target.closest('[data-lgp-close]')) { try { Swal.close(); } catch (er) { } } });
+ 
+    // ---------- helpers ----------
+    const minsOf = (txt) => {
+        txt = String(txt || '');
+        const h = /(\d+)\s*(?:h\b|ชม)/i.exec(txt), m = /(\d+)\s*(?:min|นาที)/i.exec(txt);
+        return (h ? +h[1] * 60 : 0) + (m ? +m[1] : 0);
+    };
+    const shell = (icon, tone, title, sub, bodyHtml, footHtml, cls) =>
+        `<div class="lgp ${cls || ''}"><div class="hd"><div class="ic ${tone}"><i class="bi ${icon}"></i></div><div><h2>${esc(title)}</h2><p>${esc(sub)}</p></div><button type="button" class="x" data-lgp-close="1" aria-label="close">&#10005;</button></div>` +
+        `<div class="bd">${bodyHtml}</div><div class="ft">${footHtml || ''}<button type="button" class="btn-x" data-lgp-close="1">${esc(L().close)}</button></div></div>`;
+    const restyleCfg = (c, html, extra) => Object.assign({}, c, {
+        title: '', html, width: 'min(820px,96vw)', padding: 0, showConfirmButton: false, showCloseButton: false,
+        customClass: Object.assign({}, c.customClass || {}, { popup: 'lgp-pop', htmlContainer: 'lgp-hc' }), backdrop: 'rgba(15,23,42,.5)'
+    }, extra || {});
+    const rowsOf = (doc) => Array.from(doc.querySelectorAll('tbody tr')).map(tr => ({ cells: Array.from(tr.children).map(td => td.textContent.trim()), stuck: /fff1f2/i.test(tr.getAttribute('style') || '') }));
+    const numOf = (s) => parseFloat(String(s).replace(/,/g, '')) || 0;
+ 
+    // ---------- 1) แท็กที่ยังอยู่ระหว่างทาง ----------
+    function transitHtml(htmlStr) {
+        const T = L(), doc = new DOMParser().parseFromString('<div>' + htmlStr + '</div>', 'text/html');
+        const rows = rowsOf(doc).filter(r => r.cells.length >= 7);
+        const foot = (doc.querySelector('.text-muted.mt-2') || {}).textContent || '';
+        if (!rows.length) return shell('bi-truck', 'amber', T.trTitle, T.trSub, `<div class="empty">${esc((doc.body.textContent || '').trim())}</div>`, '');
+        let totQty = 0, longest = { m: -1, txt: '-', stuck: false };
+        const groups = new Map();
+        rows.forEach(r => {
+            const [tag, wo, part, qty, outAt, outBy, wait] = r.cells, q = numOf(qty), mm = minsOf(wait);
+            totQty += q;
+            if (mm > longest.m) longest = { m: mm, txt: wait, stuck: r.stuck };
+            const gk = wo + '|' + part; let g = groups.get(gk); if (!g) { g = { wo, part, qty: 0, n: 0, batches: new Map() }; groups.set(gk, g); }
+            g.qty += q; g.n++;
+            const bk = outAt + '|' + outBy; let b = g.batches.get(bk); if (!b) { b = { outAt, outBy, wait, mm, stuck: false, qty: 0, tags: [] }; g.batches.set(bk, b); }
+            b.qty += q; b.tags.push(tag); b.stuck = b.stuck || r.stuck; if (mm > b.mm) { b.mm = mm; b.wait = wait; }
+        });
+        const open = rows.length <= 20 ? ' open' : '';
+        const gHtml = Array.from(groups.values()).map(g => {
+            const bs = Array.from(g.batches.values()).map(b => {
+                const tone = b.stuck ? 'r' : (b.mm >= 30 ? 'a' : 'g'), p = String(b.outAt).split(' ');
+                const tags = b.tags.map(t => `<span class="tg" title="${esc(t)}">…${esc(String(t).slice(-6))}</span>`).join('');
+                return `<details class="b"${open}><summary><span class="dot ${tone}"></span><div class="tm">${esc(p[1] || p[0])}<i>${esc(p[1] ? p[0] : '')}</i></div><div class="by"><i>${esc(T.by)}</i>${esc(b.outBy)}</div><span class="chip">${num(b.tags.length)} ${esc(T.tags)} · ${num(b.qty)} ${esc(T.pcs)}</span><span class="wait ${tone}">${esc(b.wait)}</span><span class="chev">&#9654;</span></summary><div class="tags" title="${esc(T.showTags)}">${tags}</div></details>`;
+            }).join('');
+            return `<div class="grp"><div class="gh"><span class="wo">${esc(g.wo)}</span><span class="pt">${esc(g.part)}</span><span class="gs">${num(g.n)} ${esc(T.tags)} · ${num(g.qty)} ${esc(T.pcs)}</span></div>${bs}</div>`;
+        }).join('');
+        const kp = `<div class="kpis"><div class="k"><small>${esc(T.kTags)}</small><b>${num(rows.length)}</b><span>${esc(T.tags)}</span></div><div class="k"><small>${esc(T.kQty)}</small><b>${num(totQty)}</b><span>${esc(T.pcs)}</span></div>` +
+            `<div class="k ${longest.stuck ? 'bad' : (longest.m >= 30 ? 'warn' : '')}"><small>${esc(T.kLong)}</small><b style="font-size:20px;">${esc(longest.txt)}</b></div></div>`;
+        return shell('bi-truck', 'amber', T.trTitle, T.trSub, kp + gHtml, `<small>${esc(foot || T.legend)}</small>`);
+    }
+ 
+    // ---------- 3) LG รับแล้ว แต่ไม่พบการสแกนออก ----------
+    function noOutHtml(htmlStr) {
+        const T = L(), doc = new DOMParser().parseFromString('<div>' + htmlStr + '</div>', 'text/html');
+        const rows = rowsOf(doc).filter(r => r.cells.length >= 6);
+        if (!rows.length) return shell('bi-exclamation-triangle', 'red', T.noTitle, T.noSub, `<div class="empty">${esc((doc.body.textContent || '').trim())}</div>`, '');
+        let tq = 0;
+        const li = rows.map(r => {
+            const [tag, wo, part, qty, recAt, recBy] = r.cells; tq += numOf(qty);
+            return `<div class="li"><span class="dot r"></span><div><div class="d">${esc(tag)}</div><div class="m">${esc(wo)} · ${esc(part)}</div></div><span class="chip">${num(numOf(qty))} ${esc(T.pcs)}</span><div class="rt">${esc(recAt)}<small>${esc(T.recBy)} ${esc(recBy)}</small></div></div>`;
+        }).join('');
+        const kp = `<div class="kpis" style="grid-template-columns:repeat(2,1fr)"><div class="k bad"><small>${esc(T.kRec)}</small><b>${num(rows.length)}</b><span>${esc(T.tags)}</span></div><div class="k"><small>${esc(T.kQty)}</small><b>${num(tq)}</b><span>${esc(T.pcs)}</span></div></div>`;
+        return shell('bi-exclamation-triangle', 'red', T.noTitle, T.noSub, kp + li, '');
+    }
+ 
+    // ---------- 2) ค้นหาแท็ก ----------
+    function restyleTrack(out) {
+        const T = L();
+        out.querySelectorAll('.lgr-tc:not([data-lgp])').forEach(tc => {
+            tc.setAttribute('data-lgp', '1');
+            const doc = (tc.querySelector('h6') || {}).textContent || '', meta = (tc.querySelector('.meta') || {}).textContent || '';
+            const sts = Array.from(tc.querySelectorAll('.st'));
+            const parts = sts.map(s => {
+                const lab = (s.querySelector('b') || {}).textContent || '', sm = (s.querySelector('small') || {}).textContent || '';
+                const c = s.cloneNode(true); c.querySelectorAll('b,small').forEach(n => n.remove());
+                return { lab, sm, main: c.textContent.trim(), red: s.classList.contains('red'), wait: s.classList.contains('wait') };
+            });
+            const hasOut = parts.length && !parts[0].red;
+            const inP = parts[parts.length - 1];
+            let badge = ['g', T.bRcv];
+            if (!hasOut) badge = ['r', T.bNoOut];
+            else if (inP && inP.wait) badge = ['a', T.bTr + (inP.sm ? ' · ' + inP.sm.replace(/^\s*/, '') : '')];
+            else if (inP && inP.red) badge = ['r', T.bStuck + (inP.sm ? ' · ' + inP.sm : '')];
+            const box = (p, i) => {
+                const tone = p.red ? 'bad' : (p.wait ? 'wt' : 'ok');
+                const stateOnly = (p.red || p.wait) && !p.main;   // กล่องสถานะ (ยังไม่รับ / ไม่พบสแกนออก): ป้ายบน = ชื่อขั้นตอน, ข้อความหลัก = สถานะ
+                const lab = stateOnly ? (i === 0 ? T.atOut : T.lgIn) : p.lab, main = stateOnly ? p.lab : p.main;
+                return `<div class="st ${tone}"><small class="l">${esc(lab)}</small><b class="v">${esc(main || '')}</b><em>${esc(p.sm)}</em></div>`;
+            };
+            tc.className = 'cd';
+            tc.innerHTML = `<div class="cdh"><b>${esc(doc)}</b><span class="m">${esc(meta)}</span><span class="badge ${badge[0]}">${esc(badge[1])}</span></div><div class="tl">${parts.map((p, i) => (i ? '<span class="ar">&#8594;</span>' : '') + box(p, i)).join('')}</div>`;
+        });
+    }
+ 
+    // ---------- ดักที่ Swal.fire ----------
+    const orig = Swal.fire;
+    Swal.fire = function (c) {
+        try {
+            if (c && typeof c === 'object' && typeof c.title === 'string') {
+                const t = c.title.trim();
+                if (T_TR.indexOf(t) >= 0 && typeof c.html === 'string') return orig.call(this, restyleCfg(c, transitHtml(c.html)));
+                if (T_NO.indexOf(t) >= 0 && typeof c.html === 'string') return orig.call(this, restyleCfg(c, noOutHtml(c.html)));
+                if (T_TK.indexOf(t) >= 0 && typeof c.html === 'string' && c.html.indexOf('lgr-track-q') >= 0) {
+                    const T = L(), od = c.didOpen;
+                    const cfg = restyleCfg(c, shell('bi-search', 'blue', T.tkTitle, T.tkSub, c.html, '', 'tk'), {
+                        didOpen: function () {
+                            if (typeof od === 'function') od.apply(this, arguments);
+                            const out = document.getElementById('lgr-track-out');
+                            if (out) { restyleTrack(out); new MutationObserver(() => restyleTrack(out)).observe(out, { childList: true }); }
+                        }
+                    });
+                    return orig.call(this, cfg);
+                }
+            }
+        } catch (err) { console.warn('LG-POPUP', err); }
+        return orig.apply(this, arguments);
+    };
+})();
 // ดาวน์โหลดเทมเพลต Excel สำหรับอัปโหลดแพลน
+(function () {
+    if (window.__navIconC) return; window.__navIconC = true;
+    const GC = ['#7aa2ff', '#2dd4bf', '#fbbf24', '#fb7185', '#a78bfa'];   // ภาพรวม · คลังสินค้า · จัดส่งและวางแผน · ตรวจสอบและประวัติ · ตั้งค่าระบบ
+    const S = '#pills-tab.icon-nav-container ';
+    const st = document.createElement('style'); st.id = 'nav-icon-c-css';
+    st.textContent = [
+        S + '.icon-nav-btn{border-radius:12px!important}',
+        S + '.icon-nav-btn:hover{background:rgba(255,255,255,.07)!important}',
+        S + '.icon-nav-btn.active{background:rgba(255,255,255,.08)!important;box-shadow:none!important}',
+        S + '.icon-nav-icon .gl-tile{width:32px!important;height:32px!important;margin-bottom:0!important;border-radius:9px!important;background:rgba(255,255,255,.035)!important;border:1px solid rgba(255,255,255,.17)!important;box-shadow:none!important;transform:none!important;transition:border-color .15s,background .15s!important}',
+        S + '.icon-nav-icon .gl-tile::before{display:none!important}',
+        S + '.icon-nav-icon .gl-tile svg{width:18px!important;height:18px!important;stroke:#cfe0ff!important;stroke-width:1.7!important;filter:none!important;transition:stroke .15s!important}',
+        S + '.icon-nav-btn:hover .gl-tile{border-color:rgba(255,255,255,.32)!important;background:rgba(255,255,255,.07)!important;transform:none!important}',
+        S + '.icon-nav-btn:active .gl-tile{transform:none!important;box-shadow:none!important}',
+        S + '.icon-nav-btn.active .gl-tile{border-color:var(--gc,#7aa2ff)!important;background:rgba(255,255,255,.08)!important}',
+        S + '.icon-nav-btn.active .gl-tile svg{stroke:var(--gc,#7aa2ff)!important}'
+    ].join('\n');
+    document.head.appendChild(st);
+    function paintGroups() {
+        const nav = document.getElementById('pills-tab'); if (!nav) return;
+        nav.querySelectorAll('.nav-group').forEach((g, i) => g.style.setProperty('--gc', GC[Math.min(i, GC.length - 1)]));
+    }
+    paintGroups();
+    let n = 0; const iv = setInterval(() => { paintGroups(); if (++n >= 10) clearInterval(iv); }, 800);
+})();
 window.downloadLGPlanTemplate = function() {
     const ws_data = [
           ['WO', 'Part No', 'ไลน์ผลิต', 'Model', 'Part Name', 'จำนวนออเดอร์', 'วันที่-เวลาที่ต้องผลิต', 'Model.Suffix (สำหรับพิมพ์แท็ก)', 'จำนวนต่อแท็ก/ลัง (Carrier Qty)', 'Locator Group ปลายทาง'],
