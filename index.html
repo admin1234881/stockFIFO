@@ -16230,6 +16230,7 @@ function parseLGBarcode(raw) {
 
 // คำนวณสถานะการแมทช์ทั้งหมด (เทียบแพลนกับผลรวมที่สแกนได้)
 function computeLGMatchStatus() {
+    const __lgSplitIx = {};   // LG-SPLIT-FAST: ดัชนีของการคำนวณรอบนี้ (สร้างครั้งเดียว)
     const scannedTotals = {};
     (db.lgScanLog || []).forEach(s => {
         const key = String(s.WO).trim() + '|' + String(s.partNo).trim();
@@ -16238,7 +16239,7 @@ function computeLGMatchStatus() {
 
     return (db.lgPlan || []).filter(p => window.__lgIncExt || !(typeof lgIsExtPlan === 'function' && lgIsExtPlan(p))).map(plan => {   // LG-EXT
         const key = String(plan.WO).trim() + '|' + String(plan.partNo).trim();
-        const scanned = (typeof lgSplitShare === 'function') ? lgSplitShare(plan, scannedTotals[key] || 0) : (scannedTotals[key] || 0);   // LG-SPLIT
+        const scanned = (typeof lgSplitShare === 'function') ? lgSplitShare(plan, scannedTotals[key] || 0, __lgSplitIx) : (scannedTotals[key] || 0);   // LG-SPLIT
         const orderQty = parseFloat(plan.orderQty) || 0;
         const isComplete = orderQty > 0 && scanned >= orderQty;
         return { ...plan, scanned, orderQty, isComplete, remaining: Math.max(0, orderQty - scanned) };
@@ -18223,10 +18224,18 @@ window.renderLGMatchTable = function() {
     // ส่วนของยอดรวม (total) ที่ตกเป็นของแถวแพลนนี้
     // - ถ้า WO+พาร์ทนี้มีแถวเดียว (ไม่ซ้ำข้ามวัน) → ได้ยอดเต็มเหมือนเดิม
     // - ถ้ามีหลายแถว → เติมแถววันเก่าสุดก่อน (ไม่เกินแพลนของแถวนั้น) ที่เหลือไหลไปแถวถัดไป แถวสุดท้ายรับส่วนเกิน
-    window.lgSplitShare = function (plan, total) {
+    window.lgSplitShare = function (plan, total, ix) {
         try {
             if (!plan || plan.planCancelledAt) return total;
             const k = kOf(plan);
+            if (ix) {   // LG-SPLIT-FAST: ใช้ดัชนีที่สร้างครั้งเดียวต่อการคำนวณ แทนการไล่ทุกแถวแพลนซ้ำทุกแถว (เดิมช้าแบบกำลังสอง)
+                if (!ix.m) { ix.m = new Map(); (db.lgPlan || []).forEach((p, i) => { if (p && !p.planCancelledAt) { const kk = kOf(p); let a = ix.m.get(kk); if (!a) ix.m.set(kk, a = []); a.push({ p, i }); } }); }
+                const sb = ix.m.get(k); if (!sb || sb.length < 2) return total;
+                if (!sb.s) { sb.s = 1; sb.sort((a, b) => { const da = lgPlanDateOf(a.p), dbb = lgPlanDateOf(b.p); if (da !== dbb) return da < dbb ? -1 : 1; const sa = parseFloat(a.p.sortOrder), sx = parseFloat(b.p.sortOrder); const ka = isNaN(sa) ? a.i / 1e6 : sa, kb = isNaN(sx) ? b.i / 1e6 : sx; return ka - kb || a.i - b.i; }); }
+                let pool = Math.max(0, parseFloat(total) || 0);
+                for (let n = 0; n < sb.length; n++) { const o = parseFloat(sb[n].p.orderQty) || 0; const a = (n === sb.length - 1) ? pool : Math.min(o, pool); if (same(sb[n].p, plan)) return a; pool -= a; }
+                return total;
+            }
             const sibs = [];
             (db.lgPlan || []).forEach((p, i) => { if (p && !p.planCancelledAt && kOf(p) === k) sibs.push({ p, i }); });
             if (sibs.length < 2) return total;
@@ -18640,7 +18649,7 @@ window.renderLGMatchTable = function() {
         box.innerHTML = html; lastSig = html;
         if (box.previousElementSibling !== kp) kp.insertAdjacentElement('afterend', box);
     }
-    setInterval(() => { try { paint(); } catch (e) { } }, 1500);
+    setInterval(() => { try { const v = document.getElementById('view-dash-lg'); if (v && !v.getClientRects().length) return; paint(); } catch (e) { } }, 1500);   // LG-PERF: ไม่คำนวณตอนหน้าแดชบอร์ด LG ถูกซ่อน
  
     // ---------- 2) รูป / PDF ที่บันทึก ----------
     function build(rep) {
@@ -18973,7 +18982,7 @@ window.renderLGMatchTable = function() {
         const target = run && run.parentNode === kp.parentNode ? run : kp;
         if (box.previousElementSibling !== target) target.insertAdjacentElement('afterend', box);
     }
-    setInterval(() => { try { paint(); } catch (e) { } }, 1500);
+    setInterval(() => { try { const v = document.getElementById('view-dash-lg'); if (v && !v.getClientRects().length) return; paint(); } catch (e) { } }, 1500);   // LG-PERF: ไม่คำนวณตอนหน้าแดชบอร์ด LG ถูกซ่อน
  
     // ---------- 2) รูป / PDF ที่บันทึก ----------
     function build(rep) {
