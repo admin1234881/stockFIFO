@@ -31015,6 +31015,8 @@ renderLGTagPrintWindow = function(tags, printWin) {
         [/ชิ้น\/ชม\./g, 'pcs/h'],
         [/ต่อชม\./g, 'per h'],
         [/ผลิตถึง /g, 'produced up to '],
+        [/ถึง LG /g, 'at LG '],   // LG-I18N-FIX
+        [/\+เจ้าอื่นคั่น /g, '+ other-supplier lots in between '],   // LG-I18N-FIX
         [/LG ผลิตแล้ว/g, 'LG produced'],
         [/ส่งครบแพลน/g, 'Plan fully sent'],
         [/ไม่มีแพลนค้างส่งแล้ว/g, 'no plan left to send'],
