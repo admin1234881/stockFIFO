@@ -19232,7 +19232,1293 @@ window.renderLGMatchTable = function() {
         return orig.apply(this, arguments);
     };
 })();
+(function () {
+    if (window.__lgLogoRep) return; window.__lgLogoRep = true;
+    const LOGO_URL = 'https://i.ibb.co/KxttMHxc/291315-logo-20230216140112-5.jpg';
+    let logoData = '', tries = 0;
+    function loadLogo() {
+        tries++;
+        try {
+            const im = new Image(); im.crossOrigin = 'anonymous';
+            im.onload = function () {
+                try {
+                    const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight;
+                    c.getContext('2d').drawImage(im, 0, 0); logoData = c.toDataURL('image/png');
+                } catch (e) { logoData = ''; }
+            };
+            im.onerror = function () { if (tries < 4) setTimeout(loadLogo, 15000); };
+            im.src = LOGO_URL;
+        } catch (e) { }
+    }
+    loadLogo();
+    const isEn = () => { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e) { return false; } };
+    function who() {
+        try {
+            const u = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null;
+            if (!u) return '-';
+            const fn = String(u.fullname || '').trim(), un = String(u.username || '').trim();
+            return fn && un && fn !== un ? fn + ' (' + un + ')' : (fn || un || '-');
+        } catch (e) { return '-'; }
+    }
+    function build(rep) {
+        const hd = rep.firstElementChild;
+        if (!hd || hd.children.length < 2) return;
+        const left = hd.children[0], right = hd.children[1];
+        const stampEl = right.querySelector('b');
+        const stamp = stampEl ? stampEl.textContent : '';
+        const en = isEn();
+        const L1 = en ? 'As of' : 'ข้อมูล ณ', L2 = en ? 'Saved by' : 'บันทึกโดย';
+        // ซ้าย: โลโก้ + เส้นคั่น + หัวเรื่องเดิม
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'display:flex;gap:14px;align-items:center;';
+        if (logoData) {
+            const img = document.createElement('img');
+            img.src = logoData; img.alt = 'ATECH';
+            img.style.cssText = 'height:44px;width:auto;border-radius:6px;display:block;';
+            wrap.appendChild(img);
+            left.style.cssText += ';border-left:1px solid #e5e9f2;padding-left:14px;';
+        }
+        hd.insertBefore(wrap, left); wrap.appendChild(left);
+        // ขวา: กรอบเล็ก ข้อมูล ณ / บันทึกโดย
+        const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        right.style.cssText = 'text-align:left;min-width:230px;border:1px solid #e2e8f0;border-radius:10px;padding:6px 12px;background:#f8fafc;font-size:12px;color:#8a97ab;';
+        const row = (a, b) => `<div style="display:flex;justify-content:space-between;gap:14px;line-height:1.6;"><span>${esc(a)}</span><b style="color:#1b2a41;">${esc(b)}</b></div>`;
+        right.innerHTML = row(L1, stamp) + row(L2, who());
+    }
+    function wrapFn(name) {
+        const orig = window[name];
+        if (typeof orig !== 'function' || orig.__lglogoW) return;
+        const w = function () {
+            const self = this, args = arguments, body = document.body, realAppend = body.appendChild;
+            body.appendChild = function (node) {
+                try { const rep = node && node.querySelector ? node.querySelector('#lgd-report') : null; if (rep && !rep.getAttribute('data-lglogo')) { rep.setAttribute('data-lglogo', '1'); build(rep); } } catch (err) { console.warn('LG-LOGO report', err); }
+                return realAppend.call(body, node);
+            };
+            try { return orig.apply(self, args); }
+            finally { body.appendChild = realAppend; delete body.appendChild; }
+        };
+        w.__lglogoW = true;
+        window[name] = w;
+    }
+    let t2 = 0;
+    const iv = setInterval(() => {
+        t2++;
+        if (typeof window.lgdSaveImage === 'function' && typeof window.lgdSavePdf === 'function' && t2 >= 10) { wrapFn('lgdSaveImage'); wrapFn('lgdSavePdf'); clearInterval(iv); }
+        else if (t2 > 80) clearInterval(iv);
+    }, 500);
+})();
+(function () {
+    if (window.__hanonTagV1) return; window.__hanonTagV1 = true;
+    var LS_LAST = 'hanonLastBatch_v1';
+    var isEn = function () { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e) { return false; } };
+    var TX = {
+        th: { btn: 'ออกแท็ก HANON', title: 'ออกแท็กชิ้นงาน HANON', date: 'วันที่ส่งงาน', rem: 'ใบสุดท้ายใช้จำนวนเศษที่เหลือ', all: 'แสดงทุกลูกค้า', last: 'พิมพ์ชุดล่าสุดซ้ำ', go: 'ออกเลข + ปริ้นแท็ก', close: 'ปิด',
+            note: 'เลขท้าย QR (001, 002, …) นับต่อกันตามวันที่ส่งงาน ไม่ซ้ำ · เมื่อกดปริ้นแล้วเลขจะถูกใช้ไปเลย ถ้าปริ้นพลาดให้กด "พิมพ์ชุดล่าสุดซ้ำ" (เลขเดิม)',
+            noperm: 'ไม่มีสิทธิ์', nopermT: 'ต้องมีสิทธิ์จัดการแผนการจัดส่ง หรือสิทธิ์ปริ้นแท็ก', none: 'ไม่พบแผนส่งของ', noneCus: 'ของลูกค้าที่ชื่อมีคำว่า', noneDay: 'ในวันที่เลือก', noneHint: ' (ถ้าชื่อลูกค้าในแผนไม่มีคำว่า HANON ให้ติ๊ก "แสดงทุกลูกค้า")',
+            cus: 'ลูกค้า', pn: 'รหัสสินค้า (Part No)', nm: 'ชื่อ', plan: 'ยอดแพลน', inv: 'Invoice', pb: 'จำนวน/กล่อง', cnt: 'จำนวนแท็ก', fillPb: 'กรอก',
+            sum1: 'รวม', sum2: 'ใบ', sum3: 'ชิ้น', sum4: 'วันที่ส่ง', badFill: 'กรอกจำนวนต่อกล่อง/จำนวนแท็กของ', badSel: 'ยังไม่ได้เลือกรายการ', badMax: 'ออกได้ไม่เกิน 300 ใบต่อครั้ง', badPipe: 'รหัสสินค้ามีตัวอักษร | ไม่ได้: ',
+            wait: '⏳ กำลังออกเลขแท็ก กรุณารอสักครู่...', popup: 'เบราว์เซอร์บล็อกป๊อปอัพ กรุณาอนุญาตป๊อปอัพ แล้วกด "พิมพ์ชุดล่าสุดซ้ำ"', popupT: 'เปิดหน้าต่างไม่สำเร็จ',
+            qrNo: 'ตัวสร้าง QR ยังไม่พร้อม (ยังไม่ได้ออกเลขแท็ก) กรุณารีเฟรชหน้าเว็บแล้วลองใหม่', srvBad: 'เซิร์ฟเวอร์ตอบกลับไม่ครบ (ยังไม่ปริ้น) กรุณาตรวจชีต HANON_TagLog',
+            failA: 'ออกแท็กไม่สำเร็จ: ', failB: 'ออกเลขแท็กแล้วแต่แสดงผลไม่สำเร็จ — กดปุ่ม "พิมพ์ชุดล่าสุดซ้ำ" ได้ (', noLast: 'ยังไม่มีชุดล่าสุด', noLastT: 'เครื่องนี้ยังไม่เคยออกแท็ก HANON', reFail: 'พิมพ์ซ้ำไม่สำเร็จ',
+            gsOld: 'Google Script ยังไม่ได้อัปเดต (ยังไม่รู้จักคำสั่งออกแท็ก HANON) ให้วางโค้ด Google Script แล้ว Deploy เวอร์ชันใหม่ก่อน', pTitle: 'ปริ้นแท็ก HANON' },
+        en: { btn: 'HANON tags', title: 'Issue HANON part tags', date: 'Delivery date', rem: 'Last tag uses the remaining qty', all: 'Show all customers', last: 'Reprint last batch', go: 'Issue numbers + print', close: 'Close',
+            note: 'The QR suffix (001, 002, …) runs per delivery date and never repeats. Once you print, the numbers are used. If a print fails, press "Reprint last batch" (same numbers).',
+            noperm: 'No permission', nopermT: 'You need delivery-plan or print-tag permission', none: 'No delivery plan found', noneCus: 'for customers named', noneDay: 'on the selected date', noneHint: ' (if the customer name has no "HANON", tick "Show all customers")',
+            cus: 'Customer', pn: 'Part No', nm: 'Name', plan: 'Plan qty', inv: 'Invoice', pb: 'Qty / box', cnt: 'Tags', fillPb: 'enter',
+            sum1: 'Total', sum2: 'tags', sum3: 'pcs', sum4: 'delivery date', badFill: 'Enter qty per box / number of tags for', badSel: 'Nothing selected', badMax: 'Max 300 tags per run', badPipe: 'Part No cannot contain "|": ',
+            wait: '⏳ Issuing tag numbers, please wait...', popup: 'Pop-up blocked. Allow pop-ups, then press "Reprint last batch"', popupT: 'Could not open window',
+            qrNo: 'QR generator not ready (no numbers used). Refresh the page and try again.', srvBad: 'Incomplete server reply (not printed). Check sheet HANON_TagLog',
+            failA: 'Could not issue tags: ', failB: 'Numbers were issued but display failed — press "Reprint last batch" (', noLast: 'No previous batch', noLastT: 'No HANON tags have been issued on this device', reFail: 'Reprint failed',
+            gsOld: 'Google Script is not updated (unknown HANON command). Paste the Google Script code and deploy a new version first.', pTitle: 'Print HANON tags' }
+    };
+    var T = function (k) { return (TX[isEn() ? 'en' : 'th'][k]); };
+    var st = document.createElement('style'); st.id = 'hnt-css';
+    st.textContent = '#hnt-box table{font-size:.85rem}#hnt-box th{background:#e9eef7;position:sticky;top:0;z-index:2;white-space:nowrap}#hnt-box input[type=number]{width:84px;text-align:center;font-weight:700}#hnt-box .hnt-warn{background:#fff3cd}';
+    document.head.appendChild(st);
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function isT(v) { return v === true || String(v).toUpperCase() === 'TRUE'; }
+    function canUse() { var u = currentUser; return !!u && (u.username === 'admin' || u.role === 'admin' || isT(u.canManageDeliveryPlan) || isT(u.printTags)); }
+    function dmy8(ymd) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(ymd || ''); return m ? (m[3] + m[2] + m[1]) : String(ymd || ''); }       // 18112026
+    function dmyShow(ymd) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(ymd || ''); return m ? (m[3] + '-' + m[2] + '-' + m[1]) : ymd; }
+    function dateOf(p) { return typeof window.formatDate === 'function' ? window.formatDate(p.date) : String(p.date || '').split('T')[0]; }
+    function perBoxOf(partNo) {
+        var p = (db.products || []).find(function (x) { return String(x.id).trim() === String(partNo).trim(); });
+        var n = p ? parseInt(p.fullBoxQuantity, 10) : 0; return n > 0 ? n : 0;
+    }
+    function plansFor(date, all) {
+        return (db.deliveryPlans || []).filter(function (p) {
+            if (!p || dateOf(p) !== date) return false;
+            if (!p.productId || p.productId === '-') return false;
+            if (p.jobType === 'Pickup' || p.jobType === 'Other') return false;
+            return all || /hanon/i.test(String(p.customer || ''));
+        });
+    }
+    function rowsHtml(date, all) {
+        var list = plansFor(date, all);
+        if (!list.length) return '<div class="alert alert-warning text-start mb-0">' + T('none') + (all ? '' : ' ' + T('noneCus') + ' <b>HANON</b> ') + ' ' + T('noneDay') + (all ? '' : T('noneHint')) + '</div>';
+        var h = '<div style="max-height:380px;overflow:auto" class="border rounded"><table class="table table-sm align-middle mb-0"><thead><tr><th><input type="checkbox" id="hnt-all" checked></th><th>' + T('cus') + '</th><th class="text-start">' + T('pn') + '</th><th class="text-start">' + T('nm') + '</th><th>' + T('plan') + '</th><th>' + T('inv') + '</th><th>' + T('pb') + '</th><th>' + T('cnt') + '</th></tr></thead><tbody>';
+        list.forEach(function (p, i) {
+            var qty = parseInt(p.quantity, 10) || 0, pb = perBoxOf(p.productId), cnt = pb ? Math.ceil(qty / pb) : 0;
+            h += '<tr data-i="' + i + '" data-id="' + esc(p.id) + '" data-pn="' + esc(String(p.productId).trim()) + '" data-name="' + esc(p.productName) + '" data-inv="' + esc(p.invoiceNumber || '') + '" data-cus="' + esc(p.customer) + '" data-qty="' + qty + '"' + (pb ? '' : ' class="hnt-warn"') + '>'
+                + '<td><input type="checkbox" class="hnt-ck" checked></td><td class="small">' + esc(p.customer) + '</td><td class="text-start fw-bold">' + esc(String(p.productId).trim()) + '</td><td class="text-start small">' + esc(p.productName) + '</td>'
+                + '<td class="fw-bold">' + qty + '</td><td class="small">' + esc(p.invoiceNumber || '-') + '</td>'
+                + '<td><input type="number" min="1" class="form-control form-control-sm hnt-pb" value="' + (pb || '') + '" placeholder="' + T('fillPb') + '"></td>'
+                + '<td><input type="number" min="1" max="300" class="form-control form-control-sm hnt-cnt" value="' + (cnt || '') + '"></td></tr>';
+        });
+        return h + '</tbody></table></div>';
+    }
+    function qtyList(qty, pb, cnt, useRem) {
+        var arr = []; for (var i = 0; i < cnt; i++) arr.push(pb);
+        if (useRem && cnt === Math.ceil(qty / pb) && qty % pb !== 0) arr[cnt - 1] = qty % pb;
+        return arr;
+    }
+    function collect(useRem) {
+        var tags = [], bad = null;
+        document.querySelectorAll('#hnt-box tbody tr').forEach(function (tr) {
+            if (!tr.querySelector('.hnt-ck').checked) return;
+            var pn = tr.getAttribute('data-pn');
+            var pb = parseInt(tr.querySelector('.hnt-pb').value, 10), cnt = parseInt(tr.querySelector('.hnt-cnt').value, 10), qty = parseInt(tr.getAttribute('data-qty'), 10) || 0;
+            if (pn.indexOf('|') !== -1) { bad = bad || (T('badPipe') + pn); return; }
+            if (!(pb > 0) || !(cnt > 0)) { bad = bad || (T('badFill') + ' ' + pn); return; }
+            qtyList(qty, pb, cnt, useRem).forEach(function (q) {
+                tags.push({ partNo: pn, qtyPerPack: q, invoiceNumber: tr.getAttribute('data-inv'), planId: tr.getAttribute('data-id'), customer: tr.getAttribute('data-cus'), productName: tr.getAttribute('data-name') });
+            });
+        });
+        return { tags: tags, bad: bad };
+    }
+    function refreshSummary() {
+        var el = document.getElementById('hnt-sum'); if (!el) return;
+        var c = collect(document.getElementById('hnt-rem').checked), date = document.getElementById('hnt-date').value;
+        var pcs = c.tags.reduce(function (a, t) { return a + t.qtyPerPack; }, 0);
+        el.innerHTML = T('sum1') + ' <b>' + c.tags.length + '</b> ' + T('sum2') + ' · <b>' + pcs + '</b> ' + T('sum3') + ' · ' + T('sum4') + ' <b>' + esc(dmyShow(date)) + '</b>' + (c.bad ? ' · <span class="text-danger">' + esc(c.bad) + '</span>' : '');
+    }
+    function fill() {
+        var date = document.getElementById('hnt-date').value, all = document.getElementById('hnt-allcus').checked;
+        document.getElementById('hnt-box').innerHTML = rowsHtml(date, all); refreshSummary();
+    }
+    /* ---- หน้าต่างปริ้น: A4 แนวตั้ง 10 ใบ/หน้า (2 x 5) ---- */
+    function renderPrint(tags, w, dateYmd) {
+        if (!w) { Swal.fire(T('popupT'), T('popup'), 'warning'); return; }
+        var d8 = dmy8(dateYmd);
+        var card = function (t) {
+            return '<div class="tg"><div class="tt"><span class="co">A TECH AUTOMOTIVE CO.,LTD.</span><span class="ti">Production Tag</span><span class="sq">No. <b>' + esc(t.serial) + '</b></span></div>'
+                + '<div class="r"><div class="a">Part No.</div><div class="b pn">' + esc(t.partNo) + '</div><div class="c h">Production Date</div></div>'
+                + '<div class="r"><div class="a">Part Name</div><div class="b nm">' + esc(t.productName || '') + '</div><div class="c v">' + esc(d8) + '</div></div>'
+                + '<div class="r q"><div class="a">QR Code</div><div class="b qc"><img src="' + t.qrUrl + '"></div><div class="ql">Qty</div><div class="c v qv">' + esc(t.qtyPerPack) + '</div></div></div>';
+        };
+        var pages = '';
+        for (var p = 0; p < tags.length; p += 10) pages += '<div class="pg">' + tags.slice(p, p + 10).map(card).join('') + '</div>';
+        w.document.open();
+        w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + T('pTitle') + '</title><style>'
+            + '*{box-sizing:border-box}@page{size:A4;margin:8mm}body{font-family:Arial,Helvetica,sans-serif;margin:0;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+            + '.pg{display:grid;grid-template-columns:95mm 95mm;grid-template-rows:repeat(5,52mm);gap:5mm 4mm;width:194mm;height:280mm;page-break-after:always}.pg:last-child{page-break-after:auto}'
+            + '.tg{border:.45mm solid #000;display:grid;grid-template-rows:8mm 11mm 11mm 1fr;overflow:hidden;background:#fff}'
+            + '.tt{display:flex;justify-content:space-between;align-items:center;padding:0 2.5mm;border-bottom:.35mm solid #000}.ti{font-size:14pt}.co{font-size:5pt;color:#333;width:24mm;line-height:1.2}.sq{font-size:7pt;width:24mm;text-align:right}.sq b{font-size:10pt}'
+            + '.r{min-height:0;display:grid;grid-template-columns:26% 1fr 29%;border-bottom:.35mm solid #000}.r:last-child{border-bottom:0}'
+            + '.r>div{display:flex;align-items:center;justify-content:center;font-size:9.5pt;border-right:.35mm solid #000;text-align:center;overflow:hidden;padding:0 1mm}.r>div:last-child{border-right:0}'
+            + '.pn{font-weight:bold;font-size:10.5pt!important}.nm{font-size:8.5pt!important;line-height:1.15}.h{font-size:9pt!important}.v{font-size:10.5pt!important}'
+            + '.q{grid-template-columns:26% 1fr 9% 29%}.qc{padding:0!important}.qc img{width:21mm;height:21mm;display:block}.ql{font-size:7.5pt!important}.qv{font-size:14pt!important;font-weight:bold}'
+            + '@media print{.tg{page-break-inside:avoid}}</style></head><body>' + pages
+            + '<script>window.onload=function(){setTimeout(function(){window.print()},300)};<\/script></body></html>');
+        w.document.close();
+    }
+    function addQr(tags) {
+        var holder = document.createElement('div'); holder.style.cssText = 'position:fixed;left:-9999px'; document.body.appendChild(holder);
+        try {
+            tags.forEach(function (t) {
+                var d = document.createElement('div'); holder.appendChild(d); safeCreateQRCode(d, t.qr);
+                var cv = d.querySelector('canvas'); t.qrUrl = cv ? cv.toDataURL('image/png') : '';
+            });
+        } finally { document.body.removeChild(holder); }
+    }
+    async function doPrint(date, useRem) {
+        var w = window.open('', '_blank');
+        if (w) w.document.write('<html><body style="font-family:sans-serif;text-align:center;padding:60px;font-size:18px;">' + T('wait') + '</body></html>');
+        var c = collect(useRem), issued = false;
+        if (c.bad || !c.tags.length) { if (w) w.close(); Swal.showValidationMessage(c.bad || T('badSel')); return false; }
+        if (c.tags.length > 300) { if (w) w.close(); Swal.showValidationMessage(T('badMax')); return false; }
+        try {
+            try { var _t = document.createElement('div'); safeCreateQRCode(_t, 'test'); if (!_t.querySelector('canvas')) throw new Error('no canvas'); }
+            catch (qe) { throw new Error(T('qrNo')); }
+            var res = await callAppsScript('issueHanonTags', { deliveryDate: date, printedBy: (currentUser && currentUser.username) || '', tags: c.tags });
+            if (!res || !res.tags || res.tags.length !== c.tags.length) throw new Error(T('srvBad'));
+            var out = c.tags.map(function (t, i) { return Object.assign({}, t, { serial: res.tags[i].serial, qr: res.tags[i].qr }); });
+            issued = true;
+            try { localStorage.setItem(LS_LAST, JSON.stringify({ date: date, tags: out })); } catch (e) { }
+            addQr(out); renderPrint(out, w, date);
+            return true;
+        } catch (e) {
+            if (w) w.close();
+            var m = String((e && e.message) || e);
+            if (/ไม่รู้จัก|unknown|Invalid action|action/i.test(m)) m = T('gsOld');
+            Swal.showValidationMessage((issued ? T('failB') : T('failA')) + m + (issued ? ')' : ''));
+            return false;
+        }
+    }
+    function reprintLast() {
+        var b = null; try { b = JSON.parse(localStorage.getItem(LS_LAST) || 'null'); } catch (e) { }
+        if (!b || !b.tags || !b.tags.length) { Swal.fire(T('noLast'), T('noLastT'), 'info'); return; }
+        var w = window.open('', '_blank');
+        try { addQr(b.tags); renderPrint(b.tags, w, b.date); } catch (e) { if (w) w.close(); Swal.fire(T('reFail'), e.message, 'error'); }
+    }
+    window.openHanonTagDialog = function () {
+        if (!canUse()) { Swal.fire(T('noperm'), T('nopermT'), 'warning'); return; }
+        var v = document.getElementById('view-plan-date');
+        var d0 = (v && v.value) || new Date().toISOString().slice(0, 10);
+        Swal.fire({
+            title: T('title'), width: 1020, showCancelButton: true, confirmButtonText: '<i class="bi bi-printer-fill"></i> ' + T('go'), cancelButtonText: T('close'), focusConfirm: false, showLoaderOnConfirm: true,
+            html: '<div class="d-flex align-items-center gap-3 flex-wrap text-start mb-2"><label class="fw-bold mb-0">' + T('date') + '</label><input type="date" id="hnt-date" class="form-control form-control-sm" style="max-width:170px">'
+                + '<label class="small mb-0"><input type="checkbox" id="hnt-rem" checked> ' + T('rem') + '</label>'
+                + '<label class="small mb-0"><input type="checkbox" id="hnt-allcus"> ' + T('all') + '</label>'
+                + '<button type="button" id="hnt-last" class="btn btn-sm btn-outline-secondary ms-auto"><i class="bi bi-arrow-repeat"></i> ' + T('last') + '</button></div>'
+                + '<div id="hnt-box"></div><div id="hnt-sum" class="text-start small mt-2"></div><div class="text-start text-muted mt-1" style="font-size:.75rem">' + T('note') + '</div>',
+            didOpen: function () {
+                document.getElementById('hnt-date').value = d0; fill();
+                document.getElementById('hnt-date').addEventListener('change', fill);
+                document.getElementById('hnt-allcus').addEventListener('change', fill);
+                document.getElementById('hnt-rem').addEventListener('change', refreshSummary);
+                document.getElementById('hnt-last').addEventListener('click', reprintLast);
+                document.getElementById('hnt-box').addEventListener('input', refreshSummary);
+                document.getElementById('hnt-box').addEventListener('change', function (e) {
+                    if (e.target.id === 'hnt-all') document.querySelectorAll('#hnt-box .hnt-ck').forEach(function (cb) { cb.checked = e.target.checked; });
+                    refreshSummary();
+                });
+            },
+            preConfirm: function () { return doPrint(document.getElementById('hnt-date').value, document.getElementById('hnt-rem').checked); }
+        });
+    };
+    // ปุ่มบนหน้าแผนส่งของ (วางต่อจากปุ่มแท็ก BROSE)
+    function ensureBtn() {
+        var acts = document.querySelector('#pills-delivery-plan #dpB-root .top .acts');
+        var b = document.getElementById('hnt-open-btn');
+        if (!canUse()) { if (b) b.remove(); return; }
+        if (!acts) return;
+        if (!b) {
+            b = document.createElement('button'); b.type = 'button'; b.id = 'hnt-open-btn'; b.className = 'dpB-btn';
+            b.style.cssText = 'background:#0f766e;color:#fff;border-color:#0f766e';
+            b.addEventListener('click', window.openHanonTagDialog);
+        }
+        var html = '<i class="bi bi-qr-code"></i>' + T('btn');
+        if (b.innerHTML !== html) b.innerHTML = html;
+        var brm = document.getElementById('brm-wrap'), anchor = brm && brm.parentNode === acts ? brm : acts.querySelector('[data-act="pdf"]');
+        var want = anchor ? anchor.nextSibling : acts.firstChild;
+        if (b.parentNode !== acts || b.previousSibling !== anchor) acts.insertBefore(b, want);
+    }
+    ensureBtn();
+    setInterval(function () { try { ensureBtn(); } catch (e) { } }, 1500);
+})();
+/* ===== จบ HANON-TAG-V1 ===== */
+(function () {
+    if (window.__tagDlgV2) return; window.__tagDlgV2 = true;
+    var isEn = function () { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e) { return false; } };
+    var TX = {
+        th: { sub: 'เลือกวันที่ส่ง · เลือกรอบเวลา · ตรวจจำนวนต่อกล่อง · กดออกเลขแล้วปริ้นได้เลย', date: 'วันที่ส่งงาน', rem: 'ใบสุดท้ายใช้จำนวนเศษ', all: 'แสดงทุกลูกค้า', last: 'พิมพ์ชุดล่าสุดซ้ำ', go: 'ออกเลข + ปริ้นแท็ก', close: 'ปิด',
+            rounds: 'รอบเวลา', allRounds: 'ทั้งหมด', rows: 'รายการ', pcs: 'ชิ้น', tags: 'แท็ก', pages: 'หน้า A4', numNote: 'เลขแท็กรันต่อให้อัตโนมัติตามวันที่ส่ง · ไม่ซ้ำแม้ออกคนละรอบ',
+            note: 'เลขท้าย QR นับต่อกันตามวันที่ส่งงาน ไม่ซ้ำ (ออกทีละรอบก็ได้ เลขจะรันต่อจากที่เคยออกไปแล้ว) · เมื่อกดปริ้นแล้วเลขจะถูกใช้ไปเลย ถ้าปริ้นพลาดให้กด "พิมพ์ชุดล่าสุดซ้ำ" (เลขเดิม)',
+            noperm: 'ไม่มีสิทธิ์', nopermT: 'ต้องมีสิทธิ์จัดการแผนการจัดส่ง หรือสิทธิ์ปริ้นแท็ก', none: 'ไม่พบแผนส่งของ', noneCus: 'ของลูกค้าที่ชื่อมีคำว่า', noneDay: 'ในวันที่เลือก', noneHint: 'ถ้าชื่อลูกค้าในแผนไม่มีคำนี้ ให้เปิด "แสดงทุกลูกค้า"', noneRound: 'ไม่มีรายการในรอบที่เลือก',
+            plan: 'ยอดแพลน (ชิ้น)', pb: 'จำนวน / กล่อง', cnt: 'จำนวนแท็ก', needPb: 'ยังไม่มีจำนวนต่อกล่อง · กรอกก่อน', issued: 'ออกแล้ว', issuedU: 'ใบ', issuedHint: '(เครื่องนี้) ติ๊กเองถ้าจะออกซ้ำ',
+            badFill: 'กรอกจำนวนต่อกล่อง/จำนวนแท็กของ', badSel: 'ยังไม่ได้เลือกรายการ', badMax: 'ออกได้ไม่เกิน 300 ใบต่อครั้ง', badPipe: 'รหัสสินค้ามีตัวอักษร | ไม่ได้: ',
+            wait: '⏳ กำลังออกเลขแท็ก กรุณารอสักครู่...', popup: 'เบราว์เซอร์บล็อกป๊อปอัพ กรุณาอนุญาตป๊อปอัพ แล้วกด "พิมพ์ชุดล่าสุดซ้ำ"', popupT: 'เปิดหน้าต่างไม่สำเร็จ',
+            qrNo: 'ตัวสร้าง QR ยังไม่พร้อม (ยังไม่ได้ออกเลขแท็ก) กรุณารีเฟรชหน้าเว็บแล้วลองใหม่', srvBad: 'เซิร์ฟเวอร์ตอบกลับไม่ครบ (ยังไม่ปริ้น) กรุณาตรวจชีตเก็บเลขแท็ก',
+            failA: 'ออกแท็กไม่สำเร็จ: ', failB: 'ออกเลขแท็กแล้วแต่แสดงผลไม่สำเร็จ — กดปุ่ม "พิมพ์ชุดล่าสุดซ้ำ" ได้ (', noLast: 'ยังไม่มีชุดล่าสุด', noLastT: 'เครื่องนี้ยังไม่เคยออกแท็ก', reFail: 'พิมพ์ซ้ำไม่สำเร็จ',
+            gsOld: 'Google Script ยังไม่ได้อัปเดต (ยังไม่รู้จักคำสั่งออกแท็ก) ให้วางโค้ด Google Script แล้ว Deploy เวอร์ชันใหม่ก่อน', pTitle: 'ปริ้นแท็ก HANON', busy: 'กำลังออกเลข...', noPrint: 'ยังไม่ได้วางแพตช์ตัวพิมพ์แท็กของลูกค้านี้' },
+        en: { sub: 'Pick delivery date · pick rounds · check qty per box · issue numbers and print', date: 'Delivery date', rem: 'Last tag uses remaining qty', all: 'Show all customers', last: 'Reprint last batch', go: 'Issue numbers + print', close: 'Close',
+            rounds: 'Rounds', allRounds: 'All', rows: 'items', pcs: 'pcs', tags: 'tags', pages: 'A4 pages', numNote: 'Tag numbers run automatically per delivery date · never repeat, even across rounds',
+            note: 'The QR suffix runs per delivery date and never repeats (you can issue one round at a time; numbers continue from what was issued). Once you print, the numbers are used. If a print fails, press "Reprint last batch" (same numbers).',
+            noperm: 'No permission', nopermT: 'You need delivery-plan or print-tag permission', none: 'No delivery plan found', noneCus: 'for customers named', noneDay: 'on the selected date', noneHint: 'If the customer name differs, turn on "Show all customers"', noneRound: 'No items in the selected rounds',
+            plan: 'Plan qty (pcs)', pb: 'Qty / box', cnt: 'Tags', needPb: 'No qty per box yet · enter it', issued: 'Issued', issuedU: 'tags', issuedHint: '(this device) tick to issue again',
+            badFill: 'Enter qty per box / number of tags for', badSel: 'Nothing selected', badMax: 'Max 300 tags per run', badPipe: 'Part No cannot contain "|": ',
+            wait: '⏳ Issuing tag numbers, please wait...', popup: 'Pop-up blocked. Allow pop-ups, then press "Reprint last batch"', popupT: 'Could not open window',
+            qrNo: 'QR generator not ready (no numbers used). Refresh the page and try again.', srvBad: 'Incomplete server reply (not printed). Check the tag log sheet',
+            failA: 'Could not issue tags: ', failB: 'Numbers were issued but display failed — press "Reprint last batch" (', noLast: 'No previous batch', noLastT: 'No tags have been issued on this device', reFail: 'Reprint failed',
+            gsOld: 'Google Script is not updated (unknown tag command). Paste the Google Script code and deploy a new version first.', pTitle: 'Print HANON tags', busy: 'Issuing...', noPrint: 'The print patch for this customer is not installed' }
+    };
+    var T = function (k) { return TX[isEn() ? 'en' : 'th'][k]; };
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function isT(v) { return v === true || String(v).toUpperCase() === 'TRUE'; }
+    function canUse() { var u = currentUser; return !!u && (u.username === 'admin' || u.role === 'admin' || isT(u.canManageDeliveryPlan) || isT(u.printTags)); }
+    function dmy8(ymd) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(ymd || ''); return m ? (m[3] + m[2] + m[1]) : String(ymd || ''); }
+    function dmyShow(ymd) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(ymd || ''); if (!m) return ymd; var mo = isEn() ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] : ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']; return (+m[3]) + ' ' + mo[+m[2] - 1] + ' ' + (isEn() ? m[1] : (+m[1] + 543)); }
+    function dateOf(p) { return typeof window.formatDate === 'function' ? window.formatDate(p.date) : String(p.date || '').split('T')[0]; }
+    function timeOf(p) { var t = typeof window.formatTimeDisplay === 'function' ? window.formatTimeDisplay(p.time) : String(p.time || ''); return String(t || '').replace(/^'+/, '').trim() || '-'; }
+    function perBoxOf(partNo) {
+        var p = (db.products || []).find(function (x) { return String(x.id).trim() === String(partNo).trim(); });
+        var n = p ? parseInt(p.fullBoxQuantity, 10) : 0; return n > 0 ? n : 0;
+    }
+    function qtyList(qty, pb, cnt, useRem) {
+        var arr = []; for (var i = 0; i < cnt; i++) arr.push(pb);
+        if (useRem && cnt === Math.ceil(qty / pb) && qty % pb !== 0) arr[cnt - 1] = qty % pb;
+        return arr;
+    }
+    function addQr(tags) {
+        var holder = document.createElement('div'); holder.style.cssText = 'position:fixed;left:-9999px'; document.body.appendChild(holder);
+        try {
+            tags.forEach(function (t) {
+                var d = document.createElement('div'); holder.appendChild(d); safeCreateQRCode(d, t.qr);
+                var cv = d.querySelector('canvas'); t.qrUrl = cv ? cv.toDataURL('image/png') : '';
+            });
+        } finally { document.body.removeChild(holder); }
+    }
+    /* ---- พิมพ์แท็ก HANON: A4 แนวตั้ง 10 ใบ/หน้า (2 x 5) ---- */
+    function renderHanon(tags, w, dateYmd) {
+        if (!w) { Swal.fire(T('popupT'), T('popup'), 'warning'); return; }
+        var d8 = dmy8(dateYmd);
+        var card = function (t) {
+            return '<div class="tg"><div class="tt"><span class="co">A TECH AUTOMOTIVE CO.,LTD.</span><span class="ti">Production Tag</span><span class="sq">No. <b>' + esc(t.serial) + '</b></span></div>'
+                + '<div class="r"><div class="a">Part No.</div><div class="b pn">' + esc(t.partNo) + '</div><div class="c h">Production Date</div></div>'
+                + '<div class="r"><div class="a">Part Name</div><div class="b nm">' + esc(t.productName || '') + '</div><div class="c v">' + esc(d8) + '</div></div>'
+                + '<div class="r q"><div class="a">QR Code</div><div class="b qc"><img src="' + t.qrUrl + '"></div><div class="ql">Qty</div><div class="c v qv">' + esc(t.qtyPerPack) + '</div></div></div>';
+        };
+        var pages = '';
+        for (var p = 0; p < tags.length; p += 10) pages += '<div class="pg">' + tags.slice(p, p + 10).map(card).join('') + '</div>';
+        w.document.open();
+        w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + T('pTitle') + '</title><style>'
+            + '*{box-sizing:border-box}@page{size:A4;margin:8mm}body{font-family:Arial,Helvetica,sans-serif;margin:0;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+            + '.pg{display:grid;grid-template-columns:95mm 95mm;grid-template-rows:repeat(5,52mm);gap:5mm 4mm;width:194mm;height:280mm;page-break-after:always}.pg:last-child{page-break-after:auto}'
+            + '.tg{border:.45mm solid #000;display:grid;grid-template-rows:8mm 11mm 11mm 1fr;overflow:hidden;background:#fff}'
+            + '.tt{display:flex;justify-content:space-between;align-items:center;padding:0 2.5mm;border-bottom:.35mm solid #000}.ti{font-size:14pt}.co{font-size:5pt;color:#333;width:24mm;line-height:1.2}.sq{font-size:7pt;width:24mm;text-align:right}.sq b{font-size:10pt}'
+            + '.r{min-height:0;display:grid;grid-template-columns:26% 1fr 29%;border-bottom:.35mm solid #000}.r:last-child{border-bottom:0}'
+            + '.r>div{display:flex;align-items:center;justify-content:center;font-size:9.5pt;border-right:.35mm solid #000;text-align:center;overflow:hidden;padding:0 1mm}.r>div:last-child{border-right:0}'
+            + '.pn{font-weight:bold;font-size:10.5pt!important}.nm{font-size:8.5pt!important;line-height:1.15}.h{font-size:9pt!important}.v{font-size:10.5pt!important}'
+            + '.q{grid-template-columns:26% 1fr 9% 29%}.qc{padding:0!important}.qc img{width:21mm;height:21mm;display:block}.ql{font-size:7.5pt!important}.qv{font-size:14pt!important;font-weight:bold}'
+            + '@media print{.tg{page-break-inside:avoid}}</style></head><body>' + pages
+            + '<script>window.onload=function(){setTimeout(function(){window.print()},300)};<\/script></body></html>');
+        w.document.close();
+    }
+    var CFG = {
+        hanon: { key: 'hanon', label: 'HANON', re: /hanon/i, c: '#0f766e', soft: '#ccfbf1', gs: 'issueHanonTags', last: 'hanonLastBatch_v1', perPage: 10,
+            print: function (tags, w, date) { addQr(tags); renderHanon(tags, w, date); },
+            reprint: function () {
+                var b = null; try { b = JSON.parse(localStorage.getItem('hanonLastBatch_v1') || 'null'); } catch (e) { }
+                if (!b || !b.tags || !b.tags.length) { Swal.fire(T('noLast'), T('noLastT'), 'info'); return; }
+                var w = window.open('', '_blank'); try { addQr(b.tags); renderHanon(b.tags, w, b.date); } catch (e) { if (w) w.close(); Swal.fire(T('reFail'), e.message, 'error'); }
+            } },
+        brose: { key: 'brose', label: 'BROSE THAILAND', re: /brose/i, c: '#1d4ed8', soft: '#dbeafe', gs: 'issueBroseTags', last: 'broseLastBatch_v1', perPage: 3,
+            print: function (tags, w, date) { if (typeof window.__broseTagPrint !== 'function') throw new Error(T('noPrint')); window.__broseTagPrint(tags, date, w); },
+            reprint: function () { if (typeof window.__broseReprintLast === 'function') window.__broseReprintLast(); else Swal.fire(T('noLast'), T('noPrint'), 'info'); } }
+    };
+    var css = document.createElement('style'); css.id = 'tgd-css';
+    css.textContent = ''
+        + '.tgd-pop{padding:0!important;border-radius:22px!important;overflow:hidden;width:min(1000px,96vw)!important;box-shadow:0 24px 70px rgba(15,23,42,.35)!important}'
+        + '.tgd-pop .swal2-html-container{margin:0!important;padding:0!important;text-align:left!important;overflow:visible!important}'
+        + '.tgd{--c:#0f766e;--s:#ccfbf1;font-family:inherit;color:#0f172a}'
+        + '.tgd *{box-sizing:border-box}'
+        + '.tgd .hd{display:flex;gap:14px;align-items:center;padding:18px 24px;border-bottom:1px solid #eef1f6;background:linear-gradient(180deg,var(--s),#fff)}'
+        + '.tgd .ic{width:44px;height:44px;border-radius:14px;background:var(--c);color:#fff;display:grid;place-items:center;font-size:21px;flex:0 0 44px}'
+        + '.tgd .hd h3{margin:0;font-size:1.25rem;font-weight:800}.tgd .hd p{margin:2px 0 0;font-size:.8rem;color:#64748b}'
+        + '.tgd .x{margin-left:auto;width:34px;height:34px;border-radius:10px;background:#f1f5f9;border:0;color:#64748b;cursor:pointer;flex:0 0 34px}.tgd .x:hover{background:#e2e8f0}'
+        + '.tgd .bar{display:flex;gap:10px;align-items:center;padding:12px 24px 6px;flex-wrap:wrap}'
+        + '.tgd .pill{display:flex;align-items:center;gap:8px;border:1.5px solid #dbe3ee;border-radius:12px;padding:5px 10px;font-weight:600;background:#fff;font-size:.85rem}'
+        + '.tgd .pill small{color:#94a3b8;font-weight:500}.tgd .pill input{border:0;outline:0;font:inherit;font-weight:700;background:transparent;color:#0f172a}'
+        + '.tgd .tg{display:flex;align-items:center;gap:7px;font-size:.8rem;color:#475569;padding:7px 10px;border-radius:10px;background:#f8fafc;cursor:pointer;user-select:none}'
+        + '.tgd .sw{width:30px;height:17px;border-radius:99px;background:#cbd5e1;position:relative;transition:.15s;flex:0 0 30px}.tgd .sw::after{content:"";position:absolute;left:2px;top:2px;width:13px;height:13px;border-radius:50%;background:#fff;transition:.15s}.tgd .tg.on .sw{background:var(--c)}.tgd .tg.on .sw::after{left:15px}'
+        + '.tgd .ghost{margin-left:auto;border:1.5px solid #dbe3ee;border-radius:12px;padding:8px 14px;font-size:.82rem;font-weight:700;color:#475569;background:#fff;cursor:pointer}.tgd .ghost:hover{background:#f8fafc}'
+        + '.tgd .rd{display:flex;gap:8px;align-items:center;padding:6px 24px 8px;flex-wrap:wrap}.tgd .rd .lb{font-size:.75rem;font-weight:700;color:#64748b;margin-right:2px}'
+        + '.tgd .rc{border:1.5px solid #dbe3ee;background:#fff;border-radius:999px;padding:5px 13px;font-size:.82rem;font-weight:700;color:#334155;cursor:pointer}.tgd .rc small{color:#94a3b8;font-weight:600;margin-left:4px}'
+        + '.tgd .rc.on{background:var(--c);border-color:var(--c);color:#fff}.tgd .rc.on small{color:#ffffffcc}'
+        + '.tgd .list{padding:4px 24px 6px;display:flex;flex-direction:column;gap:9px;max-height:min(380px,48vh);overflow:auto}'
+        + '.tgd .row{display:grid;grid-template-columns:28px 1.5fr 100px 150px 150px;gap:14px;align-items:center;border:1.5px solid #e5e9f2;border-radius:16px;padding:11px 16px;background:#fff}'
+        + '.tgd .row.sel{border-color:var(--s);background:#fcfffe;box-shadow:inset 3px 0 0 var(--c)}.tgd .row.warn{border-color:#fcd34d;background:#fffbeb}'
+        + '.tgd .ck{width:22px;height:22px;border-radius:7px;border:2px solid #cbd5e1;background:#fff;display:grid;place-items:center;color:#fff;font-size:13px;cursor:pointer;padding:0}.tgd .row.sel .ck{background:var(--c);border-color:var(--c)}'
+        + '.tgd .pn{font-weight:800;font-size:.98rem}.tgd .nm{font-size:.78rem;color:#64748b;margin-top:1px}'
+        + '.tgd .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}.tgd .tagp{font-size:.68rem;border-radius:6px;padding:1px 8px;background:#e0f2fe;color:#0369a1;font-weight:600}.tgd .tagp.t{background:#ede9fe;color:#6d28d9}.tgd .tagp.w{background:#fef3c7;color:#92400e}.tgd .tagp.i{background:#e2e8f0;color:#475569}'
+        + '.tgd .pl b{font-size:1.15rem;display:block}.tgd .pl small{color:#94a3b8;font-size:.68rem}'
+        + '.tgd .st label{display:block;font-size:.68rem;color:#64748b;font-weight:700;margin-bottom:2px}'
+        + '.tgd .stp{display:flex;align-items:center;border:1.5px solid #dbe3ee;border-radius:11px;overflow:hidden;height:38px;background:#fff}.tgd .stp.w{border-color:#fbbf24}'
+        + '.tgd .stp button{width:34px;border:0;background:#f8fafc;color:#475569;font-weight:800;font-size:1rem;cursor:pointer;height:100%;padding:0}.tgd .stp button:hover{background:#eef2f7}'
+        + '.tgd .stp input{flex:1;min-width:0;width:100%;border:0;outline:0;text-align:center;font-weight:800;font-size:1rem;background:transparent;-moz-appearance:textfield}.tgd .stp input::-webkit-outer-spin-button,.tgd .stp input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}'
+        + '.tgd .empty{border:1.5px dashed #cbd5e1;border-radius:14px;padding:22px;text-align:center;color:#64748b;font-size:.9rem}.tgd .empty small{display:block;color:#94a3b8;margin-top:4px}'
+        + '.tgd .err{margin:6px 24px 0;padding:9px 12px;border-radius:10px;background:#fef2f2;color:#b91c1c;font-size:.82rem;font-weight:600;display:none}.tgd .err.on{display:block}'
+        + '.tgd .ft{display:flex;align-items:center;gap:18px;padding:14px 24px;border-top:1px solid #eef1f6;background:#f8fafc;margin-top:10px;flex-wrap:wrap}'
+        + '.tgd .sum{display:flex;gap:22px;align-items:flex-end;flex-wrap:wrap}.tgd .sum div{font-size:.7rem;color:#64748b}.tgd .sum b{display:block;font-size:1.45rem;color:#0f172a;line-height:1.1}.tgd .sum .nn{max-width:230px;line-height:1.3;font-size:.72rem;color:#94a3b8}'
+        + '.tgd .acts{margin-left:auto;display:flex;gap:10px;align-items:center}'
+        + '.tgd .b1{background:var(--c);color:#fff;border:0;border-radius:13px;padding:12px 22px;font-weight:800;font-size:.95rem;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,.14)}.tgd .b1[disabled]{opacity:.55;cursor:wait}'
+        + '.tgd .b2{border:0;border-radius:13px;padding:12px 18px;background:#eef1f6;color:#475569;font-weight:700;cursor:pointer}'
+        + '.tgd .note{padding:8px 24px 14px;font-size:.72rem;color:#94a3b8}'
+        + '@media(max-width:760px){.tgd .row{grid-template-columns:28px 1fr 1fr}.tgd .row .pl{display:none}.tgd .row>div:nth-child(2){grid-column:2/4}}';
+    document.head.appendChild(css);
+ 
+    function openDlg(cfg) {
+        if (!canUse()) { Swal.fire(T('noperm'), T('nopermT'), 'warning'); return; }
+        var v = document.getElementById('view-plan-date');
+        var S = { cfg: cfg, date: (v && v.value) || new Date().toISOString().slice(0, 10), rounds: {}, allCus: false, rem: true, rows: {}, busy: false };
+        function issuedMap() { try { return (JSON.parse(localStorage.getItem('tagIssued_v1') || '{}')[cfg.key + '|' + S.date]) || {}; } catch (e) { return {}; } }
+        function plans() {
+            return (db.deliveryPlans || []).filter(function (p) {
+                if (!p || dateOf(p) !== S.date) return false;
+                if (!p.productId || p.productId === '-') return false;
+                if (p.jobType === 'Pickup' || p.jobType === 'Other') return false;
+                return S.allCus || cfg.re.test(String(p.customer || ''));
+            });
+        }
+        function rowsNow() {
+            var iss = issuedMap();
+            return plans().map(function (p) {
+                var id = String(p.id), qty = parseInt(p.quantity, 10) || 0, pn = String(p.productId).trim();
+                var r = S.rows[S.date + '|' + id];
+                if (!r) {
+                    var pb = perBoxOf(pn), cnt = pb ? Math.ceil(qty / pb) : 0;
+                    r = S.rows[S.date + '|' + id] = { id: id, pb: pb, cnt: cnt, touched: false, on: !!pb && !iss[id] };
+                }
+                return { r: r, p: p, id: id, qty: qty, pn: pn, time: timeOf(p), iss: iss[id] };
+            });
+        }
+        function visible() { var any = Object.keys(S.rounds).length > 0; return rowsNow().filter(function (x) { return !any || S.rounds[x.time]; }); }
+        function collect() {
+            var tags = [], bad = null;
+            visible().forEach(function (x) {
+                if (!x.r.on) return;
+                if (x.pn.indexOf('|') !== -1) { bad = bad || (T('badPipe') + x.pn); return; }
+                if (!(x.r.pb > 0) || !(x.r.cnt > 0)) { bad = bad || (T('badFill') + ' ' + x.pn); return; }
+                qtyList(x.qty, x.r.pb, x.r.cnt, S.rem).forEach(function (q) {
+                    tags.push({ partNo: x.pn, qtyPerPack: q, invoiceNumber: x.p.invoiceNumber || '', planId: x.id, customer: x.p.customer, productName: x.p.productName, time: x.time });
+                });
+            });
+            return { tags: tags, bad: bad };
+        }
+        function $(sel) { return document.querySelector('.tgd ' + sel); }
+        function drawRounds() {
+            var all = rowsNow(), cnt = {}; all.forEach(function (x) { cnt[x.time] = (cnt[x.time] || 0) + 1; });
+            var times = Object.keys(cnt).sort(), any = Object.keys(S.rounds).length > 0;
+            $('.rd').innerHTML = '<span class="lb">' + T('rounds') + '</span><button type="button" class="rc ' + (any ? '' : 'on') + '" data-t="*">' + T('allRounds') + '<small>' + all.length + '</small></button>'
+                + times.map(function (t) { return '<button type="button" class="rc ' + (S.rounds[t] ? 'on' : '') + '" data-t="' + esc(t) + '">' + esc(t) + '<small>' + cnt[t] + '</small></button>'; }).join('');
+        }
+        function drawList() {
+            var vis = visible(), all = rowsNow();
+            if (!all.length) { $('.list').innerHTML = '<div class="empty">' + T('none') + (S.allCus ? '' : ' ' + T('noneCus') + ' <b>' + esc(cfg.label.split(' ')[0]) + '</b>') + ' ' + T('noneDay') + (S.allCus ? '' : '<small>' + T('noneHint') + '</small>') + '</div>'; return; }
+            if (!vis.length) { $('.list').innerHTML = '<div class="empty">' + T('noneRound') + '</div>'; return; }
+            $('.list').innerHTML = vis.map(function (x) {
+                var warn = !(x.r.pb > 0), cls = x.r.on ? 'sel' : (warn ? 'warn' : '');
+                return '<div class="row ' + cls + '" data-id="' + esc(x.id) + '"><button type="button" class="ck" data-a="ck">' + (x.r.on ? '✓' : '') + '</button>'
+                    + '<div><div class="pn">' + esc(x.pn) + '</div><div class="nm">' + esc(x.p.productName || '') + '</div><div class="tags"><span class="tagp">' + esc(x.p.customer || '') + '</span><span class="tagp t">🕐 ' + esc(x.time) + '</span>'
+                    + (x.p.invoiceNumber ? '<span class="tagp i">' + esc(x.p.invoiceNumber) + '</span>' : '') + (warn ? '<span class="tagp w">' + T('needPb') + '</span>' : '')
+                    + (x.iss ? '<span class="tagp w">' + T('issued') + ' ' + x.iss.n + ' ' + T('issuedU') + ' ' + esc(x.iss.at || '') + ' ' + T('issuedHint') + '</span>' : '') + '</div></div>'
+                    + '<div class="pl"><b>' + x.qty + '</b><small>' + T('plan') + '</small></div>'
+                    + '<div class="st"><label>' + T('pb') + '</label><div class="stp ' + (warn ? 'w' : '') + '"><button type="button" data-a="pb-">−</button><input type="number" min="1" data-f="pb" value="' + (x.r.pb || '') + '"><button type="button" data-a="pb+">+</button></div></div>'
+                    + '<div class="st"><label>' + T('cnt') + '</label><div class="stp"><button type="button" data-a="cnt-">−</button><input type="number" min="1" max="300" data-f="cnt" value="' + (x.r.cnt || '') + '"><button type="button" data-a="cnt+">+</button></div></div></div>';
+            }).join('');
+        }
+        function drawSum() {
+            var c = collect(), pcs = c.tags.reduce(function (a, t) { return a + t.qtyPerPack; }, 0), pages = Math.ceil(c.tags.length / cfg.perPage);
+            $('.sum').innerHTML = '<div><b>' + c.tags.length + '</b>' + T('tags') + '</div><div><b>' + pcs + '</b>' + T('pcs') + '</div><div><b>' + pages + '</b>' + T('pages') + '</div><div class="nn">' + T('numNote') + '</div>';
+            var e = $('.err'); if (c.bad) { e.textContent = c.bad; e.classList.add('on'); } else if (!S.busy) { e.classList.remove('on'); }
+        }
+        function drawAll() { drawRounds(); drawList(); drawSum(); }
+        function showErr(m) { var e = $('.err'); e.textContent = m; e.classList.add('on'); }
+        async function go() {
+            if (S.busy) return;
+            var c = collect();
+            if (c.bad || !c.tags.length) { showErr(c.bad || T('badSel')); return; }
+            if (c.tags.length > 300) { showErr(T('badMax')); return; }
+            S.busy = true; var btn = $('.b1'); btn.disabled = true; var old = btn.innerHTML; btn.textContent = T('busy'); $('.err').classList.remove('on');
+            var w = window.open('', '_blank'), issued = false;
+            if (w) w.document.write('<html><body style="font-family:sans-serif;text-align:center;padding:60px;font-size:18px;">' + T('wait') + '</body></html>');
+            try {
+                try { var _t = document.createElement('div'); safeCreateQRCode(_t, 'test'); if (!_t.querySelector('canvas')) throw new Error('no canvas'); } catch (qe) { throw new Error(T('qrNo')); }
+                var res = await callAppsScript(cfg.gs, { deliveryDate: S.date, printedBy: (currentUser && currentUser.username) || '', tags: c.tags });
+                if (!res || !res.tags || res.tags.length !== c.tags.length) throw new Error(T('srvBad'));
+                var out = c.tags.map(function (t, i) { return Object.assign({}, t, { serial: res.tags[i].serial, qr: res.tags[i].qr }); });
+                issued = true;
+                try { localStorage.setItem(cfg.last, JSON.stringify({ date: S.date, tags: out })); } catch (e) { }
+                try {
+                    var all = JSON.parse(localStorage.getItem('tagIssued_v1') || '{}'), k = cfg.key + '|' + S.date, hh = new Date(), at = String(hh.getHours()).padStart(2, '0') + ':' + String(hh.getMinutes()).padStart(2, '0');
+                    all[k] = all[k] || {}; out.forEach(function (t) { var o = all[k][t.planId] || { n: 0 }; o.n++; o.at = at; all[k][t.planId] = o; });
+                    localStorage.setItem('tagIssued_v1', JSON.stringify(all));
+                } catch (e) { }
+                cfg.print(out, w, S.date);
+                Swal.close();
+            } catch (e) {
+                if (w && !issued) w.close();
+                var m = String((e && e.message) || e);
+                if (/ไม่รู้จัก|unknown|Invalid action|action/i.test(m)) m = T('gsOld');
+                showErr((issued ? T('failB') : T('failA')) + m + (issued ? ')' : ''));
+                S.busy = false; btn.disabled = false; btn.innerHTML = old; drawAll();
+            }
+        }
+        var hex = cfg.c;
+        Swal.fire({
+            showConfirmButton: false, showCancelButton: false, showCloseButton: false, allowOutsideClick: function () { return !S.busy; }, customClass: { popup: 'tgd-pop' }, width: 1000, padding: 0, focusConfirm: false,
+            html: '<div class="tgd" style="--c:' + hex + ';--s:' + cfg.soft + '"><div class="hd"><div class="ic"><i class="bi bi-qr-code"></i></div><div><h3>' + (isEn() ? 'Issue ' : 'ออกแท็กชิ้นงาน ') + esc(cfg.label) + (isEn() ? ' part tags' : '') + '</h3><p>' + T('sub') + '</p></div><button type="button" class="x" data-a="close"><i class="bi bi-x-lg"></i></button></div>'
+                + '<div class="bar"><label class="pill"><i class="bi bi-calendar3"></i><small>' + T('date') + '</small><input type="date" id="tgd-date"></label>'
+                + '<div class="tg on" data-a="rem"><span class="sw"></span>' + T('rem') + '</div><div class="tg" data-a="all"><span class="sw"></span>' + T('all') + '</div>'
+                + '<button type="button" class="ghost" data-a="last"><i class="bi bi-arrow-repeat"></i> ' + T('last') + '</button></div>'
+                + '<div class="rd"></div><div class="list"></div><div class="err"></div>'
+                + '<div class="ft"><div class="sum"></div><div class="acts"><button type="button" class="b2" data-a="close">' + T('close') + '</button><button type="button" class="b1" data-a="go"><i class="bi bi-printer-fill"></i> ' + T('go') + '</button></div></div>'
+                + '<div class="note">' + T('note') + '</div></div>',
+            didOpen: function () {
+                var root = document.querySelector('.tgd'), di = document.getElementById('tgd-date'); di.value = S.date; drawAll();
+                di.addEventListener('change', function () { if (!di.value) return; S.date = di.value; S.rounds = {}; drawAll(); });
+                root.addEventListener('click', function (e) {
+                    var rc = e.target.closest('.rc'); if (rc) { var t = rc.getAttribute('data-t'); if (t === '*') S.rounds = {}; else { if (S.rounds[t]) delete S.rounds[t]; else S.rounds[t] = 1; } drawAll(); return; }
+                    var b = e.target.closest('[data-a]'); if (!b) return; var a = b.getAttribute('data-a');
+                    if (a === 'close') { if (!S.busy) Swal.close(); return; }
+                    if (a === 'go') { go(); return; }
+                    if (a === 'last') { cfg.reprint(); return; }
+                    if (a === 'rem') { S.rem = !S.rem; b.classList.toggle('on', S.rem); drawSum(); return; }
+                    if (a === 'all') { S.allCus = !S.allCus; b.classList.toggle('on', S.allCus); S.rounds = {}; drawAll(); return; }
+                    var row = b.closest('.row'); if (!row) return; var rr = S.rows[S.date + '|' + row.getAttribute('data-id')]; if (!rr) return;
+                    if (a === 'ck') { rr.on = !rr.on; drawList(); drawSum(); return; }
+                    var pl = rowsNow().filter(function (x) { return x.id === row.getAttribute('data-id'); })[0], qty = pl ? pl.qty : 0;
+                    if (a === 'pb-' || a === 'pb+') { rr.pb = Math.max(1, (rr.pb || 0) + (a === 'pb+' ? 1 : -1)); if (!rr.touched) rr.cnt = Math.ceil(qty / rr.pb); if (!rr.on && rr.pb > 0) rr.on = true; }
+                    if (a === 'cnt-' || a === 'cnt+') { rr.cnt = Math.min(300, Math.max(1, (rr.cnt || 0) + (a === 'cnt+' ? 1 : -1))); rr.touched = true; }
+                    drawList(); drawSum();
+                });
+                root.addEventListener('input', function (e) {
+                    var f = e.target.getAttribute && e.target.getAttribute('data-f'); if (!f) return;
+                    var row = e.target.closest('.row'), rr = S.rows[S.date + '|' + row.getAttribute('data-id')], n = parseInt(e.target.value, 10) || 0;
+                    if (f === 'pb') { rr.pb = n; if (!rr.touched && n > 0) { var q = parseInt(((rowsNow().filter(function (x) { return x.id === row.getAttribute('data-id'); })[0]) || {}).qty, 10) || 0; rr.cnt = Math.ceil(q / n); var ci = row.querySelector('[data-f=cnt]'); if (ci) ci.value = rr.cnt; } if (n > 0 && !rr.on) { rr.on = true; row.classList.add('sel'); row.classList.remove('warn'); row.querySelector('.ck').textContent = '✓'; } }
+                    else { rr.cnt = n; rr.touched = true; }
+                    drawSum();
+                });
+            }
+        });
+    }
+    // ใช้ป๊อบอัพใหม่แทนของเดิม (ตั้งหลังโหลดหน้า เพื่อให้ทับฟังก์ชันเดิมของ BROSE / HANON ไม่ว่าวางแพตช์ลำดับไหน)
+    window.openHanonTagDialogV2 = function () { openDlg(CFG.hanon); };
+    window.openBroseTagDialogV2 = function () { openDlg(CFG.brose); };
+    setTimeout(function () { window.openHanonTagDialog = window.openHanonTagDialogV2; window.openBroseTagDialog = window.openBroseTagDialogV2; }, 2500);
+})();
+/* ===== จบ TAG-DLG-V2 ===== */
+(function () {
+    if (window.__hanonHistV1) return; window.__hanonHistV1 = true;
+    var isEn = function () { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e) { return false; } };
+    var TX = {
+        th: { title: 'แท็กหาย — ออกเลขใหม่', sub: 'ใบที่หายจะถูกจดว่า "หาย" แล้วออกใบใหม่ ด้วยรหัสสินค้า/จำนวนเดิม เลขลำดับต่อท้ายของวัน', date: 'วันที่ส่งงาน', q: 'พิมพ์รหัสสินค้า / เลขแท็ก เพื่อกรอง',
+            day: 'ทั้งวัน', unit: 'ใบ', latest: 'ล่าสุด', hint: 'แตะเลขที่หายเพื่อเลือก · กด Shift ค้างแล้วแตะอีกใบ = เลือกเป็นช่วง', selGroup: 'เลือกทั้งกลุ่ม', selAll: 'เลือกทั้งหมดที่แสดง', clear: 'ล้างที่เลือก',
+            cUse: 'ใช้งาน', cSel: 'เลือก', cLost: 'หายแล้ว', cRep: 'แทน', lostTags: 'ใบที่หาย', newNo: 'เลขใหม่ที่จะได้ (โดยประมาณ)', oldMark: 'ใบเก่าจะถูกจดว่า', oldLost: 'หาย', twice: 'กดปุ่มแดง 2 ครั้งเพื่อยืนยัน', picked: 'เลือกใบที่หาย', go: 'ออกเลขใหม่', goArm: 'กดอีกครั้งเพื่อยืนยัน', print: 'ปริ้น', close: 'ปิด',
+            none: 'ไม่พบแท็กที่เคยออกของวันที่', noneS: 'ไม่มีรายการที่ตรงกับคำค้น', load: '⏳ กำลังโหลด…', loadFail: 'โหลดประวัติไม่สำเร็จ: ', noperm: 'ไม่มีสิทธิ์', nopermT: 'ต้องมีสิทธิ์จัดการแผนการจัดส่ง หรือสิทธิ์ปริ้นแท็ก',
+            armMsg: 'จะออกแท็กใหม่', armMsg2: 'ใบ แทน', armMsg3: 'ด้วยเลขใหม่ต่อจากเลขล่าสุดของวัน (ใบเก่าจะถูกจดว่าหาย) — กดปุ่มแดงอีกครั้งเพื่อยืนยัน', noSel: 'ยังไม่ได้แตะเลือกแท็กที่หาย',
+            wait: '⏳ กำลังออกเลขแท็กใหม่ กรุณารอสักครู่...', srvBad: 'เซิร์ฟเวอร์ตอบกลับไม่ครบ กรุณาตรวจชีต HANON_TagLog', okA: '✔ ออกใหม่', failA: 'ออกเลขใหม่ไม่สำเร็จ: ', failB: 'ออกเลขแล้วแต่พิมพ์ไม่สำเร็จ — ใช้ปุ่ม "รีปริ้นชุดล่าสุด" ได้ (',
+            qrNo: 'ตัวสร้าง QR ยังไม่พร้อม (ยังไม่ได้ออกเลข) กรุณารีเฟรชหน้าเว็บแล้วลองใหม่', popup: 'เบราว์เซอร์บล็อกป๊อปอัพ กรุณาอนุญาตป๊อปอัพ แล้วกด "รีปริ้นชุดล่าสุด"', popupT: 'เปิดหน้าต่างไม่สำเร็จ', noLast: 'ยังไม่มีชุดล่าสุด', noLastT: 'เครื่องนี้ยังไม่เคยออกแท็ก HANON', reFail: 'พิมพ์ซ้ำไม่สำเร็จ',
+            gsOld: 'Google Script ยังไม่ได้อัปเดต (ยังไม่รู้จักคำสั่งแท็กหาย HANON) ให้วางโค้ดชุด HANON-HIST-GS แล้ว Deploy เวอร์ชันใหม่ก่อน', pTitle: 'ปริ้นแท็ก HANON', mLast: 'รีปริ้นชุดล่าสุด', mLastS: 'พิมพ์แท็กชุดที่เพิ่งออกซ้ำ (เลขเดิม)', mLost: 'แท็กหาย / ออกเลขใหม่', mLostS: 'ออกแทนใบที่หาย โดยรันเลขต่อจากเลขล่าสุดของวัน', tm: 'ตอนนี้' },
+        en: { title: 'Lost tag — issue new numbers', sub: 'Lost tags are marked "lost", then new ones are issued with the same part/qty and the next running numbers of the day', date: 'Delivery date', q: 'Type part no / tag no to filter',
+            day: 'Whole day', unit: 'tags', latest: 'latest', hint: 'Tap the lost numbers to select · hold Shift and tap another to select a range', selGroup: 'Select group', selAll: 'Select all shown', clear: 'Clear selection',
+            cUse: 'In use', cSel: 'Selected', cLost: 'Lost', cRep: 'Repl.', lostTags: 'Lost tags', newNo: 'New numbers (estimated)', oldMark: 'Old tags will be marked', oldLost: 'lost', twice: 'Press the red button twice to confirm', picked: 'Lost tags selected', go: 'Issue new numbers', goArm: 'Press again to confirm', print: 'print', close: 'Close',
+            none: 'No tags issued for', noneS: 'Nothing matches your search', load: '⏳ Loading…', loadFail: 'Could not load history: ', noperm: 'No permission', nopermT: 'You need delivery-plan or print-tag permission',
+            armMsg: 'Will issue', armMsg2: 'new tags to replace', armMsg3: 'with the next numbers of the day (old ones will be marked lost) — press the red button again to confirm', noSel: 'Tap the lost tags first',
+            wait: '⏳ Issuing new tag numbers, please wait...', srvBad: 'Incomplete server reply. Check sheet HANON_TagLog', okA: '✔ Issued', failA: 'Could not issue: ', failB: 'Numbers were issued but printing failed — use "Reprint last batch" (',
+            qrNo: 'QR generator not ready (no numbers used). Refresh the page and try again.', popup: 'Pop-up blocked. Allow pop-ups, then press "Reprint last batch"', popupT: 'Could not open window', noLast: 'No previous batch', noLastT: 'No HANON tags have been issued on this device', reFail: 'Reprint failed',
+            gsOld: 'Google Script is not updated (unknown lost-tag command). Paste the HANON-HIST-GS code and deploy a new version first.', pTitle: 'Print HANON tags', mLast: 'Reprint last batch', mLastS: 'Print the latest batch again (same numbers)', mLost: 'Lost tag / new number', mLostS: 'Replace a lost tag with the next running number', tm: 'now' }
+    };
+    var T = function (k) { return TX[isEn() ? 'en' : 'th'][k]; };
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function isT(v) { return v === true || String(v).toUpperCase() === 'TRUE'; }
+    function canUse() { var u = currentUser; return !!u && (u.username === 'admin' || u.role === 'admin' || isT(u.canManageDeliveryPlan) || isT(u.printTags)); }
+    function dmy8(ymd) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(ymd || ''); return m ? (m[3] + m[2] + m[1]) : String(ymd || ''); }
+    /* ---- พิมพ์แท็ก HANON (สำเนาเดียวกับป๊อบอัพออกแท็ก: A4 แนวตั้ง 10 ใบ/หน้า) ---- */
+    function addQr(tags) {
+        var holder = document.createElement('div'); holder.style.cssText = 'position:fixed;left:-9999px'; document.body.appendChild(holder);
+        try {
+            tags.forEach(function (t) {
+                var d = document.createElement('div'); holder.appendChild(d); safeCreateQRCode(d, t.qr);
+                var cv = d.querySelector('canvas'); t.qrUrl = cv ? cv.toDataURL('image/png') : '';
+            });
+        } finally { document.body.removeChild(holder); }
+    }
+    function renderHanon(tags, w, dateYmd) {
+        if (!w) { Swal.fire(T('popupT'), T('popup'), 'warning'); return; }
+        var d8 = dmy8(dateYmd);
+        var card = function (t) {
+            return '<div class="tg"><div class="tt"><span class="co">A TECH AUTOMOTIVE CO.,LTD.</span><span class="ti">Production Tag</span><span class="sq">No. <b>' + esc(t.serial) + '</b></span></div>'
+                + '<div class="r"><div class="a">Part No.</div><div class="b pn">' + esc(t.partNo) + '</div><div class="c h">Production Date</div></div>'
+                + '<div class="r"><div class="a">Part Name</div><div class="b nm">' + esc(t.productName || '') + '</div><div class="c v">' + esc(d8) + '</div></div>'
+                + '<div class="r q"><div class="a">QR Code</div><div class="b qc"><img src="' + t.qrUrl + '"></div><div class="ql">Qty</div><div class="c v qv">' + esc(t.qtyPerPack) + '</div></div></div>';
+        };
+        var pages = '';
+        for (var p = 0; p < tags.length; p += 10) pages += '<div class="pg">' + tags.slice(p, p + 10).map(card).join('') + '</div>';
+        w.document.open();
+        w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + T('pTitle') + '</title><style>'
+            + '*{box-sizing:border-box}@page{size:A4;margin:8mm}body{font-family:Arial,Helvetica,sans-serif;margin:0;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+            + '.pg{display:grid;grid-template-columns:95mm 95mm;grid-template-rows:repeat(5,52mm);gap:5mm 4mm;width:194mm;height:280mm;page-break-after:always}.pg:last-child{page-break-after:auto}'
+            + '.tg{border:.45mm solid #000;display:grid;grid-template-rows:8mm 11mm 11mm 1fr;overflow:hidden;background:#fff}'
+            + '.tt{display:flex;justify-content:space-between;align-items:center;padding:0 2.5mm;border-bottom:.35mm solid #000}.ti{font-size:14pt}.co{font-size:5pt;color:#333;width:24mm;line-height:1.2}.sq{font-size:7pt;width:24mm;text-align:right}.sq b{font-size:10pt}'
+            + '.r{min-height:0;display:grid;grid-template-columns:26% 1fr 29%;border-bottom:.35mm solid #000}.r:last-child{border-bottom:0}'
+            + '.r>div{display:flex;align-items:center;justify-content:center;font-size:9.5pt;border-right:.35mm solid #000;text-align:center;overflow:hidden;padding:0 1mm}.r>div:last-child{border-right:0}'
+            + '.pn{font-weight:bold;font-size:10.5pt!important}.nm{font-size:8.5pt!important;line-height:1.15}.h{font-size:9pt!important}.v{font-size:10.5pt!important}'
+            + '.q{grid-template-columns:26% 1fr 9% 29%}.qc{padding:0!important}.qc img{width:21mm;height:21mm;display:block}.ql{font-size:7.5pt!important}.qv{font-size:14pt!important;font-weight:bold}'
+            + '@media print{.tg{page-break-inside:avoid}}</style></head><body>' + pages
+            + '<script>window.onload=function(){setTimeout(function(){window.print()},300)};<\/script></body></html>');
+        w.document.close();
+    }
+    window.__hanonTagPrint = function (tags, date, w) { addQr(tags); renderHanon(tags, w, date); };
+    window.__hanonReprintLast = function () {
+        var b = null; try { b = JSON.parse(localStorage.getItem('hanonLastBatch_v1') || 'null'); } catch (e) { }
+        if (!b || !b.tags || !b.tags.length) { Swal.fire(T('noLast'), T('noLastT'), 'info'); return; }
+        var w = window.open('', '_blank'); try { addQr(b.tags); renderHanon(b.tags, w, b.date); } catch (e) { if (w) w.close(); Swal.fire(T('reFail'), e.message, 'error'); }
+    };
+ 
+    var css = document.createElement('style'); css.id = 'hlh-css';
+    css.textContent = ''
+        + '.hlh-pop{padding:0!important;border-radius:22px!important;overflow:hidden;width:min(1000px,96vw)!important;box-shadow:0 24px 70px rgba(15,23,42,.35)!important}'
+        + '.hlh-pop .swal2-html-container{margin:0!important;padding:0!important;text-align:left!important;overflow:visible!important}'
+        + '.hlh{font-family:inherit;color:#0f172a}.hlh *{box-sizing:border-box}'
+        + '.hlh .hd{display:flex;gap:14px;align-items:center;padding:18px 24px;background:linear-gradient(115deg,#4c0f0f,#92300f);color:#fff}'
+        + '.hlh .ic{width:44px;height:44px;border-radius:13px;background:rgba(255,255,255,.14);display:grid;place-items:center;font-size:21px;flex:0 0 44px}'
+        + '.hlh .hd h3{margin:0;font-size:1.25rem;font-weight:800;color:#fff}.hlh .hd p{margin:2px 0 0;font-size:.8rem;opacity:.85}'
+        + '.hlh .x{margin-left:auto;width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.15);border:0;color:#fff;cursor:pointer;flex:0 0 34px}'
+        + '.hlh .bar{display:flex;gap:10px;align-items:center;padding:14px 24px;background:#f8fafc;border-bottom:1px solid #e8edf5;flex-wrap:wrap}'
+        + '.hlh .pill{display:flex;align-items:center;gap:8px;border:1.5px solid #dbe3ee;border-radius:12px;padding:6px 11px;font-weight:600;background:#fff;font-size:.85rem}.hlh .pill small{color:#94a3b8;font-weight:500}.hlh .pill input{border:0;outline:0;font:inherit;font-weight:700;background:transparent;color:#0f172a}'
+        + '.hlh .pill input.q{width:230px;font-weight:500}'
+        + '.hlh .stat{margin-left:auto;font-size:.82rem;color:#64748b}.hlh .stat b{color:#0f172a}'
+        + '.hlh .body{padding:12px 24px 4px;max-height:min(390px,46vh);overflow:auto;background:#f1f5f9}'
+        + '.hlh .tip{display:flex;align-items:center;gap:10px;font-size:.78rem;color:#64748b;margin:2px 0 8px;flex-wrap:wrap}.hlh .tip a{color:#4f46e5;font-weight:700;cursor:pointer;text-decoration:none}.hlh .tip .sp{margin-left:auto}'
+        + '.hlh .grp{margin-bottom:12px}.hlh .gh{display:flex;align-items:baseline;gap:10px;margin:8px 0 6px}.hlh .gh b{font-size:1rem}.hlh .gh span{font-size:.8rem;color:#64748b}.hlh .gh a{margin-left:auto;font-size:.78rem;color:#4f46e5;font-weight:700;cursor:pointer}'
+        + '.hlh .chips{display:grid;grid-template-columns:repeat(auto-fill,minmax(86px,1fr));gap:8px}'
+        + '.hlh .chip{border:1.5px solid #e2e8f0;background:#fff;border-radius:13px;padding:7px 4px;text-align:center;cursor:pointer;font:inherit;color:#0f172a;user-select:none}.hlh .chip small{display:block;font-size:.62rem;color:#94a3b8;font-weight:700}.hlh .chip b{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:1.05rem;letter-spacing:.5px}'
+        + '.hlh .chip:hover{border-color:#fca5a5}.hlh .chip.sel{background:#fef2f2;border-color:#f87171}.hlh .chip.sel small{color:#dc2626}.hlh .chip.sel b{color:#b91c1c}'
+        + '.hlh .chip.lost{border-style:dashed;background:#f8fafc;cursor:not-allowed;opacity:.65}.hlh .chip.lost b{text-decoration:line-through;color:#94a3b8}'
+        + '.hlh .chip.rep{border-color:#bfdbfe;background:#eff6ff}.hlh .chip.rep small{color:#2563eb}'
+        + '.hlh .strip{margin:6px 24px 0;display:none;align-items:center;gap:14px;padding:12px 16px;border:1.5px solid #fed7aa;background:#fff7ed;border-radius:16px;flex-wrap:wrap}.hlh .strip.on{display:flex}'
+        + '.hlh .bx{border-radius:12px;padding:8px 14px;background:#fff;border:1.5px solid #fecaca;text-align:center}.hlh .bx small{display:block;font-size:.68rem;color:#64748b}.hlh .bx b{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:1.1rem}.hlh .bx.g{border-color:#86efac;background:#f0fdf4}.hlh .bx.g b{color:#15803d}.hlh .ar{font-size:1.4rem;color:#d97706}'
+        + '.hlh .sn{margin-left:auto;font-size:.8rem;color:#9a3412;text-align:right;line-height:1.5}'
+        + '.hlh .fb{margin:8px 24px 0;font-size:.82rem;font-weight:700;min-height:18px}'
+        + '.hlh .ft{display:flex;align-items:center;gap:14px;padding:14px 24px;border-top:1px solid #eef1f6;margin-top:4px;flex-wrap:wrap}.hlh .ft .n{font-size:.9rem;color:#475569}.hlh .ft .n b{font-size:1.6rem;color:#dc2626;margin:0 4px}'
+        + '.hlh .acts{margin-left:auto;display:flex;gap:10px}.hlh .b1{border:0;border-radius:13px;padding:12px 22px;font-weight:800;font-size:.95rem;cursor:pointer;color:#fff;background:linear-gradient(180deg,#ef4444,#ea580c);box-shadow:0 8px 20px rgba(220,38,38,.3)}.hlh .b1[disabled]{opacity:.5;cursor:not-allowed;box-shadow:none}.hlh .b1.arm{animation:hlhp 1s ease-in-out infinite}'
+        + '@keyframes hlhp{50%{box-shadow:0 0 0 6px rgba(239,68,68,.25)}}'
+        + '.hlh .b2{border:1.5px solid #dbe3ee;border-radius:13px;padding:12px 18px;background:#fff;color:#475569;font-weight:700;cursor:pointer}'
+        + '.hlh .em{border:1.5px dashed #cbd5e1;border-radius:14px;padding:26px;text-align:center;color:#64748b;background:#fff}';
+    document.head.appendChild(css);
+ 
+    window.openHanonHistoryDialog = function () {
+        if (!canUse()) { Swal.fire(T('noperm'), T('nopermT'), 'warning'); return; }
+        var v = document.getElementById('view-plan-date'), d0 = (v && v.value) || new Date().toISOString().slice(0, 10);
+        var S = { tags: [], sel: {}, date: d0, armed: '', busy: false, order: [], last: null };
+        function $(s) { return document.querySelector('.hlh ' + s); }
+        function selList() { return S.tags.filter(function (t) { return S.sel[t.serial] && t.status !== 'lost'; }).map(function (t) { return t.serial; }).sort(); }
+        function ranges(arr) {
+            var nums = arr.map(function (s) { return parseInt(s, 10); }).sort(function (a, b) { return a - b; }), out = [], i = 0, p = function (n) { return String(n).padStart(3, '0'); };
+            while (i < nums.length) { var j = i; while (j + 1 < nums.length && nums[j + 1] === nums[j] + 1) j++; out.push(i === j ? p(nums[i]) : p(nums[i]) + '–' + p(nums[j])); i = j + 1; }
+            return out.join(', ');
+        }
+        function fb(msg, kind) { var e = $('.fb'); if (e) { e.innerHTML = msg; e.style.color = kind === 'ok' ? '#15803d' : (kind === 'warn' ? '#b45309' : '#dc2626'); } }
+        function mx() { return S.tags.reduce(function (a, t) { var n = parseInt(t.serial, 10) || 0; return n > a ? n : a; }, 0); }
+        function drawStat() { var m = mx(); $('.stat').innerHTML = T('day') + ' <b>' + S.tags.length + '</b> ' + T('unit') + (m ? ' · ' + T('latest') + ' <b>…' + String(m).padStart(3, '0') + '</b>' : ''); }
+        function drawStrip() {
+            var sel = selList(), st = $('.strip'), n = sel.length, m = mx(), p = function (k) { return String(k).padStart(3, '0'); };
+            $('.n').innerHTML = T('picked') + '<b>' + n + '</b>' + T('unit');
+            var btn = $('.b1'); btn.disabled = !n || S.busy; btn.classList.toggle('arm', !!S.armed); btn.innerHTML = '<i class="bi bi-printer-fill"></i> ' + (S.armed ? T('goArm') : (T('go') + (n ? ' ' + n + ' ' + T('unit') : ''))) + (S.armed ? '' : ' + ' + T('print'));
+            if (!n) { st.classList.remove('on'); return; }
+            st.classList.add('on');
+            st.innerHTML = '<div class="bx"><small>' + T('lostTags') + '</small><b>' + ranges(sel) + '</b><small>' + n + ' ' + T('unit') + '</small></div><div class="ar">➜</div>'
+                + '<div class="bx g"><small>' + T('newNo') + '</small><b>' + p(m + 1) + (n > 1 ? '–' + p(m + n) : '') + '</b><small>' + n + ' ' + T('unit') + '</small></div>'
+                + '<div class="sn">' + T('oldMark') + ' <b>' + T('oldLost') + '</b><br>' + T('twice') + '</div>';
+        }
+        function drawBody() {
+            var q = ($('.q').value || '').trim().toLowerCase(), box = $('.body');
+            if (!S.tags.length) { box.innerHTML = '<div class="em">' + T('none') + ' ' + esc(S.date.split('-').reverse().join('-')) + '</div>'; S.order = []; return; }
+            var list = S.tags.filter(function (t) { return !q || (t.serial + ' ' + t.partNo + ' ' + t.productName).toLowerCase().indexOf(q) >= 0; });
+            if (!list.length) { box.innerHTML = '<div class="em">' + T('noneS') + '</div>'; S.order = []; return; }
+            var gs = {}, keys = [];
+            list.forEach(function (t) { var k = t.partNo + '||' + t.qtyPerPack; if (!gs[k]) { gs[k] = { partNo: t.partNo, qty: t.qtyPerPack, name: t.productName, items: [] }; keys.push(k); } gs[k].items.push(t); });
+            S.order = [];
+            var h = '<div class="tip">' + T('hint') + '<span class="sp"></span><a data-a="all">' + T('selAll') + '</a><a data-a="clr">' + T('clear') + '</a></div>';
+            keys.forEach(function (k) {
+                var g = gs[k], active = g.items.filter(function (t) { return t.status !== 'lost'; }).length;
+                h += '<div class="grp"><div class="gh"><b>' + esc(g.partNo) + ' × ' + esc(g.qty) + '</b><span>' + esc(g.name || '') + ' · ' + g.items.length + ' ' + T('unit') + '</span>' + (active ? '<a data-a="grp" data-k="' + esc(k) + '">' + T('selGroup') + '</a>' : '') + '</div><div class="chips">';
+                g.items.forEach(function (t) {
+                    var lost = t.status === 'lost', sel = !!S.sel[t.serial] && !lost, cls = lost ? 'lost' : (sel ? 'sel' : (t.replaces ? 'rep' : ''));
+                    var lab = lost ? (T('cLost') + (t.replacedBy ? ' → ' + esc(t.replacedBy) : '')) : (sel ? T('cSel') : (t.replaces ? T('cRep') + ' ' + esc(t.replaces) : T('cUse')));
+                    if (!lost) S.order.push(t.serial);
+                    h += '<button type="button" class="chip ' + cls + '" data-s="' + esc(t.serial) + '" title="' + esc(t.printedAt || '') + '"' + (lost ? ' disabled' : '') + '><small>' + lab + '</small><b>' + esc(t.serial) + '</b></button>';
+                });
+                h += '</div></div>';
+            });
+            box.innerHTML = h; box.setAttribute('data-g', JSON.stringify(keys.reduce(function (o, k) { o[k] = gs[k].items.filter(function (t) { return t.status !== 'lost'; }).map(function (t) { return t.serial; }); return o; }, {})));
+        }
+        function redraw() { drawBody(); drawStat(); drawStrip(); }
+        function load() {
+            S.date = $('.dt').value; S.sel = {}; S.tags = []; S.armed = ''; S.last = null; fb('', 'ok');
+            $('.body').innerHTML = '<div class="em">' + T('load') + '</div>'; drawStrip();
+            return callAppsScript('getHanonTags', { deliveryDate: S.date }).then(function (r) {
+                if (!r || r.status === 'error') throw new Error((r && r.message) || '');
+                S.tags = (r.tags || []).slice().sort(function (a, b) { return a.serial < b.serial ? -1 : 1; }); redraw();
+            }).catch(function (e) {
+                var m = String(e && e.message ? e.message : e); if (/ไม่รู้จัก|unknown|Invalid action|action/i.test(m)) m = T('gsOld');
+                $('.body').innerHTML = '<div class="em" style="color:#dc2626">' + T('loadFail') + esc(m) + '</div>';
+            });
+        }
+        function disarm() { if (S.armed) { S.armed = ''; fb('', 'ok'); } }
+        function go() {
+            if (S.busy) return;
+            var sel = selList(); if (!sel.length) { fb(T('noSel'), 'err'); return; }
+            var key = sel.join(',');
+            if (S.armed !== key) { S.armed = key; fb('⚠ ' + T('armMsg') + ' ' + sel.length + ' ' + T('armMsg2') + ' ' + esc(ranges(sel)) + ' ' + T('armMsg3'), 'warn'); drawStrip(); return; }
+            S.armed = ''; S.busy = true; drawStrip();
+            var w = window.open('', '_blank'), issued = false;
+            if (w) w.document.write('<html><body style="font-family:sans-serif;text-align:center;padding:60px;font-size:18px;">' + T('wait') + '</body></html>');
+            try { var _t = document.createElement('div'); safeCreateQRCode(_t, 'test'); if (!_t.querySelector('canvas')) throw new Error(T('qrNo')); }
+            catch (qe) { if (w) w.close(); S.busy = false; fb(T('failA') + T('qrNo'), 'err'); drawStrip(); return; }
+            callAppsScript('reissueHanonTags', { deliveryDate: S.date, printedBy: (currentUser && currentUser.username) || '', oldSerials: sel }).then(function (r) {
+                if (!r || r.status === 'error') throw new Error((r && r.message) || '');
+                if (!r.tags || r.tags.length !== sel.length) throw new Error(T('srvBad'));
+                issued = true;
+                var tags = r.tags.map(function (t) { return { serial: t.serial, qr: t.qr, partNo: t.partNo, qtyPerPack: t.qtyPerPack, productName: t.productName }; });
+                try { localStorage.setItem('hanonLastBatch_v1', JSON.stringify({ date: S.date, tags: tags })); } catch (e) { }
+                addQr(tags); renderHanon(tags, w, S.date);
+                S.busy = false;
+                return load().then(function () { fb(T('okA') + ' ' + tags.length + ' ' + T('unit') + ': ' + esc(tags[0].serial) + (tags.length > 1 ? ' – ' + esc(tags[tags.length - 1].serial) : ''), 'ok'); });
+            }).catch(function (e) {
+                if (w && !issued) { try { w.close(); } catch (x) { } }
+                var m = String(e && e.message ? e.message : e); if (/ไม่รู้จัก|unknown|Invalid action|action/i.test(m)) m = T('gsOld');
+                S.busy = false; fb((issued ? T('failB') : T('failA')) + esc(m) + (issued ? ')' : ''), 'err'); drawStrip();
+            });
+        }
+        Swal.fire({
+            showConfirmButton: false, showCancelButton: false, showCloseButton: false, allowOutsideClick: function () { return !S.busy; }, customClass: { popup: 'hlh-pop' }, width: 1000, padding: 0, focusConfirm: false,
+            html: '<div class="hlh"><div class="hd"><div class="ic"><i class="bi bi-exclamation-triangle"></i></div><div><h3>' + T('title') + ' · HANON</h3><p>' + T('sub') + '</p></div><button type="button" class="x" data-a="close"><i class="bi bi-x-lg"></i></button></div>'
+                + '<div class="bar"><label class="pill"><i class="bi bi-calendar3"></i><small>' + T('date') + '</small><input type="date" class="dt"></label><label class="pill"><i class="bi bi-search"></i><input type="text" class="q" placeholder="' + esc(T('q')) + '"></label><div class="stat"></div></div>'
+                + '<div class="body"></div><div class="strip"></div><div class="fb"></div>'
+                + '<div class="ft"><div class="n"></div><div class="acts"><button type="button" class="b2" data-a="close">' + T('close') + '</button><button type="button" class="b1" data-a="go" disabled></button></div></div></div>',
+            didOpen: function () {
+                var root = document.querySelector('.hlh'); $('.dt').value = d0; load();
+                $('.dt').addEventListener('change', load);
+                $('.q').addEventListener('input', function () { drawBody(); });
+                root.addEventListener('click', function (e) {
+                    var chip = e.target.closest('.chip');
+                    if (chip && !chip.disabled) {
+                        var s = chip.getAttribute('data-s'); disarm();
+                        if (e.shiftKey && S.last && S.order.indexOf(S.last) >= 0) { var a = S.order.indexOf(S.last), b = S.order.indexOf(s); for (var i = Math.min(a, b); i <= Math.max(a, b); i++) S.sel[S.order[i]] = true; }
+                        else S.sel[s] = !S.sel[s];
+                        S.last = s; drawBody(); drawStrip(); return;
+                    }
+                    var b2 = e.target.closest('[data-a]'); if (!b2) return; var a2 = b2.getAttribute('data-a');
+                    if (a2 === 'close') { if (!S.busy) Swal.close(); return; }
+                    if (a2 === 'go') { go(); return; }
+                    disarm();
+                    if (a2 === 'all') { S.order.forEach(function (s) { S.sel[s] = true; }); }
+                    if (a2 === 'clr') { S.sel = {}; }
+                    if (a2 === 'grp') { var g = JSON.parse($('.body').getAttribute('data-g') || '{}')[b2.getAttribute('data-k')] || []; g.forEach(function (s) { S.sel[s] = true; }); }
+                    drawBody(); drawStrip();
+                });
+            }
+        });
+    };
+ 
+    // เพิ่ม 2 รายการในเมนู "ออกแท็ก > HANON" (ถ้าติดตั้งปุ่ม TAG-MENU ไว้) — ข้ามได้ถ้าไม่มีเมนูนั้น
+    var ITEMS = [
+        { fn: '__hanonReprintLast', ic: 'bi-printer', c: '#475569', bg: '#e2e8f0', t: 'mLast', s: 'mLastS' },
+        { fn: 'openHanonHistoryDialog', ic: 'bi-arrow-repeat', c: '#b45309', bg: '#fef3c7', t: 'mLost', s: 'mLostS' }
+    ];
+    function ensureMenu() {
+        var cs = document.querySelectorAll('#tgm-wrap .tgm-c1'), card = null;
+        for (var i = 0; i < cs.length; i++) { var t = cs[i].querySelector('.tgm-cr .tgm-t'); if (t && /^HANON$/i.test(t.textContent.trim())) { card = cs[i].querySelector('.tgm-fly .tgm-card'); break; } }
+        if (!card) return;
+        if (!card.querySelector('.hlh-x')) {
+            var h = '<div class="tgm-hr hlh-x"></div>';
+            ITEMS.forEach(function (it, k) {
+                h += '<button type="button" class="tgm-r hlh-x" data-hx="' + k + '"><span class="tgm-ic" style="background:' + it.bg + ';color:' + it.c + '"><i class="bi ' + it.ic + '"></i></span><span><div class="tgm-t"></div><div class="tgm-s"></div></span></button>';
+            });
+            card.insertAdjacentHTML('beforeend', h);
+            card.querySelectorAll('button.hlh-x').forEach(function (b) {
+                b.addEventListener('click', function () {
+                    var it = ITEMS[+b.getAttribute('data-hx')], wrap = document.getElementById('tgm-wrap');
+                    if (wrap) { wrap.classList.remove('open'); wrap.querySelectorAll('.tgm-c1.open').forEach(function (x) { x.classList.remove('open'); }); }
+                    if (typeof window[it.fn] === 'function') window[it.fn]();
+                });
+            });
+        }
+        card.querySelectorAll('button.hlh-x').forEach(function (b) {
+            var it = ITEMS[+b.getAttribute('data-hx')], a = b.querySelector('.tgm-t'), s = b.querySelector('.tgm-s');
+            if (a.textContent !== T(it.t)) a.textContent = T(it.t); if (s.textContent !== T(it.s)) s.textContent = T(it.s);
+        });
+    }
+    setInterval(function () { try { ensureMenu(); } catch (e) { } }, 1500);
+})();
+/* ===== จบ HANON-HIST-V1 ===== */
+(function () {
+    if (window.__apgV1) return; window.__apgV1 = true;
+    var isEn = function () { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e) { return false; } };
+    var TX = {
+        th: {
+            head: 'ต้องได้รับการอนุมัติ', reason: 'เหตุผล', other: 'ระบุเหตุผล...', appr: 'หัวหน้า (admin) อนุมัติ', me: 'อนุมัติโดย', meNote: 'คุณเป็น admin — อนุมัติเองได้ แต่ต้องเลือกเหตุผล',
+            user: 'ชื่อผู้ใช้ admin', pass: 'รหัสผ่าน admin', cancel: 'ยกเลิก', ok: 'อนุมัติและดำเนินการต่อ',
+            noReason: 'กรุณาเลือกเหตุผล', shortOther: 'กรุณาระบุเหตุผล (อย่างน้อย 3 ตัวอักษร)', badAdmin: 'ชื่อผู้ใช้ / รหัสผ่านของ admin ไม่ถูกต้อง',
+            r: ['แท็กหาย', 'เพิ่มกล่อง / ยอดเพิ่ม', 'ปริ้นผิด / ข้อมูลผิด', 'กระดาษติด / ปริ้นไม่ออก', 'อื่นๆ (ระบุ)'],
+            tReprint: 'รีปริ้นชุดล่าสุด', dReprint: 'พิมพ์แท็กชุดล่าสุดซ้ำ (เลขเดิม)', tDup: 'ออกเลขซ้ำ — มีรายการที่เคยออกแท็กแล้ว', dDup: 'รายการต่อไปนี้เคยออกแท็กไปแล้ว การออกอีกครั้งจะได้เลขใหม่',
+            tLost: 'แท็กหาย — ออกเลขใหม่แทน', dLost: 'ใบเดิมจะถูกตั้งเป็น "หายแล้ว" และออกเลขใหม่แทน', times: 'เคยออก', unit: 'ใบ', tags: 'แท็ก', date: 'วันส่ง',
+            aReprint: 'รีปริ้นชุดล่าสุด', aDup: 'ออกเลขซ้ำ', aLost: 'แท็กหาย-ออกเลขใหม่'
+        },
+        en: {
+            head: 'Approval required', reason: 'Reason', other: 'Enter the reason...', appr: 'Supervisor (admin) approval', me: 'Approved by', meNote: 'You are an admin — you can approve yourself, but a reason is required',
+            user: 'Admin username', pass: 'Admin password', cancel: 'Cancel', ok: 'Approve and continue',
+            noReason: 'Please select a reason', shortOther: 'Please enter a reason (at least 3 characters)', badAdmin: 'Admin username / password is incorrect',
+            r: ['Tag lost', 'Extra box / extra qty', 'Wrong print / wrong data', 'Paper jam / print failed', 'Other (specify)'],
+            tReprint: 'Reprint last batch', dReprint: 'Print the latest batch again (same numbers)', tDup: 'Duplicate issue — some items already have tags', dDup: 'These items already had tags issued. Issuing again gives new numbers.',
+            tLost: 'Lost tag — issue new numbers', dLost: 'The old tags will be marked "lost" and replaced with new numbers', times: 'issued', unit: 'tags', tags: 'Tags', date: 'Delivery date',
+            aReprint: 'Reprint last batch', aDup: 'Duplicate issue', aLost: 'Lost tag - new numbers'
+        }
+    };
+    var T = function (k) { return TX[isEn() ? 'en' : 'th'][k]; };
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function $(s, r) { return (r || document).querySelector(s); }
+    function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+    function me() { return (typeof currentUser !== 'undefined' && currentUser) || null; }
+    function isAdminU(u) { return !!u && (u.username === 'admin' || String(u.role).toLowerCase() === 'admin'); }
+    var bypass = false, pending = null;
+ 
+    var css = document.createElement('style');
+    css.textContent = ''
+        + '#apg-ov{position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.55);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:16px;font-family:inherit}'
+        + '#apg-ov *{box-sizing:border-box}'
+        + '.apg{width:min(520px,100%);background:#fff;border-radius:22px;overflow:hidden;box-shadow:0 28px 80px rgba(15,23,42,.45);color:#0f172a;max-height:94vh;display:flex;flex-direction:column;animation:apgin .18s ease-out}'
+        + '@keyframes apgin{from{transform:translateY(10px) scale(.98);opacity:0}}'
+        + '.apg .hd{display:flex;gap:13px;align-items:center;padding:16px 20px;background:linear-gradient(115deg,#9a3412,#ea580c);color:#fff}'
+        + '.apg .ic{width:42px;height:42px;border-radius:13px;background:rgba(255,255,255,.18);display:grid;place-items:center;font-size:21px;flex:0 0 42px}'
+        + '.apg .hd h3{margin:0;font-size:1.1rem;font-weight:800;color:#fff}.apg .hd p{margin:2px 0 0;font-size:.78rem;opacity:.9}'
+        + '.apg .bd{padding:16px 20px 6px;overflow:auto}'
+        + '.apg .what{background:#fff7ed;border:1.5px solid #fed7aa;border-radius:14px;padding:10px 14px;font-size:.84rem;color:#7c2d12;line-height:1.55}.apg .what b{color:#9a3412}'
+        + '.apg .what ul{margin:6px 0 0;padding-left:18px;max-height:96px;overflow:auto}'
+        + '.apg .lb{font-weight:800;font-size:.8rem;color:#475569;margin:14px 0 7px}'
+        + '.apg .chips{display:flex;flex-wrap:wrap;gap:7px}'
+        + '.apg .ch{border:1.5px solid #e2e8f0;background:#fff;border-radius:999px;padding:7px 14px;font:inherit;font-size:.84rem;font-weight:700;color:#334155;cursor:pointer}'
+        + '.apg .ch:hover{border-color:#fdba74}.apg .ch.on{background:#ea580c;border-color:#ea580c;color:#fff}'
+        + '.apg input{width:100%;border:1.5px solid #dbe3ee;border-radius:12px;padding:9px 12px;font:inherit;font-size:.88rem;outline:0;margin-top:8px;background:#fff;color:#0f172a}.apg input:focus{border-color:#ea580c}'
+        + '.apg .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}'
+        + '.apg .me{display:flex;gap:10px;align-items:center;background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:12px;padding:9px 12px;font-size:.84rem;color:#166534}.apg .me small{display:block;color:#15803d;opacity:.85}'
+        + '.apg .er{min-height:20px;margin:10px 0 0;font-size:.82rem;font-weight:700;color:#dc2626}'
+        + '.apg .ft{display:flex;gap:10px;justify-content:flex-end;padding:12px 20px 18px}'
+        + '.apg .b1{border:0;border-radius:13px;padding:11px 20px;font-weight:800;font-size:.9rem;cursor:pointer;color:#fff;background:linear-gradient(180deg,#f97316,#ea580c);box-shadow:0 8px 20px rgba(234,88,12,.3)}'
+        + '.apg .b2{border:1.5px solid #dbe3ee;border-radius:13px;padding:11px 18px;background:#fff;color:#475569;font-weight:700;cursor:pointer}';
+    document.head.appendChild(css);
+ 
+    // ---------- ตัวด่าน ----------
+    // opts: { title, desc, list:[text], action, key:'HANON'|'BROSE', date, detail, audit:true|false, count }
+    // onOk(info) ถูกเรียก "ทันที" ในจังหวะกดปุ่มอนุมัติ (เพื่อให้เปิดหน้าต่างพิมพ์ได้โดยไม่โดนบล็อกป๊อบอัพ)
+    function gate(opts, onOk) {
+        var old = $('#apg-ov'); if (old) old.remove();
+        var admin = isAdminU(me()), sel = -1, R = T('r');
+        var ov = document.createElement('div'); ov.id = 'apg-ov';
+        ov.innerHTML = '<div class="apg" role="dialog"><div class="hd"><div class="ic"><i class="bi bi-shield-lock-fill"></i></div><div><h3>' + esc(T('head')) + '</h3><p>' + esc(opts.key) + ' · ' + esc(opts.title) + '</p></div></div>'
+            + '<div class="bd"><div class="what">' + esc(opts.desc) + (opts.list && opts.list.length ? '<ul>' + opts.list.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '') + '</div>'
+            + '<div class="lb">' + esc(T('reason')) + '</div><div class="chips">' + R.map(function (r, i) { return '<button type="button" class="ch" data-i="' + i + '">' + esc(r) + '</button>'; }).join('') + '</div>'
+            + '<input type="text" class="ot" maxlength="120" placeholder="' + esc(T('other')) + '" style="display:none">'
+            + '<div class="lb">' + esc(T('appr')) + '</div>'
+            + (admin ? '<div class="me"><i class="bi bi-person-check-fill" style="font-size:1.3rem"></i><div><b>' + esc(T('me')) + ' ' + esc(me().username) + '</b><small>' + esc(T('meNote')) + '</small></div></div>'
+                : '<div class="two"><input type="text" class="au" placeholder="' + esc(T('user')) + '" autocomplete="off"><input type="password" class="ap" placeholder="' + esc(T('pass')) + '" autocomplete="new-password"></div>')
+            + '<div class="er"></div></div>'
+            + '<div class="ft"><button type="button" class="b2">' + esc(T('cancel')) + '</button><button type="button" class="b1"><i class="bi bi-check2-circle"></i> ' + esc(T('ok')) + '</button></div></div>';
+        document.body.appendChild(ov);
+        var er = $('.er', ov), ot = $('.ot', ov);
+        function close() { ov.remove(); document.removeEventListener('keydown', onKey, true); }
+        function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } else if (e.key === 'Enter' && e.target && e.target.tagName === 'INPUT') { e.preventDefault(); submit(); } }
+        document.addEventListener('keydown', onKey, true);
+        ov.addEventListener('mousedown', function (e) { if (e.target === ov) close(); });
+        $('.b2', ov).addEventListener('click', close);
+        $('.b1', ov).addEventListener('click', submit);
+        $$('.ch', ov).forEach(function (b) {
+            b.addEventListener('click', function () {
+                sel = +b.getAttribute('data-i'); $$('.ch', ov).forEach(function (x) { x.classList.toggle('on', x === b); });
+                var o = sel === R.length - 1; ot.style.display = o ? '' : 'none'; if (o) ot.focus(); er.textContent = '';
+            });
+        });
+        function submit() {
+            if (sel < 0) { er.textContent = T('noReason'); return; }
+            var reason = R[sel];
+            if (sel === R.length - 1) { var t = ot.value.trim(); if (t.length < 3) { er.textContent = T('shortOther'); return; } reason = (isEn() ? 'Other: ' : 'อื่นๆ: ') + t; }
+            var approver;
+            if (admin) approver = me().username;
+            else {
+                var un = $('.au', ov).value.trim(), pw = $('.ap', ov).value;
+                var u = (db.users || []).filter(function (x) { return x && x.username === un && String(x.password) === pw && isAdminU(x); })[0];
+                if (!u) { er.textContent = T('badAdmin'); return; }
+                approver = u.username;
+            }
+            var info = { key: opts.key, action: opts.action, reason: reason, approvedBy: approver, user: (me() && me().username) || '', date: opts.date || '', detail: opts.detail || '', count: opts.count || '', at: Date.now() };
+            close();
+            if (opts.audit === false) pending = info; else audit(info, opts.count || '', '');   // ชนิดที่รอเลขจากระบบ → บันทึกตอนออกเลขสำเร็จ
+            try { onOk(info); } catch (e) { if (window.console) console.error(e); }
+        }
+        setTimeout(function () { var f = $('.au', ov); if (f) f.focus(); }, 30);
+    }
+    window.__apgGate = gate;
+    // ---------- บันทึกประวัติ ----------
+    function audit(info, count, serials) {
+        var ent = { user: info.user, action: info.key + ' · ' + info.action, reason: info.reason, approvedBy: info.approvedBy, deliveryDate: info.date, count: count, serials: serials, detail: info.detail };
+        try { var arr = JSON.parse(localStorage.getItem('tagAudit_v1') || '[]'); arr.push(ent); localStorage.setItem('tagAudit_v1', JSON.stringify(arr.slice(-60))); } catch (e) { }
+        try { if (typeof callAppsScript === 'function') { var r = (window.__apgRawCall || callAppsScript)('logBroseAudit', ent); if (r && r.catch) r.catch(function () { }); } } catch (e) { }
+    }
+    var ISSUE = { issueHanonTags: 1, reissueHanonTags: 1, issueBroseTags: 1, reissueBroseTags: 1 };
+    function wrapCall() {
+        if (window.__apgCall || typeof callAppsScript !== 'function') return; window.__apgCall = true;
+        var raw = callAppsScript; window.__apgRawCall = raw;
+        var w = function (action, payload) {
+            var pend = (ISSUE[action] && pending) ? pending : null; if (pend) pending = null;
+            var p = raw.apply(this, arguments);
+            if (pend && p && p.then) {
+                p.then(function (r) {
+                    try {
+                        if (Date.now() - pend.at < 180000 && r && r.status !== 'error' && r.tags && r.tags.length) {
+                            var ser = r.tags.map(function (t) { return t.serial; });
+                            audit(pend, ser.length, ser[0] + (ser.length > 1 ? ' – ' + ser[ser.length - 1] : ''));
+                        }
+                    } catch (e) { }
+                }, function () { });
+            }
+            return p;
+        };
+        w.__apg = true; callAppsScript = w;
+    }
+ 
+    // ---------- 1) รีปริ้นชุดล่าสุด (จากเมนู "ออกแท็ก") ----------
+    function lastOf(key) { try { var b = JSON.parse(localStorage.getItem(key.toLowerCase() === 'hanon' ? 'hanonLastBatch_v1' : 'broseLastBatch_v1') || 'null'); return b; } catch (e) { return null; } }
+    function wrapReprint(fn, key) {
+        var o = window[fn]; if (typeof o !== 'function') return false; if (o.__apg) return true;
+        var w = function () {
+            var self = this, args = arguments;
+            if (bypass) return o.apply(self, args);
+            var b = lastOf(key);
+            if (key === 'HANON' && (!b || !b.tags || !b.tags.length)) return o.apply(self, args);   // ไม่มีชุดล่าสุด → ให้ระบบเดิมแจ้งเอง
+            gate({ key: key, title: T('tReprint'), desc: T('dReprint'), action: T('aReprint'), date: b && b.date || '', count: b && b.tags ? b.tags.length : '', detail: b && b.tags && b.tags.length ? (b.tags[0].serial + (b.tags.length > 1 ? ' – ' + b.tags[b.tags.length - 1].serial : '')) : '' }, function () {
+                bypass = true; try { o.apply(self, args); } finally { bypass = false; }
+            });
+        };
+        w.__apg = true; for (var k in o) { try { w[k] = o[k]; } catch (e) { } } window[fn] = w; return true;
+    }
+    function init() { wrapCall(); var a = wrapReprint('__hanonReprintLast', 'HANON'), b = wrapReprint('__broseReprintLast', 'BROSE'); return a && b; }
+    init(); var n = 0, tm = setInterval(function () { try { if (init() ? ++n > 8 : ++n > 90) clearInterval(tm); } catch (e) { } }, 1000);
+ 
+    // ---------- 2) ด่านในป๊อบอัพ (จับคลิกก่อนระบบเดิม แล้วเล่นซ้ำเมื่ออนุมัติ) ----------
+    function replay(el) { bypass = true; try { el.click(); } finally { bypass = false; } }
+    document.addEventListener('click', function (e) {
+        if (bypass) return;
+        var t = e.target; if (!t || !t.closest) return;
+        // 2.1 ป๊อบอัพออกแท็กชิ้นงาน (TAG-DLG-V2)
+        var tg = t.closest('.tgd'); if (tg) {
+            var key = /BROSE/i.test((tg.querySelector('h3') || {}).textContent || '') ? 'BROSE' : 'HANON', date = (document.getElementById('tgd-date') || {}).value || '';
+            var last = t.closest('[data-a="last"]');
+            if (last) {
+                e.preventDefault(); e.stopImmediatePropagation();
+                gate({ key: key, title: T('tReprint'), desc: T('dReprint'), action: T('aReprint'), date: date }, function () { replay(last); });
+                return;
+            }
+            var go = t.closest('.b1[data-a="go"]');
+            if (go && !go.disabled) {
+                var word = isEn() ? 'Issued' : 'ออกแล้ว';
+                var dups = $$('.row.sel', tg).filter(function (r) { return $$('.tagp.w', r).some(function (x) { return x.textContent.trim().indexOf(word) === 0; }); });
+                if (dups.length) {
+                    e.preventDefault(); e.stopImmediatePropagation();
+                    var list = dups.map(function (r) { var iss = $$('.tagp.w', r).filter(function (x) { return x.textContent.trim().indexOf(word) === 0; })[0]; return ((r.querySelector('.pn') || {}).textContent || '') + ' — ' + (iss ? iss.textContent.trim().split(' (')[0] : ''); });
+                    gate({ key: key, title: T('tDup'), desc: T('dDup'), list: list, action: T('aDup'), date: date, detail: dups.map(function (r) { return (r.querySelector('.pn') || {}).textContent || ''; }).join('; '), audit: false }, function () { replay(go); });
+                }
+                return;
+            }
+        }
+        // 2.2 ป๊อบอัพแท็กหาย HANON (HANON-HIST): ครั้งแรกกด = เตือนเลข / ครั้งที่สอง = ต้องอนุมัติก่อนทำจริง
+        var hl = t.closest('.hlh .b1'); if (hl && hl.classList.contains('arm') && !hl.disabled) {
+            e.preventDefault(); e.stopImmediatePropagation();
+            var dt = (document.querySelector('.hlh .dt') || {}).value || '', cnt = $$('.hlh .chip.sel').length;
+            gate({ key: 'HANON', title: T('tLost'), desc: T('dLost') + (cnt ? ' (' + cnt + ' ' + T('unit') + ')' : ''), action: T('aLost'), date: dt, detail: $$('.hlh .chip.sel').map(function (c) { return (c.querySelector('b') || {}).textContent || ''; }).join(','), audit: false }, function () { replay(hl); });
+        }
+    }, true);
+})();
+/* ===== จบ APPROVE-GATE-V1 ===== */
+(function () {
+    if (window.__reprintV1) return; window.__reprintV1 = true;
+    var isEn = function () { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e) { return false; } };
+    var TX = {
+        th: {
+            title: 'รีปริ้นแท็ก', sub: 'เลือกวันที่ส่งงาน แล้วเลือกรอบเวลา / Invoice ที่จะพิมพ์ซ้ำ — ใช้เลขเดิม ไม่ออกเลขใหม่', date: 'วันที่ส่งงาน', all: 'ทั้งหมด', clear: 'ล้างที่เลือก',
+            rounds: 'รอบเวลา', invs: 'Invoice', noInv: 'ไม่มี Invoice', noRound: 'ไม่ระบุรอบ', loading: 'กำลังโหลดรายการแท็ก...', none: 'วันที่นี้ยังไม่เคยออกแท็ก', total: 'วันนี้ออกไปแล้ว', unit: 'ใบ', items: 'รายการ',
+            sel: 'เลือก', tags: 'แท็ก', close: 'ปิด', go: 'รีปริ้น', pickFirst: 'ยังไม่ได้เลือก — กดเลือกรอบ / Invoice / ทั้งหมด หรือติ๊กรายการ', onlyActive: 'แท็กที่ถูกแทนด้วยเลขใหม่ (หายแล้ว) จะไม่ถูกนำมาพิมพ์',
+            gsOld: 'Google Script ยังไม่อัปเดต (ไม่รู้จักคำสั่งดึงรายการแท็ก) — วาง TAGLOG-GS แล้ว Deploy เวอร์ชันใหม่ก่อน', loadFail: 'โหลดรายการไม่สำเร็จ: ', noPrint: 'ยังไม่พบตัวพิมพ์แท็ก (ตรวจว่าวางบล็อกแท็กครบ)', popup: 'เบราว์เซอร์บล็อกป๊อปอัพ — อนุญาตป๊อปอัพแล้วกดใหม่', printFail: 'พิมพ์ไม่สำเร็จ: ',
+            noperm: 'ไม่มีสิทธิ์', nopermT: 'บัญชีนี้ไม่มีสิทธิ์พิมพ์แท็ก', gTitle: 'รีปริ้นแท็ก (เลขเดิม)', gDesc: 'จะพิมพ์แท็กที่เคยออกแล้วซ้ำ ด้วยเลขเดิม', aRe: 'รีปริ้นแท็ก',
+            mT: 'รีปริ้นแท็ก (เลือกรอบ / Invoice)', mS: 'พิมพ์ซ้ำด้วยเลขเดิม · เลือกรอบ · ตาม Invoice · หรือทั้งหมด'
+        },
+        en: {
+            title: 'Reprint tags', sub: 'Pick the delivery date, then the rounds / invoices to print again — same numbers, no new numbers issued', date: 'Delivery date', all: 'All', clear: 'Clear selection',
+            rounds: 'Rounds', invs: 'Invoices', noInv: 'No invoice', noRound: 'No round', loading: 'Loading tag list...', none: 'No tags have been issued on this date', total: 'Issued this day', unit: 'tags', items: 'items',
+            sel: 'Selected', tags: 'Tags', close: 'Close', go: 'Reprint', pickFirst: 'Nothing selected — pick a round / invoice / All, or tick items', onlyActive: 'Tags that were replaced with new numbers (lost) are not included',
+            gsOld: 'Google Script is not updated (unknown tag-list command) — paste TAGLOG-GS and deploy a new version first', loadFail: 'Could not load the list: ', noPrint: 'Tag printer not found (check the tag blocks are installed)', popup: 'Pop-up blocked — allow pop-ups and try again', printFail: 'Print failed: ',
+            noperm: 'No permission', nopermT: 'This account cannot print tags', gTitle: 'Reprint tags (same numbers)', gDesc: 'Previously issued tags will be printed again with the same numbers', aRe: 'Reprint tags',
+            mT: 'Reprint tags (pick round / invoice)', mS: 'Print again with the same numbers · by round · by invoice · or all'
+        }
+    };
+    var T = function (k) { return TX[isEn() ? 'en' : 'th'][k]; };
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+    function isT(v) { return v === true || String(v).toUpperCase() === 'TRUE'; }
+    function canUse() { var u = (typeof currentUser !== 'undefined' && currentUser) || null; return !!u && (u.username === 'admin' || u.role === 'admin' || isT(u.canManageDeliveryPlan) || isT(u.printTags)); }
+    function dateOf(p) { return typeof window.formatDate === 'function' ? window.formatDate(p.date) : String(p.date || '').split('T')[0]; }
+    function timeOf(p) { var t = typeof window.formatTimeDisplay === 'function' ? window.formatTimeDisplay(p.time) : String(p.time || ''); return String(t || '').replace(/^'+/, '').trim() || ''; }
+    function tail(s) { return String(s).slice(-3); }
+    var CFG = {
+        HANON: { label: 'HANON', c: '#0f766e', soft: '#ccfbf1', re: /hanon/i, print: function (t, d, w) { if (typeof window.__hanonTagPrint !== 'function') throw new Error(T('noPrint')); window.__hanonTagPrint(t, d, w); } },
+        BROSE: { label: 'BROSE THAILAND', c: '#1d4ed8', soft: '#dbeafe', re: /brose/i, print: function (t, d, w) { if (typeof window.__broseTagPrint !== 'function') throw new Error(T('noPrint')); window.__broseTagPrint(t, d, w); } }
+    };
+ 
+    var css = document.createElement('style'); css.id = 'rpd-css';
+    css.textContent = ''
+        + '.rpd-pop{padding:0!important;border-radius:22px!important;overflow:hidden;width:min(980px,96vw)!important;box-shadow:0 24px 70px rgba(15,23,42,.35)!important}'
+        + '.rpd-pop .swal2-html-container{margin:0!important;padding:0!important;text-align:left!important;overflow:visible!important}'
+        + '.rpd{font-family:inherit;color:#0f172a}.rpd *{box-sizing:border-box}'
+        + '.rpd .hd{display:flex;gap:14px;align-items:center;padding:18px 24px;border-bottom:1px solid #eef1f6;background:linear-gradient(180deg,var(--s),#fff)}'
+        + '.rpd .ic{width:44px;height:44px;border-radius:13px;background:var(--c);color:#fff;display:grid;place-items:center;font-size:21px;flex:0 0 44px}'
+        + '.rpd .hd h3{margin:0;font-size:1.25rem;font-weight:800}.rpd .hd p{margin:2px 0 0;font-size:.8rem;color:#64748b}'
+        + '.rpd .x{margin-left:auto;width:34px;height:34px;border-radius:10px;background:#f1f5f9;border:0;color:#475569;cursor:pointer;flex:0 0 34px}'
+        + '.rpd .bar{display:flex;gap:10px;align-items:center;padding:12px 24px;background:#f8fafc;border-bottom:1px solid #e8edf5;flex-wrap:wrap}'
+        + '.rpd .pill{display:flex;align-items:center;gap:8px;border:1.5px solid #dbe3ee;border-radius:12px;padding:6px 11px;font-weight:600;background:#fff;font-size:.85rem}.rpd .pill small{color:#94a3b8;font-weight:500}.rpd .pill input{border:0;outline:0;font:inherit;background:transparent}'
+        + '.rpd .stat{margin-left:auto;font-size:.82rem;color:#64748b}.rpd .stat b{color:#0f172a}'
+        + '.rpd .fl{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 24px 0}.rpd .fl .lb{font-size:.78rem;font-weight:800;color:#64748b;min-width:62px}'
+        + '.rpd .rc{border:1.5px solid #dbe3ee;background:#fff;border-radius:999px;padding:5px 13px;font:inherit;font-size:.82rem;font-weight:700;color:#334155;cursor:pointer}.rpd .rc small{color:#94a3b8;font-weight:600;margin-left:4px}'
+        + '.rpd .rc:hover{border-color:var(--c)}.rpd .rc.on{background:var(--c);border-color:var(--c);color:#fff}.rpd .rc.on small{color:rgba(255,255,255,.85)}.rpd .rc.part{border-color:var(--c);background:var(--s)}'
+        + '.rpd .rc.clr{border-style:dashed;color:#dc2626}'
+        + '.rpd .list{padding:12px 24px 4px;max-height:min(360px,42vh);overflow:auto;background:#f1f5f9;margin-top:10px}'
+        + '.rpd .row{display:grid;grid-template-columns:34px 1fr auto;gap:12px;align-items:center;background:#fff;border:1.5px solid #e2e8f0;border-radius:15px;padding:10px 14px;margin-bottom:8px;cursor:pointer}'
+        + '.rpd .row.sel{border-color:var(--c);box-shadow:0 0 0 3px var(--s)}'
+        + '.rpd .ck{width:26px;height:26px;border-radius:8px;border:2px solid #cbd5e1;display:grid;place-items:center;color:#fff;font-weight:900;font-size:.9rem;background:#fff}.rpd .row.sel .ck{background:var(--c);border-color:var(--c)}'
+        + '.rpd .pn{font-weight:800;font-size:.98rem}.rpd .nm{font-size:.78rem;color:#64748b}'
+        + '.rpd .tg{display:flex;gap:6px;margin-top:4px;flex-wrap:wrap}.rpd .tp{font-size:.7rem;font-weight:700;border-radius:999px;padding:2px 9px;background:#e2e8f0;color:#475569}.rpd .tp.t{background:#e0e7ff;color:#3730a3}.rpd .tp.i{background:#fef3c7;color:#92400e}'
+        + '.rpd .rt{text-align:right;font-size:.78rem;color:#64748b}.rpd .rt b{display:block;font-size:1.25rem;color:#0f172a}.rpd .rt span{font-family:ui-monospace,Menlo,Consolas,monospace}'
+        + '.rpd .em{border:1.5px dashed #cbd5e1;border-radius:14px;padding:26px;text-align:center;color:#64748b;background:#fff}'
+        + '.rpd .ft{display:flex;align-items:center;gap:14px;padding:14px 24px;border-top:1px solid #eef1f6;flex-wrap:wrap}.rpd .sum{font-size:.9rem;color:#475569}.rpd .sum b{font-size:1.5rem;color:var(--c);margin:0 4px}'
+        + '.rpd .acts{margin-left:auto;display:flex;gap:10px}.rpd .b1{border:0;border-radius:13px;padding:12px 24px;font-weight:800;font-size:.95rem;cursor:pointer;color:#fff;background:var(--c);box-shadow:0 8px 20px rgba(0,0,0,.14)}.rpd .b1[disabled]{opacity:.4;cursor:not-allowed;box-shadow:none}'
+        + '.rpd .b2{border:1.5px solid #dbe3ee;border-radius:13px;padding:12px 18px;background:#fff;color:#475569;font-weight:700;cursor:pointer}'
+        + '.rpd .err{margin:8px 24px 0;font-size:.82rem;font-weight:700;color:#dc2626;min-height:18px}.rpd .note{padding:0 24px 14px;font-size:.74rem;color:#94a3b8}'
+        // ป้ายชื่อเมนู: แทนข้อความ "รีปริ้นชุดล่าสุด" ด้วย CSS (กันชนกับสคริปต์เมนูที่รีเซ็ตข้อความทุก 1.5 วินาที)
+        + 'html[data-rpl] .tgm-r[data-rp] .tgm-t,html[data-rpl] .tgm-r[data-rp] .tgm-s{font-size:0!important}'
+        + 'html[data-rpl] .tgm-r[data-rp] .tgm-t::after{font-size:.92rem;content:attr(data-x)}html[data-rpl] .tgm-r[data-rp] .tgm-s::after{font-size:.75rem;content:attr(data-x)}';
+    document.head.appendChild(css);
+ 
+    function planFor(S, planId, partNo, inv) {
+        var plans = (db.deliveryPlans || []).filter(function (p) { return p && dateOf(p) === S.date; });
+        var p = planId ? plans.filter(function (x) { return String(x.id) === String(planId); })[0] : null;
+        if (!p) p = plans.filter(function (x) { return String(x.productId).trim() === String(partNo).trim() && (!inv || String(x.invoiceNumber || '').trim() === inv) && S.cfg.re.test(String(x.customer || '')); })[0];
+        return p || null;
+    }
+    function open(key) {
+        var cfg = CFG[key]; if (!cfg) return;
+        if (!canUse()) { Swal.fire(T('noperm'), T('nopermT'), 'warning'); return; }
+        var v = document.getElementById('view-plan-date'), d = new Date();
+        var S = { cfg: cfg, key: key, date: (v && v.value) || (d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')), groups: [], sel: {}, total: 0, busy: false, loaded: false };
+        function Q(s) { return document.querySelector('.rpd ' + s); }
+        function selTags() { var out = []; S.groups.forEach(function (g) { if (S.sel[g.id]) out = out.concat(g.tags); }); return out.sort(function (a, b) { return a.serial < b.serial ? -1 : (a.serial > b.serial ? 1 : 0); }); }
+        function build(tags) {
+            var map = {}, order = [];
+            tags.forEach(function (t) {
+                if (String(t.status).toLowerCase() === 'lost' || !t.serial) return;
+                var inv = String(t.invoiceNumber || '').trim(), pl = planFor(S, t.planId, t.partNo, inv);
+                if (!inv && pl) inv = String(pl.invoiceNumber || '').trim();
+                var round = pl ? timeOf(pl) : '';
+                var id = (t.planId ? 'p' + t.planId : 'k' + t.partNo + '|' + inv) + '|' + t.qtyPerPack;
+                var g = map[id]; if (!g) { g = map[id] = { id: id, partNo: t.partNo, name: t.productName || (pl && pl.productName) || '', inv: inv, round: round, tags: [], at: '' }; order.push(g); }
+                g.tags.push({ serial: t.serial, qr: t.qr, partNo: t.partNo, qtyPerPack: t.qtyPerPack, invoiceNumber: inv, productName: g.name });
+                if (String(t.printedAt || '') > g.at) g.at = String(t.printedAt || '');
+            });
+            order.forEach(function (g) { g.tags.sort(function (a, b) { return a.serial < b.serial ? -1 : 1; }); });
+            order.sort(function (a, b) { return (a.round || '~') < (b.round || '~') ? -1 : ((a.round || '~') > (b.round || '~') ? 1 : (a.tags[0].serial < b.tags[0].serial ? -1 : 1)); });
+            return order;
+        }
+        function chipState(pred) { var gs = S.groups.filter(pred), n = gs.filter(function (g) { return S.sel[g.id]; }).length; return n === 0 ? '' : (n === gs.length ? 'on' : 'part'); }
+        function draw() {
+            var rounds = {}, invs = {}, rOrd = [], iOrd = [];
+            S.groups.forEach(function (g) { var r = g.round || '', i = g.inv || ''; if (!(r in rounds)) { rounds[r] = 0; rOrd.push(r); } rounds[r] += g.tags.length; if (!(i in invs)) { invs[i] = 0; iOrd.push(i); } invs[i] += g.tags.length; });
+            rOrd.sort(function (a, b) { return (a || '~') < (b || '~') ? -1 : 1; }); iOrd.sort();
+            var h = '';
+            if (S.groups.length) {
+                h += '<div class="fl"><span class="lb">' + T('rounds') + '</span><button type="button" class="rc ' + chipState(function () { return true; }) + '" data-k="all">' + T('all') + '<small>' + S.total + '</small></button>'
+                    + rOrd.map(function (r) { return '<button type="button" class="rc ' + chipState(function (g) { return (g.round || '') === r; }) + '" data-k="r" data-v="' + esc(r) + '">' + esc(r || T('noRound')) + '<small>' + rounds[r] + '</small></button>'; }).join('')
+                    + '<button type="button" class="rc clr" data-k="clr">' + T('clear') + '</button></div>';
+                if (iOrd.length > 1 || iOrd[0]) h += '<div class="fl"><span class="lb">' + T('invs') + '</span>' + iOrd.map(function (i) { return '<button type="button" class="rc ' + chipState(function (g) { return (g.inv || '') === i; }) + '" data-k="i" data-v="' + esc(i) + '">' + esc(i || T('noInv')) + '<small>' + invs[i] + '</small></button>'; }).join('') + '</div>';
+            }
+            Q('.chips').innerHTML = h;
+            var L = Q('.list');
+            if (!S.loaded) L.innerHTML = '<div class="em">' + T('loading') + '</div>';
+            else if (!S.groups.length) L.innerHTML = '<div class="em">' + T('none') + '</div>';
+            else L.innerHTML = S.groups.map(function (g) {
+                var a = g.tags[0].serial, z = g.tags[g.tags.length - 1].serial;
+                return '<div class="row ' + (S.sel[g.id] ? 'sel' : '') + '" data-id="' + esc(g.id) + '"><div class="ck">' + (S.sel[g.id] ? '✓' : '') + '</div><div><div class="pn">' + esc(g.partNo) + '</div><div class="nm">' + esc(g.name) + '</div>'
+                    + '<div class="tg">' + (g.round ? '<span class="tp t">🕐 ' + esc(g.round) + '</span>' : '') + (g.inv ? '<span class="tp i">' + esc(g.inv) + '</span>' : '') + '<span class="tp">' + esc(g.tags[0].qtyPerPack) + ' pcs/box</span></div></div>'
+                    + '<div class="rt"><b>' + g.tags.length + ' ' + T('unit') + '</b><span>…' + esc(tail(a)) + (g.tags.length > 1 ? '–' + esc(tail(z)) : '') + '</span><br>' + esc(String(g.at || '').slice(11, 16)) + '</div></div>';
+            }).join('');
+            var n = selTags().length, ng = S.groups.filter(function (g) { return S.sel[g.id]; }).length;
+            Q('.sum').innerHTML = T('sel') + ' <b>' + n + '</b> ' + T('unit') + ' · ' + ng + ' ' + T('items');
+            Q('.b1').disabled = !n || S.busy;
+            Q('.stat').innerHTML = S.loaded ? (T('total') + ' <b>' + S.total + '</b> ' + T('unit')) : '';
+        }
+        function err(m) { var e = Q('.err'); if (e) e.textContent = m || ''; }
+        function load() {
+            S.date = Q('.dt').value; S.groups = []; S.sel = {}; S.total = 0; S.loaded = false; err(''); draw();
+            var date = S.date;
+            return callAppsScript('getTagLog', { customer: key, deliveryDate: date }).then(function (r) {
+                if (!Q('.dt') || Q('.dt').value !== date) return;
+                if (!r || r.status === 'error') throw new Error((r && r.message) || 'error');
+                S.groups = build(r.tags || []); S.total = S.groups.reduce(function (a, g) { return a + g.tags.length; }, 0); S.loaded = true; draw();
+            }).catch(function (e) {
+                if (!Q('.dt')) return; S.loaded = true; draw();
+                var m = String((e && e.message) || e); if (/ไม่รู้จัก|unknown|Invalid action|action/i.test(m)) m = T('gsOld'); else m = T('loadFail') + m; err(m);
+            });
+        }
+        function toggle(pred) { var gs = S.groups.filter(pred), all = gs.every(function (g) { return S.sel[g.id]; }); gs.forEach(function (g) { if (all) delete S.sel[g.id]; else S.sel[g.id] = true; }); }
+        function doPrint() {
+            var tags = selTags(); if (!tags.length || S.busy) return;
+            var list = S.groups.filter(function (g) { return S.sel[g.id]; }).map(function (g) { return g.partNo + (g.inv ? ' · ' + g.inv : '') + (g.round ? ' · ' + g.round : '') + ' — ' + g.tags.length + ' ' + T('unit') + ' (…' + tail(g.tags[0].serial) + (g.tags.length > 1 ? '–' + tail(g.tags[g.tags.length - 1].serial) : '') + ')'; });
+            var run = function () {
+                var w = window.open('', '_blank');
+                if (!w) { err(T('popup')); return; }
+                try { cfg.print(tags, S.date, w); err(''); }
+                catch (e) { try { w.close(); } catch (x) { } err(T('printFail') + String((e && e.message) || e)); }
+            };
+            if (typeof window.__apgGate === 'function') window.__apgGate({ key: key, title: T('gTitle'), desc: T('gDesc') + ' (' + tags.length + ' ' + T('unit') + ')', list: list, action: T('aRe'), date: S.date, count: tags.length, detail: tail(tags[0].serial) + (tags.length > 1 ? ' – ' + tail(tags[tags.length - 1].serial) : '') }, run);
+            else run();
+        }
+        Swal.fire({
+            showConfirmButton: false, showCancelButton: false, showCloseButton: false, customClass: { popup: 'rpd-pop' }, width: 980, padding: 0, focusConfirm: false,
+            html: '<div class="rpd" style="--c:' + cfg.c + ';--s:' + cfg.soft + '"><div class="hd"><div class="ic"><i class="bi bi-printer-fill"></i></div><div><h3>' + esc(T('title')) + ' ' + esc(cfg.label) + '</h3><p>' + esc(T('sub')) + '</p></div><button type="button" class="x" data-a="close"><i class="bi bi-x-lg"></i></button></div>'
+                + '<div class="bar"><label class="pill"><i class="bi bi-calendar3"></i><small>' + T('date') + '</small><input type="date" class="dt"></label><span class="stat"></span></div>'
+                + '<div class="chips"></div><div class="list"></div><div class="err"></div>'
+                + '<div class="ft"><div class="sum"></div><div class="acts"><button type="button" class="b2" data-a="close">' + T('close') + '</button><button type="button" class="b1" data-a="go"><i class="bi bi-printer-fill"></i> ' + T('go') + '</button></div></div>'
+                + '<div class="note">' + T('onlyActive') + '</div></div>',
+            didOpen: function () {
+                var root = document.querySelector('.rpd'); Q('.dt').value = S.date; draw(); load();
+                Q('.dt').addEventListener('change', function () { if (Q('.dt').value) load(); });
+                root.addEventListener('click', function (e) {
+                    var t = e.target, a = t.closest('[data-a]');
+                    if (a) { if (a.getAttribute('data-a') === 'close') Swal.close(); else if (a.getAttribute('data-a') === 'go') doPrint(); return; }
+                    var c = t.closest('.rc');
+                    if (c) {
+                        var k = c.getAttribute('data-k'), val = c.getAttribute('data-v');
+                        if (k === 'all') toggle(function () { return true; });
+                        else if (k === 'r') toggle(function (g) { return (g.round || '') === val; });
+                        else if (k === 'i') toggle(function (g) { return (g.inv || '') === val; });
+                        else if (k === 'clr') S.sel = {};
+                        draw(); return;
+                    }
+                    var r = t.closest('.row'); if (r) { var id = r.getAttribute('data-id'); if (S.sel[id]) delete S.sel[id]; else S.sel[id] = true; draw(); }
+                });
+            }
+        });
+    }
+    window.openTagReprintDialog = open;
+ 
+    // ---------- ผูกกับปุ่มเดิมทั้งหมด: เมนู "รีปริ้นชุดล่าสุด" และปุ่มในป๊อบอัพออกแท็ก ----------
+    function mk(key) { var f = function () { open(key); }; f.__apg = true; f.__rpv = true; return f; }   // __apg = บอกบล็อกอนุมัติว่าไม่ต้องครอบซ้ำ (ด่านอยู่ที่ปุ่มรีปริ้นในหน้านี้แล้ว)
+    function hook() { ['HANON', 'BROSE'].forEach(function (k) { var fn = k === 'HANON' ? '__hanonReprintLast' : '__broseReprintLast'; if (!window[fn] || !window[fn].__rpv) window[fn] = mk(k); }); }
+    hook(); var n = 0, tm = setInterval(function () { try { hook(); } catch (e) { } if (++n > 15) clearInterval(tm); }, 1000);
+    window.addEventListener('click', function (e) {   // ชั้น window ทำงานก่อนด่านอื่น
+        var t = e.target; if (!t || !t.closest) return;
+        var b = t.closest('.tgd [data-a="last"]'); if (!b) return;
+        e.preventDefault(); e.stopImmediatePropagation();
+        open(/BROSE/i.test((document.querySelector('.tgd h3') || {}).textContent || '') ? 'BROSE' : 'HANON');
+    }, true);
+    function relabel() {
+        var en = isEn(); document.documentElement.setAttribute('data-rpl', en ? 'en' : 'th');
+        $$('.tgm-r').forEach(function (b) {
+            var tt = b.querySelector('.tgm-t'), ss = b.querySelector('.tgm-s'); if (!tt || !ss) return;
+            var tx = (tt.getAttribute('data-orig') || tt.textContent).trim();
+            if (!b.hasAttribute('data-rp')) { if (!/^(รีปริ้นชุดล่าสุด|Reprint last batch)$/.test(tx)) return; b.setAttribute('data-rp', '1'); tt.setAttribute('data-orig', tx); }
+            tt.setAttribute('data-x', T('mT')); ss.setAttribute('data-x', T('mS'));
+        });
+        $$('.tgd [data-a="last"]').forEach(function (b) { var s = '<i class="bi bi-arrow-repeat"></i> ' + (en ? 'Reprint (pick round / invoice)' : 'รีปริ้น (เลือกรอบ / Invoice)'); if (b.getAttribute('data-rl') !== (en ? 'e' : 't')) { b.innerHTML = s; b.setAttribute('data-rl', en ? 'e' : 't'); } });
+    }
+    setInterval(function () { try { relabel(); } catch (e) { } }, 700);
+})();
+/* ===== จบ REPRINT-V1 ===== */
 // ดาวน์โหลดเทมเพลต Excel สำหรับอัปโหลดแพลน
+(function () {
+    if (window.__tagMenuV1) return; window.__tagMenuV1 = true;
+    var isEn = function () { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e) { return false; } };
+    // เพิ่มลูกค้าใหม่ในอนาคต: เติมอีก 1 รายการในลิสต์นี้
+    var CUS = [
+        { name: 'BROSE THAILAND', ic: 'bi-box-seam', c: '#1d4ed8', bg: '#dbeafe', items: [
+            { fn: 'openBroseTagDialog', ic: 'bi-box-seam', c: '#1d4ed8', bg: '#dbeafe', t: ['แท็กชิ้นงาน', 'Part tag'], s: ['ติดแร็ค/กล่อง · QR มีเลขลำดับ ดึงจากแผนส่งของ', 'Rack/box tag · QR with running no. · from delivery plan'] },
+            { fn: 'openBroseInvoiceDialog', ic: 'bi-receipt', c: '#0f766e', bg: '#ccfbf1', t: ['แท็ก Invoice', 'Invoice tag'], s: ['แนวยาว · QR = เลข Invoice · ตั้ง DOCK เองได้', 'Landscape · QR = invoice no. · editable DOCK'] },
+            { hr: 1 },
+            { fn: '__broseReprintLast', ic: 'bi-printer', c: '#475569', bg: '#e2e8f0', t: ['รีปริ้นชุดล่าสุด', 'Reprint last batch'], s: ['พิมพ์แท็กชุดที่เพิ่งออกซ้ำ (เลขเดิม)', 'Print the latest batch again (same numbers)'] },
+            { fn: 'openBroseHistoryDialog', ic: 'bi-arrow-repeat', c: '#b45309', bg: '#fef3c7', t: ['แท็กหาย / ออกเลขใหม่', 'Lost tag / new number'], s: ['ออกแทนใบที่หาย โดยรันเลขต่อจากเลขล่าสุดของวัน', 'Replace a lost tag with the next running number'] }
+        ] },
+        { name: 'HANON', ic: 'bi-box-seam', c: '#0f766e', bg: '#ccfbf1', items: [
+            { fn: 'openHanonTagDialog', ic: 'bi-qr-code', c: '#0f766e', bg: '#ccfbf1', t: ['แท็กชิ้นงาน', 'Part tag'], s: ['A4 หน้าละ 10 ใบ · QR มีเลขลำดับ · มีปุ่มพิมพ์ชุดล่าสุดซ้ำ', 'A4, 10 per page · QR with running no. · has reprint-last button'] }
+        ] }
+    ];
+    var TXT = { btn: ['ออกแท็ก', 'Print tags'], cus: ['เลือกลูกค้า', 'Choose customer'], na: ['ยังไม่พร้อมใช้งาน', 'Not available yet'], naT: ['ยังไม่ได้วางแพตช์ของเมนูนี้ในไฟล์ HTML', 'This menu\'s patch is not in the HTML file yet'] };
+    var L = function (a) { return a[isEn() ? 1 : 0]; };
+    var css = document.createElement('style'); css.id = 'tgm-css';
+    css.textContent = ''
+        + '#brm-wrap,#brt-open-btn,#bri-open-btn,#bh-open-btn,#hnt-open-btn{display:none!important}'   // ซ่อนปุ่ม BROSE / HANON แยกเดิม (ยังทำงานอยู่ข้างหลัง)
+        + '.tgm{position:relative;display:inline-block}'
+        + '#tgm-btn{background:#0f172a!important;color:#fff!important;border:1px solid #0f172a!important}#tgm-btn:hover{background:#1e293b!important}#tgm-btn .tgm-c{font-size:.7rem;margin-left:2px;transition:transform .15s}.tgm.open #tgm-btn .tgm-c{transform:rotate(180deg)}'
+        + '.tgm-p{position:absolute;top:100%;left:0;padding-top:8px;z-index:3000;display:none}.tgm.open>.tgm-p{display:block}'
+        + '.tgm-card{width:250px;background:#fff;border:1px solid #dbe2ee;border-radius:16px;box-shadow:0 14px 36px rgba(15,23,42,.18);padding:6px;text-align:left}'
+        + '.tgm-g{font-size:.68rem;font-weight:700;letter-spacing:.4px;color:#94a3b8;padding:7px 10px 3px}'
+        + '.tgm-c1{position:relative}'
+        + '.tgm-r{display:flex;gap:11px;align-items:center;width:100%;border:0;background:transparent;border-radius:11px;padding:9px 10px;cursor:pointer;text-align:left;font:inherit;color:#0f172a}'
+        + '.tgm-c1:hover>.tgm-r,.tgm-c1.open>.tgm-r{background:#f1f5f9}.tgm-r *{pointer-events:none}'
+        + '.tgm-ic{flex:0 0 34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1rem}'
+        + '.tgm-t{font-weight:600;font-size:.92rem;line-height:1.2;flex:1}.tgm-s{font-size:.75rem;color:#64748b;margin-top:2px;line-height:1.25}.tgm-ar{color:#94a3b8;font-size:.8rem}'
+        + '.tgm-fly{position:absolute;left:100%;top:-6px;padding-left:6px;display:none;z-index:3001}.tgm-c1:hover>.tgm-fly,.tgm-c1.open>.tgm-fly{display:block}'
+        + '.tgm-fly.left{left:auto;right:100%;padding-left:0;padding-right:6px}'
+        + '.tgm-fly .tgm-card{width:330px}'
+        + '.tgm-hr{height:1px;background:#e8edf5;margin:5px 8px}';
+    document.head.appendChild(css);
+    function isT(v) { return v === true || String(v).toUpperCase() === 'TRUE'; }
+    function canUse() { var u = currentUser; return !!u && (u.username === 'admin' || u.role === 'admin' || isT(u.canManageDeliveryPlan) || isT(u.printTags)); }
+    function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+    function build() {
+        var wrap = document.createElement('div'); wrap.className = 'tgm'; wrap.id = 'tgm-wrap';
+        var h = '<button type="button" class="dpB-btn" id="tgm-btn"><i class="bi bi-qr-code"></i><span class="tgm-bt"></span><i class="bi bi-chevron-down tgm-c"></i></button><div class="tgm-p"><div class="tgm-card"><div class="tgm-g tgm-cg"></div>';
+        CUS.forEach(function (cu, ci) {
+            h += '<div class="tgm-c1" data-ci="' + ci + '"><button type="button" class="tgm-r tgm-cr"><span class="tgm-ic" style="background:' + cu.bg + ';color:' + cu.c + '"><i class="bi ' + cu.ic + '"></i></span><span class="tgm-t">' + esc(cu.name) + '</span><i class="bi bi-chevron-right tgm-ar"></i></button>'
+                + '<div class="tgm-fly"><div class="tgm-card">';
+            cu.items.forEach(function (it, ii) {
+                if (it.hr) { h += '<div class="tgm-hr"></div>'; return; }
+                h += '<button type="button" class="tgm-r tgm-a" data-ci="' + ci + '" data-ii="' + ii + '"><span class="tgm-ic" style="background:' + it.bg + ';color:' + it.c + '"><i class="bi ' + it.ic + '"></i></span><span><div class="tgm-t" data-k="t"></div><div class="tgm-s" data-k="s"></div></span></button>';
+            });
+            h += '</div></div></div>';
+        });
+        h += '</div></div>';
+        wrap.innerHTML = h;
+        var t = null;
+        function place() {
+            var pn = wrap.querySelector('.tgm-p'); pn.style.left = '0'; pn.style.right = 'auto';
+            var r = pn.getBoundingClientRect(); if (r.right > window.innerWidth - 8) { pn.style.left = 'auto'; pn.style.right = '0'; }
+            // เมนูย่อยเปิดไปทางขวา ถ้าไม่พอที่ให้เปิดไปทางซ้าย
+            var pr = pn.getBoundingClientRect();
+            wrap.querySelectorAll('.tgm-fly').forEach(function (f) { f.classList.toggle('left', pr.right + 340 > window.innerWidth); });
+        }
+        function open() { clearTimeout(t); wrap.classList.add('open'); place(); }
+        function close() { clearTimeout(t); t = setTimeout(function () { wrap.classList.remove('open'); wrap.querySelectorAll('.tgm-c1.open').forEach(function (x) { x.classList.remove('open'); }); }, 250); }
+        wrap.addEventListener('mouseenter', open); wrap.addEventListener('mouseleave', close);
+        wrap.querySelector('#tgm-btn').addEventListener('click', function () { wrap.classList.toggle('open'); if (wrap.classList.contains('open')) place(); });   // มือถือ/ทัชสกรีน: แตะเปิด-ปิด
+        wrap.addEventListener('click', function (e) {
+            var cr = e.target.closest ? e.target.closest('.tgm-cr') : null;
+            if (cr) { var c1 = cr.parentNode, was = c1.classList.contains('open'); wrap.querySelectorAll('.tgm-c1.open').forEach(function (x) { x.classList.remove('open'); }); if (!was) c1.classList.add('open'); return; }
+            var a = e.target.closest ? e.target.closest('.tgm-a') : null; if (!a) return;
+            wrap.classList.remove('open'); wrap.querySelectorAll('.tgm-c1.open').forEach(function (x) { x.classList.remove('open'); });
+            var it = CUS[+a.getAttribute('data-ci')].items[+a.getAttribute('data-ii')], fn = window[it.fn];
+            if (typeof fn === 'function') fn(); else if (window.Swal) Swal.fire(L(TXT.na), L(TXT.naT), 'info');
+        });
+        document.addEventListener('click', function (e) { if (!wrap.contains(e.target)) { wrap.classList.remove('open'); } });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') wrap.classList.remove('open'); });
+        return wrap;
+    }
+    function label(w) {   // ใส่/อัปเดตข้อความตามภาษา
+        var bt = w.querySelector('.tgm-bt'); if (bt && bt.textContent !== L(TXT.btn)) bt.textContent = L(TXT.btn);
+        var cg = w.querySelector('.tgm-cg'); if (cg && cg.textContent !== L(TXT.cus)) cg.textContent = L(TXT.cus);
+        w.querySelectorAll('.tgm-a').forEach(function (a) {
+            var it = CUS[+a.getAttribute('data-ci')].items[+a.getAttribute('data-ii')];
+            var t = a.querySelector('[data-k=t]'), s = a.querySelector('[data-k=s]');
+            if (t.textContent !== L(it.t)) t.textContent = L(it.t);
+            if (s.textContent !== L(it.s)) s.textContent = L(it.s);
+        });
+    }
+    function ensure() {
+        var acts = document.querySelector('#pills-delivery-plan #dpB-root .top .acts');
+        var w = document.getElementById('tgm-wrap');
+        if (!canUse()) { if (w) w.remove(); return false; }
+        if (acts) {
+            if (!w) w = build();
+            if (w.parentNode !== acts) { var pdf = acts.querySelector('[data-act="pdf"]'); acts.insertBefore(w, pdf ? pdf.nextSibling : acts.firstChild); }
+            label(w); return true;
+        }
+        var v = document.getElementById('view-plan-date'); if (!v) return false;
+        if (!w) w = build();
+        if (!w.isConnected) { w.style.marginRight = '8px'; v.parentElement.insertBefore(w, v.parentElement.firstChild); }
+        label(w); return true;
+    }
+    ensure();
+    setInterval(function () { try { ensure(); } catch (e) { } }, 1500);
+})();
+/* ===== จบ TAG-MENU-V1 ===== */
 (function () {
     if (window.__navIconC) return; window.__navIconC = true;
     const GC = ['#7aa2ff', '#2dd4bf', '#fbbf24', '#fb7185', '#a78bfa'];   // ภาพรวม · คลังสินค้า · จัดส่งและวางแผน · ตรวจสอบและประวัติ · ตั้งค่าระบบ
