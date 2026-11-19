@@ -20576,6 +20576,81 @@ window.renderLGMatchTable = function() {
     }, 500);
 })();
 /* ===== จบ LG-WONOTE-V1 ===== */
+(function () {
+    if (window.__lgRepDedup) return; window.__lgRepDedup = true;
+    function sty(el) { return (el && el.getAttribute && el.getAttribute('style')) || ''; }
+    function dedupe(rep) {
+        const card = rep.querySelector('[data-lgrp="1"]');            // การ์ด "ส่งแล้วตามแพลน" (มีบรรทัด LG รับแล้ว อยู่ในนั้นแล้ว)
+        if (!card || !/LG รับ|Received at LG/.test(card.textContent || '')) return;
+        const tbl = rep.querySelector('table'); if (!tbl) return;
+        let strip = tbl.previousElementSibling, n = 0;
+        while (strip && n++ < 4 && !(strip.tagName === 'DIV' && /display:\s*flex/.test(sty(strip)) && strip.children.length >= 1 && strip !== card)) strip = strip.previousElementSibling;
+        if (!strip || strip === card) return;
+        const kids = Array.prototype.slice.call(strip.children);
+        const rings = kids.filter(function (k) { return k.querySelector && k.querySelector('svg') && /f7f9fc/i.test(sty(k)); });       // แบบวงกลม 2 อัน (ATECH ส่งออก / LG รับเข้า)
+        if (rings.length >= 2) { rings.forEach(function (k) { k.remove(); }); return; }
+        const green = kids.filter(function (k) { return /dcfce7/i.test(sty(k)) && /LG/.test(k.textContent || ''); });                   // แบบแถบเขียว "LG รับเข้า x / y (z%)"
+        if (green.length && kids.length > green.length) green.forEach(function (k) { k.remove(); });
+    }
+    function wrapFn(name) {
+        const orig = window[name]; if (typeof orig !== 'function' || orig.__lgddW) return;
+        const w = function () {
+            const self = this, args = arguments, body = document.body, realAppend = body.appendChild;
+            body.appendChild = function (node) {
+                try { const rep = node && node.querySelector ? node.querySelector('#lgd-report') : null; if (rep && !rep.getAttribute('data-lgdd')) { rep.setAttribute('data-lgdd', '1'); dedupe(rep); } } catch (err) { if (window.console) console.warn('LG-REPORT-DEDUP', err); }
+                return realAppend.call(body, node);
+            };
+            try { return orig.apply(self, args); }
+            finally { body.appendChild = realAppend; delete body.appendChild; }
+        };
+        w.__lgddW = true; window[name] = w;
+    }
+    let t = 0;
+    const iv = setInterval(function () {
+        t++;
+        if (typeof window.lgdSaveImage === 'function' && typeof window.lgdSavePdf === 'function' && t >= 24) { wrapFn('lgdSaveImage'); wrapFn('lgdSavePdf'); clearInterval(iv); }   // ต้องห่อทีหลังตัวอื่น (ราว 12 วินาทีหลังเปิดหน้า) เพื่อให้ตัดหลังที่แถบถูกสร้างแล้ว
+        else if (t > 120) clearInterval(iv);
+    }, 500);
+})();
+/* ===== จบ LG-REPORT-DEDUP-V1 ===== */
+(function () {
+    if (window.__lgProgFast) return;
+    var TXT = {
+        th: { sv: 'กำลังบันทึกความคืบหน้า...', retry: 'เซิร์ฟเวอร์กำลังยุ่ง ลองใหม่อัตโนมัติ (ครั้งที่ {n}/{m})...', fail: 'บันทึกไม่สำเร็จหลังลองใหม่ {m} ครั้ง — ข้อมูลที่ติ๊กยังไม่หาย กดบันทึกอีกครั้งได้ ({e})', to: 'หมดเวลารอเซิร์ฟเวอร์' },
+        en: { sv: 'Saving progress...', retry: 'Server is busy, retrying automatically (attempt {n}/{m})...', fail: 'Save failed after {m} attempts — your ticks are kept, please press Save again ({e})', to: 'Server timed out' }
+    };
+    function T() { var l = 'th'; try { l = sessionStorage.getItem('currentLanguage') === 'en' ? 'en' : 'th'; } catch (e) { } return TXT[l]; }
+    function setSpin(t) { try { var b = document.querySelector('.swal2-popup .lgu-sv b'); if (b) b.textContent = t; } catch (e) { } }
+    function withTimeout(p, ms, msg) {
+        return new Promise(function (res, rej) {
+            var t = setTimeout(function () { rej(new Error(msg)); }, ms);
+            p.then(function (v) { clearTimeout(t); res(v); }, function (e) { clearTimeout(t); rej(e); });
+        });
+    }
+    var MAX = 3, TMO = 45000;
+    // คืน true = บันทึกสำเร็จ / false = Google Script ยังไม่ได้อัปเดต (ให้โค้ดเดิมบันทึกทีละไลน์แทน) / throw = ล้มเหลวจริง
+    window.__lgProgFast = async function (list, by) {
+        var items = (list || []).map(function (v) { return { line: v.line, planDate: v.planDate, WO: v.WO, producedQty: v.producedQty, doneWOs: v.doneWOs, partial: v.partial }; });
+        var last = null;
+        for (var n = 1; n <= MAX; n++) {
+            try {
+                var r = await withTimeout(callAppsScript('saveLGLineProgressBatch', { items: items, by: by || '' }), TMO, T().to);
+                if (r && r.status && r.status !== 'success') throw new Error(r.message || 'error');
+                return true;
+            } catch (e) {
+                var m = String((e && e.message) || e);
+                if (/Invalid action|ไม่รู้จัก|unknown action/i.test(m)) return false;
+                last = m;
+                if (n < MAX) {
+                    setSpin(T().retry.replace('{n}', n + 1).replace('{m}', MAX));
+                    await new Promise(function (ok) { setTimeout(ok, 1500 * n); });
+                }
+            }
+        }
+        throw new Error(T().fail.replace('{m}', MAX).replace('{e}', last || ''));
+    };
+})();
+// ===== LG-PROGRESS-FAST-V1 (จบ) =====
 // ดาวน์โหลดเทมเพลต Excel สำหรับอัปโหลดแพลน
 (function () {
     if (window.__tagMenuV1) return; window.__tagMenuV1 = true;
@@ -32913,7 +32988,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
         try {
             popSaving('กำลังบันทึกความคืบหน้า...');
             const by = (typeof currentUser !== 'undefined' && currentUser && currentUser.username) || '';
-            for (const v of list) await callAppsScript('saveLGLineProgress', { line: v.line, planDate: v.planDate, WO: v.WO, producedQty: v.producedQty, doneWOs: v.doneWOs, partial: v.partial, by });
+            if (!(window.__lgProgFast && await window.__lgProgFast(list, by))) for (const v of list) await callAppsScript('saveLGLineProgress', { line: v.line, planDate: v.planDate, WO: v.WO, producedQty: v.producedQty, doneWOs: v.doneWOs, partial: v.partial, by });
             const stamp = new Date().toISOString();
             let base = (Array.isArray(db.lgLineProgress) ? db.lgLineProgress : progRows());
             list.forEach(v => {
