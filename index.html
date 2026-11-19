@@ -20651,6 +20651,551 @@ window.renderLGMatchTable = function() {
     };
 })();
 // ===== LG-PROGRESS-FAST-V1 (จบ) =====
+(function () {
+    if (window.__lgIdleV1) return; window.__lgIdleV1 = true;
+    var isEn = function () { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e) { return false; } };
+    var PRE = ['ส่งของไม่ทัน', 'ของขาด/ไม่ครบ', 'ป้ายแท็กผิด', 'ของ NG', 'ส่งผิดรุ่น/ผิด WO', 'รอ ATECH ยืนยัน'];
+    var TX = {
+        th: {
+            title: 'จอดไลน์เพราะ ATECH', today: 'วันนี้', add: 'บันทึกจอดไลน์', rep: 'รายงานรายเดือน', none: 'ไม่มีการจอดไลน์', noneSub: 'ไม่มีไลน์ใดจอดเพราะ ATECH',
+            cnt: 'จอดไลน์ {n} ครั้ง · รวม {m}', month: 'เดือนนี้รวม {n} ครั้ง · {m}', mo0: 'เดือนนี้ยังไม่มีการจอดไลน์', ongoing: 'ยังจอดอยู่', endBtn: 'จบการจอด', line: 'ไลน์', min: 'นาที', hr: 'ชม.',
+            fault: 'เกิดจากใคร', fA: 'ATECH', fO: 'LG / อื่นๆ', lines: 'ไลน์', lineOther: 'ไลน์อื่น (พิมพ์)', reasons: 'สาเหตุ (เลือกได้หลายข้อ)', reasonOther: 'สาเหตุอื่นๆ (พิมพ์)', date: 'วันที่', start: 'เริ่มจอด', end: 'จบ', still: 'ยังจอดอยู่',
+            wo: 'WO / Part ที่เกี่ยวข้อง (ไม่บังคับ)', note: 'หมายเหตุ', notePh: 'เช่น รอแร็ค 2 ใบจากโกดัง', save: 'บันทึก', cancel: 'ยกเลิก', fTitle: 'บันทึกจอดไลน์', fEdit: 'แก้ไขรายการจอดไลน์',
+            vLine: 'ยังไม่ได้เลือกไลน์', vRs: 'ยังไม่ได้เลือกสาเหตุ', vSt: 'ใส่เวลาเริ่มจอด', vEn: 'ใส่เวลาจบ หรือติ๊ก "ยังจอดอยู่"', vSame: 'เวลาเริ่มและจบเท่ากัน', vDate: 'ใส่วันที่',
+            saved: 'บันทึกแล้ว', ended: 'จบการจอดแล้ว', deleted: 'ลบรายการแล้ว', fail: 'บันทึกไม่สำเร็จ: ', gsOld: 'Google Script ยังไม่อัปเดต — วาง LG-IDLE-GS แล้ว Deploy เวอร์ชันใหม่ก่อน',
+            endT: 'จบการจอดไลน์ {l}', endAt: 'เวลาที่ไลน์กลับมาเดินเครื่อง', delQ: 'ลบรายการนี้?', del: 'ลบ',
+            rTitle: 'รายงานจอดไลน์', rCnt: 'จำนวนครั้ง', rTot: 'เวลารวม', rAvg: 'เฉลี่ยต่อครั้ง', rDays: 'วันที่มีเหตุ', rDaysU: 'วัน', byR: 'แยกตามสาเหตุ', byL: 'แยกตามไลน์', onlyA: 'เฉพาะ ATECH', all: 'ทั้งหมด',
+            cDate: 'วันที่', cTime: 'เวลา', cLine: 'ไลน์', cWho: 'เกิดจาก', cRs: 'สาเหตุ', cMin: 'นาที', cWo: 'WO / หมายเหตุ', cBy: 'บันทึกโดย', empty: 'เดือนนี้ไม่มีรายการจอดไลน์', xl: 'ดาวน์โหลด Excel', close: 'ปิด', loading: 'กำลังโหลด...', hh: 'ชม.', gsBadShort: 'ยังไม่ได้อัปเดต Google Script'
+        },
+        en: {
+            title: 'Line stops caused by ATECH', today: 'Today', add: 'Log line stop', rep: 'Monthly report', none: 'No line stops', noneSub: 'No line stopped because of ATECH',
+            cnt: '{n} stop(s) · total {m}', month: 'This month: {n} stop(s) · {m}', mo0: 'No line stops this month', ongoing: 'Still stopped', endBtn: 'End stop', line: 'Line', min: 'min', hr: 'h',
+            fault: 'Caused by', fA: 'ATECH', fO: 'LG / other', lines: 'Line', lineOther: 'Other line (type)', reasons: 'Reason (select one or more)', reasonOther: 'Other reason (type)', date: 'Date', start: 'Stopped at', end: 'Resumed at', still: 'Still stopped',
+            wo: 'Related WO / Part (optional)', note: 'Note', notePh: 'e.g. waiting for 2 racks from warehouse', save: 'Save', cancel: 'Cancel', fTitle: 'Log line stop', fEdit: 'Edit line stop',
+            vLine: 'Select a line', vRs: 'Select a reason', vSt: 'Enter the start time', vEn: 'Enter the end time or tick "Still stopped"', vSame: 'Start and end times are the same', vDate: 'Enter the date',
+            saved: 'Saved', ended: 'Stop ended', deleted: 'Deleted', fail: 'Could not save: ', gsOld: 'Google Script is not updated — paste LG-IDLE-GS and deploy a new version first',
+            endT: 'End stop on line {l}', endAt: 'Time the line resumed', delQ: 'Delete this entry?', del: 'Delete',
+            rTitle: 'Line stop report', rCnt: 'Stops', rTot: 'Total time', rAvg: 'Average per stop', rDays: 'Days affected', rDaysU: 'days', byR: 'By reason', byL: 'By line', onlyA: 'ATECH only', all: 'All',
+            cDate: 'Date', cTime: 'Time', cLine: 'Line', cWho: 'Caused by', cRs: 'Reason', cMin: 'Min', cWo: 'WO / note', cBy: 'Logged by', empty: 'No line stops this month', xl: 'Download Excel', close: 'Close', loading: 'Loading...', hh: 'h', gsBadShort: 'Google Script not updated'
+        }
+    };
+    var EN_PRE = ['Delivered late', 'Parts short / incomplete', 'Wrong tag label', 'NG parts', 'Wrong model / WO', 'Waiting for ATECH confirmation'];
+    var T = function (k) { return TX[isEn() ? 'en' : 'th'][k]; };
+    function fmt(s, o) { return String(s).replace(/\{(\w+)\}/g, function (m, k) { return o[k]; }); }
+    function dispR(r) { var i = PRE.indexOf(r); return (isEn() && i >= 0) ? EN_PRE[i] : r; }
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function $(s, r) { return (r || document).querySelector(s); }
+    function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+    function p2(n) { return String(n).padStart(2, '0'); }
+    function todayStr() { var d = new Date(); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+    function nowHM() { var d = new Date(); return p2(d.getHours()) + ':' + p2(d.getMinutes()); }
+    function selDate() { var d = document.getElementById('lgd-date'); return (d && d.value) || todayStr(); }
+    function me() { return (typeof currentUser !== 'undefined' && currentUser && currentUser.username) || ''; }
+    function isAdmin() { return typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'admin'; }
+    function dmy(d) { var a = String(d).split('-'); return a.length === 3 ? a[2] + '/' + a[1] : d; }
+    function hm4(t) { var a = String(t || '').split(':'); return a.length > 1 ? p2(a[0]) + ':' + a[1] : t; }
+    function dur(m) { m = Math.max(0, Math.round(m)); if (m < 60) return m + ' ' + T('min'); var h = Math.floor(m / 60), r = m % 60; return h + ' ' + T('hr') + (r ? ' ' + r + ' ' + T('min') : ''); }
+    function minsOf(r) {   // ยังจอดอยู่ → คิดถึงเวลาปัจจุบัน
+        if (r.endTime) return Number(r.minutes) || 0;
+        var a = String(r.date).split('-'), t = String(r.startTime).split(':');
+        var st = new Date(+a[0], +a[1] - 1, +a[2], +t[0], +t[1]);
+        return Math.max(0, Math.floor((Date.now() - st.getTime()) / 60000));
+    }
+    var S = { month: '', rows: [], gsBad: false, loading: false, at: 0, fil: 'A' };
+    function mOf(d) { return String(d).slice(0, 7); }
+ 
+    // ---------- ข้อมูล ----------
+    function load(month, force) {
+        if (!force && S.month === month && Date.now() - S.at < 5000) return Promise.resolve();
+        S.loading = true;
+        return callAppsScript('getLGLineStops', { month: month }).then(function (r) {
+            S.loading = false; S.gsBad = false; S.month = month; S.at = Date.now();
+            S.rows = (r && r.stops) || [];
+        }).catch(function (e) {
+            S.loading = false; S.at = Date.now();
+            var m = String((e && e.message) || e);
+            if (/Invalid action|ไม่รู้จัก|unknown action/i.test(m)) S.gsBad = true;
+            if (S.month !== month) { S.month = month; S.rows = []; }
+        });
+    }
+    function reduceSave(st) {
+        S.rows = S.rows.filter(function (x) { return x.id !== st.id; });
+        if (mOf(st.date) === S.month || !st.endTime) S.rows.push(st);
+    }
+    function save(o) {
+        return callAppsScript('saveLGLineStop', Object.assign({ by: me() }, o)).then(function (r) { if (r && r.stop) reduceSave(r.stop); return r; });
+    }
+    function errMsg(e) { var m = String((e && e.message) || e); return /Invalid action|ไม่รู้จัก|unknown action/i.test(m) ? T('gsOld') : T('fail') + m; }
+    function toast(t, ok) { if (window.Swal) Swal.fire({ toast: true, position: 'top-end', icon: ok === false ? 'error' : 'success', title: t, showConfirmButton: false, timer: 2200 }); }
+    function lineList() {
+        var set = {};
+        try { (db.lgPlan || []).forEach(function (r) { if (r && r.line) set[String(r.line).trim()] = 1; }); } catch (e) { }
+        try { (db.lgUht || db.lgLineUht || []).forEach(function (r) { if (r && r.line) set[String(r.line).trim()] = 1; }); } catch (e) { }
+        try { (db.lgLineProgress || []).forEach(function (r) { if (r && r.line) set[String(r.line).trim()] = 1; }); } catch (e) { }
+        return Object.keys(set).filter(Boolean).sort(function (a, b) { return a.localeCompare(b, undefined, { numeric: true }); });
+    }
+    function atech(r) { return r.fault !== 'OTHER'; }
+    function stats(rows) { var t = 0, ds = {}; rows.forEach(function (r) { t += minsOf(r); ds[r.date] = 1; }); return { n: rows.length, min: t, days: Object.keys(ds).length }; }
+ 
+    // ---------- CSS ----------
+    var css = document.createElement('style');
+    css.textContent = ''
+        + '#lgi-strip{margin-bottom:16px;padding:16px 20px}#lgi-strip *{box-sizing:border-box}'
+        + '#lgi-strip .lgi-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}#lgi-strip .lgi-t{font-weight:800;font-size:.95rem;color:#0d6efd;display:flex;align-items:center;gap:8px}'
+        + '#lgi-strip .lgi-bt{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}'
+        + '.lgi-b{border:1px solid #cbd5e1;background:#fff;color:#334155;border-radius:10px;padding:7px 13px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}.lgi-b:hover{background:#f1f5f9}'
+        + '.lgi-b.p{background:#dc2626;border-color:#dc2626;color:#fff}.lgi-b.p:hover{background:#b91c1c}.lgi-b.s{padding:4px 10px;font-size:12px}'
+        + '#lgi-strip .lgi-box{border-radius:14px;padding:12px 16px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}'
+        + '#lgi-strip .lgi-box.ok{background:#f0fdf4;border:1px solid #bbf7d0}#lgi-strip .lgi-box.bad{background:#fef2f2;border:1px solid #fecaca;align-items:flex-start}'
+        + '#lgi-strip .lgi-n{font-size:34px;font-weight:800;line-height:1}#lgi-strip .ok .lgi-n{color:#16a34a}#lgi-strip .bad .lgi-n{color:#dc2626}'
+        + '#lgi-strip .lgi-tx b{display:block;font-size:14px}#lgi-strip .ok b{color:#166534}#lgi-strip .bad b{color:#b91c1c}#lgi-strip .lgi-tx small{display:block;color:#64748b;font-size:12px;margin-top:2px}'
+        + '#lgi-strip .lgi-evs{flex:1;min-width:260px}.lgi-ev{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:7px 0;border-top:1px dashed #fecaca;font-size:13px}.lgi-ev:first-child{border-top:0;padding-top:0}'
+        + '.lgi-tag{background:#fff;border:1px solid #fecaca;color:#b91c1c;border-radius:999px;padding:1px 9px;font-size:12px;white-space:nowrap}.lgi-ln{font-weight:800;color:#0f172a}'
+        + '.lgi-live{background:#dc2626;color:#fff;border-radius:999px;padding:1px 9px;font-size:12px;white-space:nowrap;animation:lgiB 1.2s infinite}@keyframes lgiB{50%{opacity:.55}}'
+        + '.lgi-tm{margin-left:auto;color:#475569;white-space:nowrap}.lgi-ev .lgi-ic{border:0;background:transparent;color:#94a3b8;cursor:pointer;padding:2px 5px;border-radius:6px}.lgi-ev .lgi-ic:hover{background:#fee2e2;color:#dc2626}'
+        + '.lgi-warn{font-size:12px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:4px 10px;margin-top:8px}'
+        + 'body.lgi-open .swal2-container{z-index:100050!important}'
+        + '.lgi-pop{width:min(520px,96vw)!important;text-align:left!important}.lgi-pop .swal2-html-container{margin:0!important;padding:0 18px!important;text-align:left!important}'
+        + '.lgi-f .fl{margin-bottom:12px}.lgi-f .fl>b{display:block;font-size:12px;color:#64748b;margin-bottom:5px;font-weight:700}'
+        + '.lgi-f .cp{display:inline-block;border:1.5px solid #cbd5e1;border-radius:999px;padding:5px 12px;margin:0 6px 6px 0;font-size:13px;font-weight:700;background:#fff;color:#334155;cursor:pointer;user-select:none}'
+        + '.lgi-f .cp.on{background:#fee2e2;border-color:#ef4444;color:#b91c1c}.lgi-f .cp.on.o{background:#e0e7ff;border-color:#6366f1;color:#3730a3}'
+        + '.lgi-f .tg{display:inline-flex;border:1.5px solid #cbd5e1;border-radius:10px;overflow:hidden}.lgi-f .tg span{padding:7px 18px;font-weight:700;cursor:pointer;font-size:13px;color:#475569}.lgi-f .tg span.on{background:#dc2626;color:#fff}.lgi-f .tg span.on[data-f="OTHER"]{background:#4f46e5}'
+        + '.lgi-f input[type=text],.lgi-f input[type=time],.lgi-f input[type=date]{width:100%;border:1.5px solid #cbd5e1;border-radius:10px;padding:8px 11px;font:inherit;font-size:14px;background:#fff}.lgi-f input:focus{outline:0;border-color:#2563eb}'
+        + '.lgi-f .g2{display:flex;gap:10px}.lgi-f .g2>div{flex:1}.lgi-f .er{color:#dc2626;font-size:13px;font-weight:700;min-height:18px}'
+        + '#lgi-rp-ov{position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:14px}'
+        + '#lgi-rp{background:#fff;border-radius:18px;width:min(1000px,100%);max-height:94vh;overflow:auto;padding:20px 22px;font-family:inherit;color:#0f172a;box-shadow:0 24px 70px rgba(0,0,0,.35)}#lgi-rp *{box-sizing:border-box}'
+        + '#lgi-rp .hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}#lgi-rp .hd h3{margin:0;font-size:1.1rem;font-weight:800;color:#0d6efd;margin-right:auto}'
+        + '#lgi-rp input[type=month]{border:1.5px solid #cbd5e1;border-radius:10px;padding:6px 10px;font:inherit}'
+        + '#lgi-rp .sg{display:inline-flex;border:1.5px solid #cbd5e1;border-radius:10px;overflow:hidden}#lgi-rp .sg span{padding:6px 12px;font-size:13px;font-weight:700;cursor:pointer;color:#475569}#lgi-rp .sg span.on{background:#0d6efd;color:#fff}'
+        + '#lgi-rp .kp{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}#lgi-rp .kk{flex:1;min-width:130px;background:#f8fafc;border-radius:12px;padding:10px 14px}#lgi-rp .kk .v{font-size:24px;font-weight:800}#lgi-rp .kk .t{font-size:12px;color:#64748b}'
+        + '#lgi-rp .bars{display:flex;gap:26px;flex-wrap:wrap;margin-bottom:14px}#lgi-rp .bars>div{flex:1;min-width:250px}#lgi-rp .bars h5{font-size:12px;color:#64748b;margin:0 0 6px;font-weight:700}'
+        + '#lgi-rp .br{display:flex;gap:8px;align-items:center;margin:5px 0;font-size:12px}#lgi-rp .br .nm{width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#lgi-rp .br .tr{flex:1;background:#e2e8f0;border-radius:6px;height:10px}#lgi-rp .br .tr i{display:block;height:10px;border-radius:6px;background:#ef4444}#lgi-rp .br.l .tr i{background:#f97316}#lgi-rp .br .v{width:54px;text-align:right;color:#475569}'
+        + '#lgi-rp table{width:100%;border-collapse:collapse;font-size:13px}#lgi-rp th{text-align:left;color:#64748b;font-weight:700;padding:8px;background:#f8fafc;white-space:nowrap}#lgi-rp td{padding:8px;border-top:1px solid #eef2f7;vertical-align:top}'
+        + '#lgi-rp .fo{font-size:11px;font-weight:700;border-radius:999px;padding:1px 8px;white-space:nowrap}#lgi-rp .fo.A{background:#fee2e2;color:#b91c1c}#lgi-rp .fo.O{background:#e0e7ff;color:#3730a3}#lgi-rp .em{text-align:center;color:#94a3b8;padding:26px}';
+    document.head.appendChild(css);
+ 
+    // ---------- การ์ดบนแดชบอร์ด ----------
+    function evHtml(r, withDate) {
+        var rs = String(r.reasons || '').split('|').filter(Boolean).map(function (x) { return '<span class="lgi-tag">' + esc(dispR(x.trim())) + '</span>'; }).join('');
+        var tm = r.endTime ? hm4(r.startTime) + ' – ' + hm4(r.endTime) + ' (' + dur(r.minutes) + ')' : hm4(r.startTime) + ' → … ' + dur(minsOf(r));
+        var act = '';
+        if (!r.endTime) act += '<button class="lgi-b p s" data-a="end" data-id="' + esc(r.id) + '">' + T('endBtn') + '</button>';
+        if (isAdmin()) act += '<button class="lgi-ic" data-a="edit" data-id="' + esc(r.id) + '" title="Edit"><i class="bi bi-pencil-fill"></i></button><button class="lgi-ic" data-a="del" data-id="' + esc(r.id) + '" title="Delete"><i class="bi bi-trash3-fill"></i></button>';
+        return '<div class="lgi-ev">' + (r.endTime ? '' : '<span class="lgi-live">● ' + T('ongoing') + '</span>') + '<span class="lgi-ln">' + T('line') + ' ' + esc(r.line) + '</span>' + rs
+            + (withDate ? '<span class="lgi-tag" style="color:#b45309;border-color:#fde68a">' + dmy(r.date) + '</span>' : '')
+            + '<span class="lgi-tm" style="' + (r.endTime ? '' : 'color:#b91c1c;font-weight:700') + '">' + tm + '</span>' + act + '</div>';
+    }
+    function stripHtml() {
+        var d = selDate(), mo = mOf(d), isToday = d === todayStr();
+        var day = S.rows.filter(function (r) { return r.date === d && atech(r); });
+        var carry = S.rows.filter(function (r) { return !r.endTime && atech(r) && r.date !== d; });   // ค้างจากวันอื่น
+        var mon = S.rows.filter(function (r) { return mOf(r.date) === mo && atech(r); });
+        var sd = stats(day), sm = stats(mon);
+        var ttl = T('title') + ' — ' + (isToday ? T('today') : d.split('-').reverse().join('/'));
+        var h = '<div class="lgi-h"><div class="lgi-t"><i class="bi bi-pause-circle-fill"></i> ' + ttl + '</div><div class="lgi-bt"><button class="lgi-b" data-a="add"><i class="bi bi-plus-lg"></i> ' + T('add') + '</button><button class="lgi-b" data-a="rep"><i class="bi bi-bar-chart-line-fill"></i> ' + T('rep') + '</button></div></div>';
+        var monTxt = sm.n ? fmt(T('month'), { n: sm.n, m: dur(sm.min) }) : T('mo0');
+        if (!day.length && !carry.length) {
+            h += '<div class="lgi-box ok"><div class="lgi-n">0</div><div class="lgi-tx"><b>' + (isToday ? T('none') : T('none')) + ' 🎉</b><small>' + T('noneSub') + ' · ' + monTxt + '</small></div></div>';
+        } else {
+            h += '<div class="lgi-box bad"><div class="lgi-n">' + (sd.n + carry.length) + '</div><div class="lgi-evs"><div class="lgi-tx" style="margin-bottom:8px"><b>' + fmt(T('cnt'), { n: sd.n + carry.length, m: dur(sd.min + carry.reduce(function (a, r) { return a + minsOf(r); }, 0)) }) + '</b><small>' + monTxt + '</small></div>'
+                + carry.concat(day).map(function (r) { return evHtml(r, r.date !== d); }).join('') + '</div></div>';
+        }
+        if (S.gsBad) h += '<div class="lgi-warn">' + T('gsOld') + '</div>';
+        return h;
+    }
+    function drawStrip() {
+        var el = document.getElementById('lgi-strip'); if (!el) return;
+        var h = stripHtml(); if (el.__h !== h) { el.innerHTML = h; el.__h = h; }
+    }
+    function ensureStrip() {
+        var root = document.getElementById('view-dash-lg'); if (!root) return null;
+        var el = document.getElementById('lgi-strip');
+        if (!el) {
+            var kp = root.querySelector('.lgd-kpis'), hd = root.querySelector('.lgd-head');
+            el = document.createElement('div'); el.id = 'lgi-strip'; el.className = 'lgd-card';
+            if (kp) kp.parentNode.insertBefore(el, kp); else if (hd) hd.insertAdjacentElement('afterend', el); else return null;
+            el.addEventListener('click', onStripClick);
+        }
+        return el;
+    }
+    function visible(el) { return !!(el && el.offsetParent !== null && !document.hidden); }
+    var lastMo = '', tick = 0;
+    setInterval(function () {
+        var el = ensureStrip(); if (!el || !visible(el)) return;
+        tick++;
+        var mo = mOf(selDate());
+        if (mo !== lastMo || tick % 180 === 0 || (mo !== S.month && !S.loading && !document.getElementById('lgi-rp-ov'))) { lastMo = mo; load(mo, true).then(drawStrip); }
+        if (!el.__h || tick % 15 === 0 || mo !== S.month) drawStrip();
+    }, 1000);
+    document.addEventListener('change', function (e) { if (e.target && e.target.id === 'lgd-date') setTimeout(drawStrip, 50); }, true);
+    function onStripClick(e) { var b = e.target.closest('[data-a]'); if (b) act(b.getAttribute('data-a'), b.getAttribute('data-id')); }
+    function find(id) { for (var i = 0; i < S.rows.length; i++) if (S.rows[i].id === id) return S.rows[i]; return null; }
+    function after() { drawStrip(); var o = document.getElementById('lgi-rp-ov'); if (o) drawReport(); }
+    function act(a, id) {
+        if (a === 'add') openForm(null); else if (a === 'rep') openReport();
+        else if (a === 'end') openEnd(find(id)); else if (a === 'edit') openForm(find(id)); else if (a === 'del') delRow(find(id));
+    }
+ 
+    // ---------- ฟอร์มบันทึก / แก้ไข ----------
+    function openForm(row) {
+        if (!window.Swal) return;
+        var edit = !!row, d0 = edit ? row.date : selDate();
+        var lines = lineList(), selRs = edit ? String(row.reasons || '').split('|').map(function (x) { return x.trim(); }).filter(Boolean) : [];
+        var custom = selRs.filter(function (x) { return PRE.indexOf(x) < 0; }).join(', ');
+        var chosenRs = selRs.filter(function (x) { return PRE.indexOf(x) >= 0; });
+        var curLine = edit ? row.line : '', otherLine = '';
+        if (curLine && lines.indexOf(curLine) < 0) { otherLine = curLine; curLine = ''; }
+        var ongoing = edit ? !row.endTime : (d0 === todayStr());
+        var html = '<div class="lgi-f">'
+            + '<div class="fl"><b>' + T('fault') + '</b><div class="tg" id="lgi-fault"><span data-f="ATECH" class="' + ((!edit || row.fault !== 'OTHER') ? 'on' : '') + '">' + T('fA') + '</span><span data-f="OTHER" class="' + ((edit && row.fault === 'OTHER') ? 'on' : '') + '">' + T('fO') + '</span></div></div>'
+            + '<div class="fl"><b>' + T('lines') + '</b><div id="lgi-lines">' + lines.map(function (l) { return '<span class="cp' + (l === curLine ? ' on' : '') + '" data-l="' + esc(l) + '">' + esc(l) + '</span>'; }).join('') + '</div><input type="text" id="lgi-line2" maxlength="20" placeholder="' + esc(T('lineOther')) + '" value="' + esc(otherLine) + '"></div>'
+            + '<div class="fl"><b>' + T('reasons') + '</b><div id="lgi-rs">' + PRE.map(function (r) { return '<span class="cp' + (chosenRs.indexOf(r) >= 0 ? ' on' : '') + '" data-r="' + esc(r) + '">' + esc(dispR(r)) + '</span>'; }).join('') + '</div><input type="text" id="lgi-rs2" maxlength="80" placeholder="' + esc(T('reasonOther')) + '" value="' + esc(custom) + '"></div>'
+            + '<div class="fl g2"><div><b style="display:block;font-size:12px;color:#64748b;margin-bottom:5px">' + T('date') + '</b><input type="date" id="lgi-d" value="' + d0 + '"></div><div><b style="display:block;font-size:12px;color:#64748b;margin-bottom:5px">' + T('start') + '</b><input type="time" id="lgi-st" value="' + (edit ? hm4(row.startTime) : nowHM()) + '"></div>'
+            + '<div><b style="display:block;font-size:12px;color:#64748b;margin-bottom:5px">' + T('end') + '</b><input type="time" id="lgi-en" value="' + (edit && row.endTime ? hm4(row.endTime) : '') + '"' + (ongoing ? ' disabled' : '') + '></div></div>'
+            + '<div class="fl"><label style="font-size:13px;font-weight:700;color:#334155;cursor:pointer"><input type="checkbox" id="lgi-on" ' + (ongoing ? 'checked' : '') + ' style="margin-right:6px">' + T('still') + '</label></div>'
+            + '<div class="fl"><b>' + T('wo') + '</b><input type="text" id="lgi-wo" maxlength="120" value="' + esc(edit ? row.woPart : '') + '"></div>'
+            + '<div class="fl"><b>' + T('note') + '</b><input type="text" id="lgi-nt" maxlength="200" placeholder="' + esc(T('notePh')) + '" value="' + esc(edit ? row.note : '') + '"></div>'
+            + '<div class="er" id="lgi-er"></div></div>';
+        document.body.classList.add('lgi-open');
+        Swal.fire({
+            customClass: { popup: 'lgi-pop' }, title: '<span style="font-size:1.05rem;font-weight:800;color:#dc2626">' + (edit ? T('fEdit') : T('fTitle')) + '</span>', html: html, showCancelButton: true, confirmButtonText: T('save'), cancelButtonText: T('cancel'), confirmButtonColor: '#dc2626', focusConfirm: false,
+            didOpen: function (pop) {
+                pop.addEventListener('click', function (e) {
+                    var f = e.target.closest('#lgi-fault span'); if (f) { $$('#lgi-fault span', pop).forEach(function (x) { x.classList.toggle('on', x === f); }); return; }
+                    var l = e.target.closest('#lgi-lines .cp'); if (l) { var was = l.classList.contains('on'); $$('#lgi-lines .cp', pop).forEach(function (x) { x.classList.remove('on'); }); if (!was) { l.classList.add('on'); $('#lgi-line2', pop).value = ''; } return; }
+                    var r = e.target.closest('#lgi-rs .cp'); if (r) { r.classList.toggle('on'); return; }
+                });
+                $('#lgi-line2', pop).addEventListener('input', function () { if (this.value) $$('#lgi-lines .cp', pop).forEach(function (x) { x.classList.remove('on'); }); });
+                $('#lgi-on', pop).addEventListener('change', function () { var en = $('#lgi-en', pop); en.disabled = this.checked; if (this.checked) en.value = ''; else if (!en.value) en.value = nowHM(); });
+            },
+            preConfirm: function () {
+                var pop = Swal.getPopup(), er = $('#lgi-er', pop), bad = function (m) { er.textContent = m; return false; };
+                var lineEl = $('#lgi-lines .cp.on', pop), line = lineEl ? lineEl.getAttribute('data-l') : $('#lgi-line2', pop).value.trim();
+                if (!line) return bad(T('vLine'));
+                var rs = $$('#lgi-rs .cp.on', pop).map(function (x) { return x.getAttribute('data-r'); }), c2 = $('#lgi-rs2', pop).value.replace(/\|/g, '/').trim(); if (c2) rs.push(c2);
+                if (!rs.length) return bad(T('vRs'));
+                var d = $('#lgi-d', pop).value, st = $('#lgi-st', pop).value, on = $('#lgi-on', pop).checked, en = on ? '' : $('#lgi-en', pop).value;
+                if (!d) return bad(T('vDate')); if (!st) return bad(T('vSt')); if (!on && !en) return bad(T('vEn')); if (!on && en === st) return bad(T('vSame'));
+                var o = { id: edit ? row.id : '', date: d, line: line, startTime: st, endTime: en, fault: $('#lgi-fault span.on', pop).getAttribute('data-f'), reasons: rs.join('|'), woPart: $('#lgi-wo', pop).value.trim(), note: $('#lgi-nt', pop).value.trim() };
+                Swal.showLoading();
+                return save(o).then(function () { return true; }).catch(function (e) { Swal.hideLoading(); er.textContent = errMsg(e); return false; });
+            }
+        }).then(function (res) { document.body.classList.remove('lgi-open'); if (res && res.isConfirmed) { toast(T('saved')); after(); if (mOf(selDate()) !== S.month) load(mOf(selDate()), true).then(drawStrip); } });
+    }
+    function openEnd(row) {
+        if (!row || !window.Swal) return;
+        document.body.classList.add('lgi-open');
+        Swal.fire({
+            customClass: { popup: 'lgi-pop' }, title: '<span style="font-size:1.05rem;font-weight:800;color:#dc2626">' + fmt(T('endT'), { l: esc(row.line) }) + '</span>',
+            html: '<div class="lgi-f"><div class="fl"><b>' + T('endAt') + '</b><input type="time" id="lgi-en" value="' + nowHM() + '"></div><div class="er" id="lgi-er"></div></div>',
+            showCancelButton: true, confirmButtonText: T('endBtn'), cancelButtonText: T('cancel'), confirmButtonColor: '#dc2626',
+            preConfirm: function () {
+                var pop = Swal.getPopup(), er = $('#lgi-er', pop), en = $('#lgi-en', pop).value;
+                if (!en) { er.textContent = T('vEn'); return false; } if (en === row.startTime) { er.textContent = T('vSame'); return false; }
+                Swal.showLoading();
+                return save({ id: row.id, date: row.date, line: row.line, startTime: row.startTime, endTime: en, fault: row.fault, reasons: row.reasons, woPart: row.woPart, note: row.note }).then(function () { return true; }).catch(function (e) { Swal.hideLoading(); er.textContent = errMsg(e); return false; });
+            }
+        }).then(function (res) { document.body.classList.remove('lgi-open'); if (res && res.isConfirmed) { toast(T('ended')); after(); } });
+    }
+    function delRow(row) {
+        if (!row || !window.Swal) return;
+        document.body.classList.add('lgi-open');
+        Swal.fire({ title: T('delQ'), text: T('line') + ' ' + row.line + ' · ' + dmy(row.date) + ' ' + hm4(row.startTime), icon: 'warning', showCancelButton: true, confirmButtonText: T('del'), cancelButtonText: T('cancel'), confirmButtonColor: '#dc2626',
+            preConfirm: function () { Swal.showLoading(); return callAppsScript('deleteLGLineStop', { id: row.id, by: me() }).then(function () { S.rows = S.rows.filter(function (x) { return x.id !== row.id; }); return true; }).catch(function (e) { Swal.hideLoading(); Swal.showValidationMessage(errMsg(e)); return false; }); }
+        }).then(function (res) { document.body.classList.remove('lgi-open'); if (res && res.isConfirmed) { toast(T('deleted')); after(); } });
+    }
+ 
+    // ---------- รายงานรายเดือน ----------
+    var RM = '';
+    function repRows() {
+        return S.rows.filter(function (r) { return mOf(r.date) === RM && (S.fil === 'ALL' || atech(r)); }).sort(function (a, b) { return (b.date + b.startTime).localeCompare(a.date + a.startTime); });
+    }
+    function drawReport() {
+        var box = document.getElementById('lgi-rp-body'); if (!box) return;
+        if (S.month !== RM) { box.innerHTML = '<div class="em">' + T('loading') + '</div>'; return; }
+        var rows = repRows(), st = stats(rows), y = +RM.slice(0, 4), m = +RM.slice(5, 7), now = new Date();
+        var dim = (y === now.getFullYear() && m === now.getMonth() + 1) ? now.getDate() : new Date(y, m, 0).getDate();
+        var byR = {}, byL = {};
+        rows.forEach(function (r) {
+            var mi = minsOf(r);
+            String(r.reasons || '').split('|').filter(Boolean).forEach(function (x) { x = x.trim(); (byR[x] = byR[x] || { n: 0, m: 0 }); byR[x].n++; byR[x].m += mi; });
+            (byL[r.line] = byL[r.line] || { n: 0, m: 0 }); byL[r.line].n++; byL[r.line].m += mi;
+        });
+        var bars = function (o, cls, lab) {
+            var ks = Object.keys(o).sort(function (a, b) { return o[b].n - o[a].n || o[b].m - o[a].m; }), mx = ks.length ? o[ks[0]].n : 1;
+            return ks.map(function (k) { return '<div class="br ' + cls + '"><span class="nm" title="' + esc(lab(k)) + '">' + esc(lab(k)) + '</span><span class="tr"><i style="width:' + Math.max(6, Math.round(o[k].n / mx * 100)) + '%"></i></span><span class="v">' + o[k].n + ' · ' + o[k].m + '′</span></div>'; }).join('');
+        };
+        var h = '<div class="kp"><div class="kk"><div class="v" style="color:' + (st.n ? '#dc2626' : '#16a34a') + '">' + st.n + '</div><div class="t">' + T('rCnt') + '</div></div>'
+            + '<div class="kk"><div class="v">' + dur(st.min) + '</div><div class="t">' + T('rTot') + '</div></div>'
+            + '<div class="kk"><div class="v">' + (st.n ? dur(st.min / st.n) : '–') + '</div><div class="t">' + T('rAvg') + '</div></div>'
+            + '<div class="kk"><div class="v">' + st.days + ' <small style="font-size:13px;font-weight:600">/ ' + dim + ' ' + T('rDaysU') + '</small></div><div class="t">' + T('rDays') + '</div></div></div>';
+        if (!rows.length) { box.innerHTML = h + '<div class="em">🎉 ' + T('empty') + '</div>'; return; }
+        h += '<div class="bars"><div><h5>' + T('byR') + '</h5>' + bars(byR, 'r', dispR) + '</div><div><h5>' + T('byL') + '</h5>' + bars(byL, 'l', function (k) { return T('line') + ' ' + k; }) + '</div></div>';
+        h += '<div style="overflow:auto"><table><thead><tr><th>' + T('cDate') + '</th><th>' + T('cTime') + '</th><th>' + T('cLine') + '</th><th>' + T('cWho') + '</th><th>' + T('cRs') + '</th><th>' + T('cMin') + '</th><th>' + T('cWo') + '</th><th>' + T('cBy') + '</th>' + (isAdmin() ? '<th></th>' : '') + '</tr></thead><tbody>'
+            + rows.map(function (r) {
+                var rs = String(r.reasons || '').split('|').filter(Boolean).map(function (x) { return dispR(x.trim()); }).join(', ');
+                var wn = [r.woPart, r.note].filter(Boolean).map(esc).join(' · ');
+                return '<tr><td>' + dmy(r.date) + '</td><td style="white-space:nowrap">' + hm4(r.startTime) + ' – ' + (r.endTime ? hm4(r.endTime) : '<b style="color:#dc2626">…</b>') + '</td><td><b>' + esc(r.line) + '</b></td><td><span class="fo ' + (atech(r) ? 'A' : 'O') + '">' + (atech(r) ? T('fA') : T('fO')) + '</span></td><td>' + esc(rs) + '</td><td style="font-weight:700;' + (r.endTime ? '' : 'color:#dc2626') + '">' + minsOf(r) + (r.endTime ? '' : '+') + '</td><td>' + wn + '</td><td>' + esc(r.updatedBy || r.createdBy) + '</td>'
+                    + (isAdmin() ? '<td style="white-space:nowrap"><button class="lgi-ic" style="border:0;background:transparent;cursor:pointer;color:#94a3b8" data-a="edit" data-id="' + esc(r.id) + '"><i class="bi bi-pencil-fill"></i></button><button class="lgi-ic" style="border:0;background:transparent;cursor:pointer;color:#94a3b8" data-a="del" data-id="' + esc(r.id) + '"><i class="bi bi-trash3-fill"></i></button></td>' : '') + '</tr>';
+            }).join('') + '</tbody></table></div>';
+        box.innerHTML = h;
+    }
+    function exportXl() {
+        var rows = repRows().slice().reverse();
+        var hd = [T('cDate'), T('start'), T('end'), T('cMin'), T('cLine'), T('cWho'), T('cRs'), 'WO / Part', T('note'), T('cBy')];
+        var data = rows.map(function (r) { return [r.date, hm4(r.startTime), r.endTime ? hm4(r.endTime) : '', minsOf(r), r.line, atech(r) ? 'ATECH' : 'LG/other', String(r.reasons || '').split('|').map(function (x) { return dispR(x.trim()); }).join(', '), r.woPart, r.note, r.updatedBy || r.createdBy]; });
+        var fname = 'LG_LineStops_' + RM;
+        try {
+            if (window.XLSX && XLSX.utils) { var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([hd].concat(data)), 'LineStops'); XLSX.writeFile(wb, fname + '.xlsx'); return; }
+        } catch (e) { }
+        var csv = '﻿' + [hd].concat(data).map(function (r) { return r.map(function (c) { return '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"'; }).join(','); }).join('\r\n');
+        var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = fname + '.csv'; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    }
+    function closeReport() { var o = document.getElementById('lgi-rp-ov'); if (o) o.remove(); document.removeEventListener('keydown', onKeyRp, true); }
+    function onKeyRp(e) { if (e.key === 'Escape' && !document.querySelector('.swal2-popup:not(.swal2-toast)')) closeReport(); }
+    function openReport() {
+        closeReport(); RM = mOf(selDate());
+        var ov = document.createElement('div'); ov.id = 'lgi-rp-ov';
+        ov.innerHTML = '<div id="lgi-rp"><div class="hd"><h3><i class="bi bi-bar-chart-line-fill me-2"></i>' + T('rTitle') + '</h3><input type="month" id="lgi-rm" value="' + RM + '"><div class="sg" id="lgi-fil"><span data-v="A" class="' + (S.fil === 'A' ? 'on' : '') + '">' + T('onlyA') + '</span><span data-v="ALL" class="' + (S.fil === 'ALL' ? 'on' : '') + '">' + T('all') + '</span></div><button class="lgi-b" data-x="xl"><i class="bi bi-file-earmark-excel-fill"></i> ' + T('xl') + '</button><button class="lgi-b" data-x="close">' + T('close') + '</button></div><div id="lgi-rp-body"></div></div>';
+        document.body.appendChild(ov);
+        ov.addEventListener('mousedown', function (e) { if (e.target === ov) closeReport(); });
+        ov.addEventListener('click', function (e) {
+            var x = e.target.closest('[data-x]'); if (x) { if (x.getAttribute('data-x') === 'close') closeReport(); else exportXl(); return; }
+            var v = e.target.closest('#lgi-fil span'); if (v) { S.fil = v.getAttribute('data-v'); $$('#lgi-fil span', ov).forEach(function (s) { s.classList.toggle('on', s === v); }); drawReport(); return; }
+            var b = e.target.closest('[data-a]'); if (b) act(b.getAttribute('data-a'), b.getAttribute('data-id'));
+        });
+        $('#lgi-rm', ov).addEventListener('change', function () { if (!this.value) return; RM = this.value; drawReport(); load(RM, true).then(function () { drawReport(); drawStrip(); }); });
+        document.addEventListener('keydown', onKeyRp, true);
+        drawReport();
+        if (S.month !== RM) load(RM, true).then(drawReport); else load(RM, true).then(drawReport);
+    }
+    window.__lgIdleApi = { rows: function () { return S.rows; }, atech: atech, minsOf: minsOf, dispR: dispR, dur: dur, hm4: hm4, dmy: dmy, end: function (id) { openEnd(find(id)); } };
+    window.lgIdleOpen = function () { openForm(null); }; window.lgIdleReport = openReport;
+})();
+// ===== LG-IDLE-V1 (จบ) =====
+(function () {
+    if (window.__lgIdleLineV1) return; window.__lgIdleLineV1 = true;
+    var isEn = function () { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e) { return false; } };
+    var TX = {
+        th: { stop: 'จอดไลน์', line: 'ไลน์', noWo: 'ไม่มี WO กำลังผลิต', since: 'เริ่ม', end: 'จบการจอด', hist: 'วันนี้จอดมาแล้ว', histD: 'จอดมาแล้ว', times: 'ครั้ง', still: 'ยังจอดอยู่', title: 'LG กำลังผลิตอยู่ตอนนี้',
+              tTitle: 'จอดไลน์เพราะ ATECH', today: 'วันนี้', byLine: 'แยกตามไลน์', total: 'รวม', mo: 'เดือนนี้', cLine: 'ไลน์', cCnt: 'จำนวน', cTot: 'รวม', cDet: 'รายละเอียด (เวลา · สาเหตุ)', none: 'ไม่มีการจอด',
+              zero: 'ไม่มีไลน์ใดจอดเพราะ ATECH', zeroT: '0 ครั้ง' },
+        en: { stop: 'Line stopped', line: 'Line', noWo: 'No WO running', since: 'Since', end: 'End stop', hist: 'Stopped earlier today:', histD: 'Stopped:', times: 'time(s)', still: 'still stopped', title: 'Where LG is running',
+              tTitle: 'Line stops caused by ATECH', today: 'Today', byLine: 'by line', total: 'Total', mo: 'This month', cLine: 'Line', cCnt: 'Stops', cTot: 'Total', cDet: 'Details (time · reason)', none: 'No stops',
+              zero: 'No line stopped because of ATECH', zeroT: '0 stops' }
+    };
+    var T = function () { return TX[isEn() ? 'en' : 'th']; };
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function $(s, r) { return (r || document).querySelector(s); }
+    function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+    function A() { return window.__lgIdleApi; }
+    function p2(n) { return String(n).padStart(2, '0'); }
+    function todayStr() { var d = new Date(); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+    function selDate() { var d = document.getElementById('lgd-date'); return (d && d.value) || todayStr(); }
+    function selLines() { return $$('#lgd-linemenu input:checked').map(function (i) { return String(i.value).trim(); }); }
+    var css = document.createElement('style');
+    css.textContent = '@keyframes lgi2B{50%{opacity:.4}}.lgi2-bl{animation:lgi2B 1s infinite}@keyframes lgi2G{50%{box-shadow:0 0 0 4px rgba(220,38,38,.18)}}.lgi2-gl{animation:lgi2G 1.4s infinite}.lgi2-end{border:0;background:#dc2626;color:#fff;border-radius:8px;padding:4px 11px;font-weight:700;font-size:12px;cursor:pointer;margin-left:auto;white-space:nowrap}.lgi2-end:hover{background:#b91c1c}';
+    document.head.appendChild(css);
+ 
+    // ---------- ข้อมูล: ต่อไลน์ ----------
+    function model(d) {
+        var api = A(); if (!api) return null;
+        var rows = (api.rows() || []).filter(api.atech), isToday = d === todayStr();
+        var stopped = {}, hist = {}, all = {};
+        rows.forEach(function (r) {
+            var line = String(r.line).trim(), ongoing = !r.endTime;
+            var inDay = r.date === d;
+            if (ongoing && isToday) { (stopped[line] = stopped[line] || []).push(r); }
+            if (inDay || (ongoing && isToday)) { (all[line] = all[line] || []).push(r); }
+            if (inDay && !(ongoing && isToday)) { var h = hist[line] = hist[line] || { n: 0, m: 0, rows: [] }; h.n++; h.m += api.minsOf(r); h.rows.push(r); }
+        });
+        return { stopped: stopped, hist: hist, all: all, isToday: isToday };
+    }
+    var DOT = '<span style="display:inline-block;width:3px;height:10px;background:currentColor;margin-right:2px;vertical-align:-1px"></span><span style="display:inline-block;width:3px;height:10px;background:currentColor;margin-right:5px;vertical-align:-1px"></span>';
+    function pill(rows, live) {
+        var api = A(), mins = rows.reduce(function (a, r) { return a + api.minsOf(r); }, 0);
+        return '<span class="' + (live ? 'lgi2-bl' : '') + '" style="margin-left:auto;background:#dc2626;color:#fff;border-radius:999px;padding:3px 11px;font-size:11.5px;font-weight:800;white-space:nowrap;">' + DOT + T().stop + ' · ' + api.dur(mins) + '</span>';
+    }
+    function reasonBox(r, live) {
+        var api = A(), rs = String(r.reasons || '').split('|').filter(Boolean).map(function (x) { return '<span style="background:#fee2e2;color:#b91c1c;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:700;white-space:nowrap;">' + esc(api.dispR(x.trim())) + '</span>'; }).join('');
+        var since = T().since + ' ' + (r.date !== todayStr() ? api.dmy(r.date) + ' ' : '') + api.hm4(r.startTime);
+        var extra = [r.woPart, r.note].filter(Boolean).map(esc).join(' · ');
+        return '<div style="margin-top:8px;border:1px dashed #fca5a5;background:#fff;border-radius:10px;padding:6px 10px;font-size:12.5px;color:#334155;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">' + rs + '<span>' + since + (extra ? ' · ' + extra : '') + '</span>'
+            + (live ? '<button type="button" class="lgi2-end" data-lgi2-end="' + esc(r.id) + '">' + T().end + '</button>' : '') + '</div>';
+    }
+    function histChip(h) {
+        var api = A();
+        return '<div style="margin-top:8px;display:inline-block;background:#fffbeb;border:1px solid #fde68a;color:#b45309;border-radius:8px;padding:2px 10px;font-size:12px;font-weight:700;">' + DOT + T().hist + ' ' + h.n + ' ' + T().times + ' · ' + api.dur(h.m) + '</div>';
+    }
+    function lineOfCard(card) {
+        var h = card.firstElementChild, sp = h && h.querySelector('span'); if (!sp) return '';
+        var m = sp.textContent.trim().match(/^(?:ไลน์|Line)\s+(.+)$/); return m ? m[1].trim() : '';
+    }
+    function stopCardHtml(line, rows, live) {
+        return '<div ' + (live ? 'class="lgi2-gl" ' : '') + 'data-lgi2x="1" style="border:1px solid #fecaca;border-left:5px solid #dc2626;border-radius:12px;padding:9px 14px;background:#fef2f2;break-inside:avoid;">'
+            + '<div style="display:flex;align-items:center;gap:8px;"><span style="background:#1b2a41;color:#fff;font-weight:800;font-size:12px;padding:2px 10px;border-radius:6px;">' + T().line + ' ' + esc(line) + '</span>' + pill(rows, live) + '</div>'
+            + '<div style="margin-top:6px;font-size:15px;font-weight:800;color:#64748b;">' + T().noWo + '</div>' + rows.map(function (r) { return reasonBox(r, live); }).join('') + '</div>';
+    }
+    // แต่งการ์ดไลน์ที่ LG-RUN วาดไว้แล้ว
+    function decorate(card, line, M, live) {
+        var st = M.stopped[line] || [], h = M.hist[line];
+        var api = A();
+        var sig = JSON.stringify([live, isEn(), st.map(function (r) { return r.id + ':' + api.minsOf(r); }), h ? h.n + ':' + h.m : '']);
+        if (card.__lgi2 && card.__lgi2.sig === sig) return;
+        if (card.__lgi2) { card.innerHTML = card.__lgi2.h; card.setAttribute('style', card.__lgi2.s); card.classList.remove('lgi2-gl'); }
+        else card.__lgi2 = { h: card.innerHTML, s: card.getAttribute('style') || '' };
+        card.__lgi2.sig = sig;
+        if (!st.length && !h) return;
+        if (st.length) {
+            card.style.borderColor = '#fecaca'; card.style.borderLeftColor = '#dc2626'; card.style.background = '#fef2f2'; if (live) card.classList.add('lgi2-gl');
+            var hd = card.firstElementChild, sps = hd ? hd.children : [], status = sps[1] || null;
+            var wrap = document.createElement('div'); wrap.innerHTML = pill(st, live);
+            if (status) status.replaceWith(wrap.firstChild); else if (hd) hd.appendChild(wrap.firstChild);
+            $$('[style]', card).forEach(function (e) { var s = e.getAttribute('style') || ''; if (/background:#2563eb/.test(s)) e.style.background = '#ef4444'; if (/color:#1d4ed8/.test(s) && e.tagName !== 'BUTTON' && !e.classList.contains('lgi2-bl')) e.style.color = '#dc2626'; });
+            card.insertAdjacentHTML('beforeend', st.map(function (r) { return reasonBox(r, live); }).join(''));
+        }
+        if (h) card.insertAdjacentHTML('beforeend', histChip(h));
+    }
+    // ใส่ลงกล่องการ์ด (grid) — แต่งการ์ดเดิม + เพิ่มการ์ดของไลน์ที่จอดแต่ไม่มี WO กำลังผลิต
+    function paintGrid(grid, M, live) {
+        var seen = {};
+        Array.prototype.slice.call(grid.children).forEach(function (c) {
+            if (c.getAttribute && c.getAttribute('data-lgi2x')) return;
+            var ln = lineOfCard(c); if (!ln) return; seen[ln] = 1; decorate(c, ln, M, live);
+        });
+        var need = Object.keys(M.stopped).filter(function (l) { return !seen[l]; }).sort(function (a, b) { return a.localeCompare(b, undefined, { numeric: true }); });
+        var sel = selLines(); if (sel.length) need = need.filter(function (l) { return sel.indexOf(l) >= 0; });
+        var sig = JSON.stringify([live, isEn(), need.map(function (l) { return l + ':' + M.stopped[l].map(function (r) { return r.id + ':' + A().minsOf(r); }).join(','); })]);
+        if (grid.__lgi2x === sig) return;
+        $$(':scope > [data-lgi2x]', grid).forEach(function (e) { e.remove(); });
+        need.forEach(function (l) { grid.insertAdjacentHTML('beforeend', stopCardHtml(l, M.stopped[l], live)); });
+        grid.__lgi2x = sig;
+    }
+ 
+    // ---------- 1) แดชบอร์ด ----------
+    function paintDash() {
+        var root = document.getElementById('view-dash-lg'); if (!root || !A() || !root.getClientRects().length) return;
+        var M = model(selDate()); if (!M) return;
+        var box = document.getElementById('lgrun-card'), own = document.getElementById('lgidle-card');
+        var sel = selLines(), needAny = Object.keys(M.stopped).filter(function (l) { return !sel.length || sel.indexOf(l) >= 0; }).length > 0;
+        var grid = box ? $('[style*="grid-template-columns"]', box) : null;
+        if (box && own) own.remove();
+        if (box && !grid) {   // LG-RUN โชว์แค่ข้อความ "ยังไม่มีอัปเดต" → สร้าง grid เองในกล่องเดิม
+            if (!needAny) return;
+            grid = document.createElement('div'); grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;margin-top:8px;'; box.appendChild(grid);
+        }
+        if (!box) {
+            if (!needAny) { if (own) own.remove(); return; }
+            var kp = document.getElementById('lgd-kpis'); if (!kp) return;
+            if (!own) {
+                own = document.createElement('div'); own.id = 'lgidle-card'; own.style.cssText = 'background:#fff;border-radius:20px;box-shadow:0 2px 12px rgba(20,40,80,.07);padding:16px 18px;margin-bottom:16px;';
+                own.innerHTML = '<div style="font-size:14px;font-weight:800;color:#1b2a41;margin-bottom:8px;">' + esc(T().title) + '</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;"></div>';
+                kp.insertAdjacentElement('afterend', own);
+            }
+            grid = own.lastElementChild;
+        }
+        paintGrid(grid, M, true);
+    }
+    setInterval(function () { try { paintDash(); } catch (e) { if (window.console) console.warn('LG-IDLE-LINE', e); } }, 1000);
+    document.addEventListener('click', function (e) { var b = e.target && e.target.closest && e.target.closest('[data-lgi2-end]'); if (b && A()) { e.preventDefault(); A().end(b.getAttribute('data-lgi2-end')); } }, true);
+ 
+    // ---------- 2) รูป / PDF ----------
+    function lineSet(M) {
+        var set = {}; try { (db.lgPlan || []).forEach(function (r) { if (r && r.line) set[String(r.line).trim()] = 1; }); } catch (e) { }
+        Object.keys(M.all).forEach(function (l) { set[l] = 1; });
+        var sel = selLines(), ls = Object.keys(set).filter(function (l) { return !sel.length || sel.indexOf(l) >= 0; });
+        var api = A(), tot = function (l) { return (M.all[l] || []).reduce(function (a, r) { return a + api.minsOf(r); }, 0); };
+        return ls.sort(function (a, b) { var ha = (M.all[a] || []).length > 0, hb = (M.all[b] || []).length > 0; if (ha !== hb) return ha ? -1 : 1; return tot(b) - tot(a) || a.localeCompare(b, undefined, { numeric: true }); });
+    }
+    function tableHtml(M, d) {
+        var api = A(), t = T(), ls = lineSet(M), sel = selLines();
+        var flat = []; Object.keys(M.all).forEach(function (l) { if (!sel.length || sel.indexOf(l) >= 0) flat = flat.concat(M.all[l]); });
+        var mon = (api.rows() || []).filter(function (r) { return api.atech(r) && String(r.date).slice(0, 7) === d.slice(0, 7); });
+        var dayTxt = M.isToday ? t.today : d.split('-').reverse().join('/');
+        var head = DOT + t.tTitle + ' — ' + dayTxt;
+        if (!flat.length) return '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:9px 14px;margin:0 0 12px;color:#166534;font-size:13px;font-weight:800;">' + esc(t.tTitle) + ' — ' + dayTxt + ' <span style="font-size:15px;">' + t.zeroT + '</span> <span style="font-weight:600;color:#15803d;">· ' + t.zero + '</span></div>';
+        var sumMin = flat.reduce(function (a, r) { return a + api.minsOf(r); }, 0), moMin = mon.reduce(function (a, r) { return a + api.minsOf(r); }, 0);
+        var trs = ls.map(function (l) {
+            var rs = (M.all[l] || []).slice().sort(function (a, b) { return (a.date + a.startTime).localeCompare(b.date + b.startTime); }), n = rs.length, m = rs.reduce(function (a, r) { return a + api.minsOf(r); }, 0);
+            var badge = '<span style="background:' + (n ? '#1b2a41' : '#94a3b8') + ';color:#fff;font-weight:800;font-size:12px;padding:2px 10px;border-radius:6px;">' + esc(l) + '</span>';
+            var det = n ? rs.map(function (r) {
+                var why = String(r.reasons || '').split('|').filter(Boolean).map(function (x) { return api.dispR(x.trim()); }).join(', '), ex = [r.woPart, r.note].filter(Boolean).join(' · ');
+                return '<div>' + (r.date !== d ? api.dmy(r.date) + ' ' : '') + api.hm4(r.startTime) + ' – ' + (r.endTime ? api.hm4(r.endTime) : '<b style="color:#dc2626;">' + t.still + '</b>') + ' · ' + esc(why) + (ex ? ' <span style="color:#64748b;">(' + esc(ex) + ')</span>' : '') + '</div>';
+            }).join('') : '<span style="color:#94a3b8;">' + t.none + '</span>';
+            return '<tr><td style="padding:6px 8px;border-top:1px solid #eef2f7;vertical-align:top;">' + badge + '</td><td style="padding:6px 8px;border-top:1px solid #eef2f7;vertical-align:top;font-weight:800;color:' + (n ? '#dc2626' : '#16a34a') + ';">' + (n ? n + ' ' + t.times : '0') + '</td><td style="padding:6px 8px;border-top:1px solid #eef2f7;vertical-align:top;color:#334155;">' + (n ? api.dur(m) + (rs.some(function (r) { return !r.endTime; }) ? '+' : '') : '–') + '</td><td style="padding:6px 8px;border-top:1px solid #eef2f7;vertical-align:top;font-size:12px;color:#334155;">' + det + '</td></tr>';
+        }).join('');
+        return '<div style="border:1px solid #fecaca;border-radius:12px;padding:10px 14px 12px;margin:0 0 12px;background:#fff;break-inside:avoid;"><div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px;"><span style="font-size:14px;font-weight:800;color:#b91c1c;">' + head + ' (' + t.byLine + ')</span><span style="margin-left:auto;font-size:12px;color:#64748b;">' + t.total + ' ' + flat.length + ' ' + t.times + ' · ' + api.dur(sumMin) + ' · ' + t.mo + ' ' + mon.length + ' ' + t.times + ' · ' + api.dur(moMin) + '</span></div>'
+            + '<table style="width:100%;border-collapse:collapse;font-size:12.5px;"><thead><tr><th style="text-align:left;padding:5px 8px;background:#f8fafc;color:#64748b;width:70px;">' + t.cLine + '</th><th style="text-align:left;padding:5px 8px;background:#f8fafc;color:#64748b;width:90px;">' + t.cCnt + '</th><th style="text-align:left;padding:5px 8px;background:#f8fafc;color:#64748b;width:110px;">' + t.cTot + '</th><th style="text-align:left;padding:5px 8px;background:#f8fafc;color:#64748b;">' + t.cDet + '</th></tr></thead><tbody>' + trs + '</tbody></table></div>';
+    }
+    function build(rep) {
+        var api = A(); if (!api) return;
+        var d = selDate(), M = model(d); if (!M) return;
+        var runBox = rep.querySelector('#lgrun-rep'), table = rep.querySelector('table'), anchor = rep.querySelector('#lgu-rep') || table; if (!anchor) return;
+        var sel = selLines(), needAny = Object.keys(M.stopped).filter(function (l) { return !sel.length || sel.indexOf(l) >= 0; }).length > 0;
+        var grid = runBox ? $('[style*="grid-template-columns"]', runBox) : null;
+        if (!runBox && needAny) {
+            runBox = document.createElement('div'); runBox.id = 'lgrun-rep'; runBox.style.cssText = 'background:#f7f9fc;border:1px solid #e3e8f0;border-radius:12px;padding:10px 14px 12px;margin:0 0 12px;';
+            runBox.innerHTML = '<div style="font-size:14px;font-weight:800;color:#1b2a41;margin-bottom:8px;">' + esc(T().title) + '</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;"></div>';
+            anchor.insertAdjacentElement('beforebegin', runBox); grid = runBox.lastElementChild;
+        }
+        if (grid) paintGrid(grid, M, false);
+        var t = document.createElement('div'); t.id = 'lgidle-rep'; t.innerHTML = tableHtml(M, d);
+        (runBox || anchor).insertAdjacentElement(runBox ? 'afterend' : 'beforebegin', t);
+    }
+    function wrapFn(name) {
+        var orig = window[name]; if (typeof orig !== 'function' || orig.__lgi2W) return;
+        var w = function () {
+            var self = this, args = arguments, body = document.body, realAppend = body.appendChild;
+            body.appendChild = function (node) {
+                try { var rep = node && node.querySelector ? node.querySelector('#lgd-report') : null; if (rep && !rep.getAttribute('data-lgidle')) { rep.setAttribute('data-lgidle', '1'); build(rep); } } catch (err) { if (window.console) console.warn('LG-IDLE-LINE report', err); }
+                return realAppend.call(body, node);
+            };
+            try { return orig.apply(self, args); }
+            finally { body.appendChild = realAppend; delete body.appendChild; }
+        };
+        w.__lgi2W = true; window[name] = w;
+    }
+    var t2 = 0, iv = setInterval(function () {
+        t2++;
+        if (typeof window.lgdSaveImage === 'function' && typeof window.lgdSavePdf === 'function' && t2 >= 16) { wrapFn('lgdSaveImage'); wrapFn('lgdSavePdf'); clearInterval(iv); }
+        else if (t2 > 120) clearInterval(iv);
+    }, 500);
+})();
+// ===== LG-IDLE-LINE-V1 (จบ) =====
+(function () {
+    if (window.__lgRepDedup2) return; window.__lgRepDedup2 = true;
+    function sty(el) { return (el && el.getAttribute && el.getAttribute('style')) || ''; }
+    function dedupe(rep) {
+        var card = rep.querySelector('[data-lgrp="1"]');
+        if (!card || !/LG รับ|Received at LG/.test(card.textContent || '')) return;      // ตัดเฉพาะเมื่อการ์ดบนมีบรรทัด "LG รับแล้ว" อยู่แล้ว
+        var divs = rep.querySelectorAll('div');
+        for (var i = 0; i < divs.length; i++) {
+            var d = divs[i]; if (d === card || card.contains(d) || d.contains(card)) continue;
+            var kids = Array.prototype.slice.call(d.children);
+            var rings = kids.filter(function (k) { return k.querySelector && k.querySelector('svg') && /f7f9fc/i.test(sty(k)); });
+            if (rings.length >= 2) { rings.forEach(function (k) { k.remove(); }); }
+        }
+    }
+    function wrapFn(name) {
+        var orig = window[name]; if (typeof orig !== 'function' || orig.__lgdd2W) return;
+        var w = function () {
+            var self = this, args = arguments, body = document.body, realAppend = body.appendChild;
+            body.appendChild = function (node) {
+                try { var rep = node && node.querySelector ? node.querySelector('#lgd-report') : null; if (rep && !rep.getAttribute('data-lgdd2')) { rep.setAttribute('data-lgdd2', '1'); dedupe(rep); } } catch (err) { if (window.console) console.warn('LG-REPORT-DEDUP-V2', err); }
+                return realAppend.call(body, node);
+            };
+            try { return orig.apply(self, args); }
+            finally { body.appendChild = realAppend; delete body.appendChild; }
+        };
+        w.__lgdd2W = true; window[name] = w;
+    }
+    var t = 0, iv = setInterval(function () {
+        t++;
+        if (typeof window.lgdSaveImage === 'function' && typeof window.lgdSavePdf === 'function' && t >= 40) { wrapFn('lgdSaveImage'); wrapFn('lgdSavePdf'); clearInterval(iv); }
+        else if (t > 160) clearInterval(iv);
+    }, 500);
+})();
+/* ===== จบ LG-REPORT-DEDUP-V2 ===== */
 // ดาวน์โหลดเทมเพลต Excel สำหรับอัปโหลดแพลน
 (function () {
     if (window.__tagMenuV1) return; window.__tagMenuV1 = true;
