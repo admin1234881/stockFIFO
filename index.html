@@ -18161,7 +18161,7 @@ window.renderLGMatchTable = function() {
             if (!st.rows.length) return;
             const u = A.uhtOf(l);
             let kind = 'hours', cls = 'none', h = 0, chipTxt = '';
-            if (st.complete) { kind = 'done'; cls = 'ok'; chipTxt = T.doneAll(st.doneN, st.rows.length); }
+            if (st.complete) { kind = 'done'; cls = 'ok'; chipTxt = T.doneAll(st.doneW, st.totW); }
             else if (A.fullSent(st)) { kind = 'sent'; cls = 'ok'; chipTxt = T.sentAll; }
             else if (!u) { kind = 'nouph'; chipTxt = T.noUph; }
             else { h = (st.rem + st.extGap) / u; cls = (st.sent > 0 || st.hasProg) ? A.status(h) : 'none'; chipTxt = A.hh(h) + ' ' + T.hr; }
@@ -18173,10 +18173,10 @@ window.renderLGMatchTable = function() {
         const rows = items.map(it => {
             const c = COL[it.cls];
             const uph = it.u ? `<b style="font-size:14px;color:#1d4ed8;">${num(it.u)}</b><span style="font-size:10.5px;color:#7a8799;"> ${esc(T.cUnit)}</span>` : `<span style="color:#98a4b6;">-</span>`;
-            const calc = `<span style="font-size:11px;color:#6b7a90;">${esc(T.cSent)} ${num(it.st.sent)} − ${esc(T.cMade)} ${num(it.st.produced)} = <b style="color:#1b2a41;">${num(it.st.rem)}</b></span>`;
+            const calc = `<span style="font-size:11px;color:#6b7a90;">${esc(T.cSent)} ${num(it.st.sent)} − ${esc(T.cMade)} ${num(it.st.produced)} = <b style="color:#1b2a41;">${num(it.st.rem)}</b>${it.st.coRun ? ' <span style="color:#b45309;font-weight:700;">' + (isEn() ? 'paired ÷2 −' : 'รันคู่ ÷2 −') + num(it.st.coAdj) + '</span>' : ''}</span>`;
             return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid #e6ebf2;">
                 <span style="flex:none;width:62px;text-align:center;background:#1b2a41;color:#fff;font-weight:800;font-size:12px;padding:2px 0;border-radius:6px;">${esc(T.ln)} ${esc(it.l)}</span>
-                <span style="flex:none;width:92px;white-space:nowrap;">UPH ${uph}</span>
+                <span style="flex:none;width:92px;white-space:nowrap;">UPH ${uph}</span>${it.st.coRun ? `<span style="flex:none;white-space:nowrap;border:1px solid #fb923c;background:#fff7ed;color:#c2410c;border-radius:20px;padding:1px 9px;font-size:10.5px;font-weight:800;">⇄ ${isEn() ? 'Paired ×2 parts' : 'รันคู่ ×2 พาร์ท'}</span>` : ''}
                 <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;">${calc}</span>
                 <span style="flex:none;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:800;background:${c[0]};color:${c[1]};white-space:nowrap;">${esc(it.chipTxt)}</span>
             </div>`;
@@ -18575,6 +18575,7 @@ window.renderLGMatchTable = function() {
             if (st.nv) {
                 String(st.pg.doneWOs == null ? '' : st.pg.doneWOs).split(',').map(x => x.trim()).filter(Boolean).forEach(k => done.add(k));
                 run = st.partRows.map(x => ({ r: x.r, q: x.q }));
+                { const seen = new Set(run.map(x => rk(x.r))), ex = []; run.forEach(x => { st.rows.forEach(s => { if (String(s.WO).trim() === String(x.r.WO).trim() && !seen.has(rk(s))) { seen.add(rk(s)); const o2 = parseFloat(s.orderQty) || 0; ex.push({ r: s, q: done.has(rk(s)) ? o2 : 0 }); } }); }); run = run.concat(ex); const ord = []; run.forEach(x => { const w = String(x.r.WO).trim(); if (ord.indexOf(w) < 0) ord.push(w); }); run = [].concat.apply([], ord.map(w => run.filter(x => String(x.r.WO).trim() === w))); }   /* LG-CORUN-V3 */
             } else if (st.idx >= 0) {
                 st.rows.forEach((r, i) => { if (i < st.idx) done.add(rk(r)); });
                 const o = parseFloat(st.cur.orderQty) || 0, q = Math.min(o, parseFloat(st.pg.producedQty) || 0);
@@ -18582,6 +18583,7 @@ window.renderLGMatchTable = function() {
             }
         }
         const runKeys = new Set(run.map(x => rk(x.r)));
+        const runW = []; run.forEach(x => { const w = String(x.r.WO).trim(); if (runW.indexOf(w) < 0) runW.push(w); });   // LG-CORUN-V3
         const queue = st.rows.filter(r => !done.has(rk(r)) && !runKeys.has(rk(r)));
         let kind;
         if (!st.hasProg) kind = 'none';
@@ -18589,7 +18591,7 @@ window.renderLGMatchTable = function() {
         else if (!queue.length) kind = 'all';
         else if (done.size) kind = 'next';
         else kind = 'idle';
-        return { line, st, run: run.slice(0, 2), runMore: Math.max(0, run.length - 2), queue, doneN: done.size, total: st.rows.length, kind, ts: stamp(st.pg), by: (st.pg && st.pg.updatedBy) || '' };
+        return { line, st, run: run.filter(x => runW.slice(0, 2).indexOf(String(x.r.WO).trim()) >= 0), runMore: Math.max(0, runW.length - 2), queue, doneN: done.size, total: st.rows.length, kind, ts: stamp(st.pg), by: (st.pg && st.pg.updatedBy) || '' };
     }
     function allInfo(date) {
         const A = window.__lguApi; if (!A) return [];
@@ -18601,11 +18603,12 @@ window.renderLGMatchTable = function() {
  
     // ---------- วาดการ์ดของแต่ละไลน์ (ใช้ style ในตัว → ใช้ได้ทั้งแดชบอร์ดและรูปที่บันทึก) ----------
     function cardHtml(it, T) {
+        const cw = {}; it.run.forEach(x => { const k = String(x.r.WO).trim(); cw[k] = (cw[k] || 0) + 1; });   // LG-CORUN-V3
         const rows = it.run.map(x => {
             const r = x.r, q = x.q, o = parseFloat(r.orderQty) || 0, p = o > 0 ? Math.round(q / o * 100) : 0;
             return `<div style="margin-top:6px;">
                 <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
-                    <span style="font-size:18px;font-weight:800;color:#0b1b33;">${esc(r.WO)}</span>
+                    <span style="font-size:18px;font-weight:800;color:#0b1b33;">${esc(r.WO)}</span>${cw[String(r.WO).trim()] > 1 ? `<span style="border:1px solid #fb923c;background:#fff7ed;color:#c2410c;border-radius:20px;padding:0 8px;font-size:10.5px;font-weight:800;white-space:nowrap;">⇄ ${isEn() ? 'Paired' : 'รันคู่'}</span>` : ''}
                     <span style="font-size:11.5px;color:#64748b;">${esc(r.partNo || '')}${r.model ? ' · ' + esc(r.model) : ''}</span>
                     <span style="margin-left:auto;font-size:14px;font-weight:800;color:#1d4ed8;white-space:nowrap;">${num(q)} <span style="color:#64748b;font-weight:600;">/ ${num(o)} ${esc(T.pcs)}</span></span>
                 </div>
@@ -18856,7 +18859,7 @@ window.renderLGMatchTable = function() {
             trailRun = 0; trailQty = 0;
             const k = rk(p), made = Math.min(ord, part[k] || 0), rem = Math.max(0, ord - made);
             const cov = Math.min(rem, Math.max(0, (RV[k] || 0) - made));
-            const run = rem / u, covH = cov / u;
+            const nco = all.filter(q => !isExt(q) && up(q.WO) === up(p.WO)).length, kdiv = nco >= 2 ? nco : 1, run = rem / u / kdiv, covH = cov / u / kdiv;   /* LG-CORUN-V1 */
             segs.push({ kind: 'mine', WO: p.WO, partNo: p.partNo, qty: ord, made, rem, cov, runH: run, covH, endH: h + run, arrived: Math.min(ord, RV[k] || 0) });
             if (!short && cov < rem) short = { WO: p.WO, atH: h + covH, need: rem - cov };
             h += run;
@@ -21196,6 +21199,75 @@ window.renderLGMatchTable = function() {
     }, 500);
 })();
 /* ===== จบ LG-REPORT-DEDUP-V2 ===== */
+(function () {
+    if (window.__lgCoTag) return; window.__lgCoTag = true;
+    function en() { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e) { return false; } }
+    function selDate() { var d = document.getElementById('lgd-date'); return (d && d.value) || ''; }
+    function pairs(date) {   // ชุดของ "WO|ไลน์" ที่มี 2 พาร์ทขึ้นไป
+        var m = {}, set = {};
+        try {
+            computeLGMatchStatus().filter(function (r) { return lgPlanDateOf(r) === date; }).forEach(function (r) {
+                var k = String(r.WO).trim() + '|' + (String(r.line == null ? '' : r.line).trim() || '-');
+                (m[k] = m[k] || {})[String(r.partNo == null ? '' : r.partNo).trim()] = 1;
+            });
+        } catch (e) { }
+        Object.keys(m).forEach(function (k) { if (Object.keys(m[k]).length >= 2) set[k] = 1; });
+        return set;
+    }
+    var TAG = 'display:inline-block;margin-left:6px;background:#f97316;color:#fff;border-radius:20px;padding:0 7px;font-size:10px;font-weight:800;line-height:1.5;vertical-align:middle;white-space:nowrap;';
+    function tagHtml() { return '<span class="lgco-tag" style="' + TAG + '">⇄ ' + (en() ? 'Pair' : 'คู่') + '</span>'; }
+    // ตารางในแดชบอร์ด
+    function sweep() {
+        var tb = document.getElementById('lgd-tbody'); if (!tb) return;
+        var date = selDate(); if (!date) return;
+        if (!document.getElementById('lgco-tbl-css')) { var st0 = document.createElement('style'); st0.id = 'lgco-tbl-css'; st0.textContent = '#view-dash-lg .lgd-wo[data-lgco-t]::after{content:attr(data-lgco-t);display:inline-block;margin-left:6px;background:#f97316;color:#fff;border-radius:20px;padding:0 7px;font-size:10px;font-weight:800;line-height:1.5;vertical-align:middle;white-space:nowrap}'; document.head.appendChild(st0); }
+        var set = null, stamp = date + (en() ? 'e' : 't') + '2';
+        Array.prototype.forEach.call(tb.querySelectorAll('tr'), function (tr) {
+            if (tr.getAttribute('data-lgco') === stamp) return;
+            var wo = tr.querySelector('.lgd-wo'), ln = tr.querySelector('.lgd-l2'); if (!wo || !ln) return;
+            if (!set) set = pairs(date);
+            var old = tr.querySelector('.lgco-tag'); if (old) old.remove(); wo.removeAttribute('data-lgco-t');
+            tr.style.boxShadow = '';
+            if (set[wo.textContent.trim() + '|' + (ln.textContent.trim() || '-')]) {
+                wo.setAttribute('data-lgco-t', '⇄ ' + (en() ? 'Pair' : 'คู่'));
+                var td = tr.children[0]; if (td) td.style.boxShadow = 'inset 4px 0 0 #f97316';
+                if (!tr.classList.contains('od')) tr.style.background = '#fff7ed';
+            } else { var td0 = tr.children[0]; if (td0) td0.style.boxShadow = ''; }
+            tr.setAttribute('data-lgco', stamp);
+        });
+    }
+    setInterval(function () { try { sweep(); } catch (e) { if (window.console) console.warn('LG-CORUN-TAG', e); } }, 1000);
+    // รูป / PDF
+    function inject(rep) {
+        var set = pairs(selDate());
+        Array.prototype.forEach.call(rep.querySelectorAll('tbody tr'), function (tr) {
+            var tds = tr.children; if (tds.length < 9) return;
+            var k = tds[1].textContent.trim() + '|' + (tds[4].textContent.trim() || '-');
+            if (!set[k]) return;
+            tds[2].insertAdjacentHTML('beforeend', tagHtml());
+            tds[0].style.boxShadow = 'inset 4px 0 0 #f97316'; if (!/background/.test(tr.getAttribute('style') || '')) tr.style.background = '#fff7ed';
+        });
+    }
+    function wrapFn(name) {
+        var orig = window[name]; if (typeof orig !== 'function' || orig.__lgcoW) return;
+        var w = function () {
+            var self = this, args = arguments, body = document.body, realAppend = body.appendChild;
+            body.appendChild = function (node) {
+                try { var rep = node && node.querySelector ? node.querySelector('#lgd-report') : null; if (rep && !rep.getAttribute('data-lgco')) { rep.setAttribute('data-lgco', '1'); inject(rep); } } catch (err) { if (window.console) console.warn('LG-CORUN-TAG report', err); }
+                return realAppend.call(body, node);
+            };
+            try { return orig.apply(self, args); }
+            finally { body.appendChild = realAppend; delete body.appendChild; }
+        };
+        w.__lgcoW = true; window[name] = w;
+    }
+    var t = 0, iv = setInterval(function () {
+        t++;
+        if (typeof window.lgdSaveImage === 'function' && typeof window.lgdSavePdf === 'function' && t >= 24) { wrapFn('lgdSaveImage'); wrapFn('lgdSavePdf'); clearInterval(iv); }
+        else if (t > 120) clearInterval(iv);
+    }, 500);
+})();
+/* ===== จบ LG-CORUN-TAG-V1 ===== */
 // ดาวน์โหลดเทมเพลต Excel สำหรับอัปโหลดแพลน
 (function () {
     if (window.__tagMenuV1) return; window.__tagMenuV1 = true;
@@ -33120,15 +33192,24 @@ renderLGTagPrintWindow = function(tags, printWin) {
                 else { pr = Math.min(o, parseFloat(pp.part[k]) || 0); if (pr > 0) partRows.push({ r, q: pr }); }
             } else if (hasProg && idx >= 0) pr = i < idx ? o : (i === idx ? Math.min(o, parseFloat(pg.producedQty) || 0) : 0);
             sent += aRow; produced += Math.min(aRow, pr); planTotal += o;   // LG-UPH-RECV
-            rem += Math.max(0, aRow - pr); planLeft += Math.max(0, o - pr);   // LG-UPH-RECV
+            rem += Math.max(0, aRow - pr); planLeft += Math.max(0, o - pr); (partRows.co = partRows.co || []).push({ w: String(r.WO).trim(), v: Math.max(0, aRow - pr) }); /* LG-CORUN-V1 */
             unsent += Math.max(0, Math.max(0, o - pr) - Math.max(0, sRow - pr));
         });
        const stObj = { rows, pg, idx, hasProg, nv: pp.nv, doneN, partRows, sent, produced, rem, planTotal, planLeft, unsent, cur: idx >= 0 ? rows[idx] : null, complete: pp.nv && rows.length > 0 && doneN === rows.length };
-        try { stObj.extGap = typeof window.__lgqExtGap === 'function' ? window.__lgqExtGap(line, date, stObj) : 0; } catch (e) { stObj.extGap = 0; }   // LG-QUEUE-UPH: เวลาที่ LG ผลิตของเจ้าอื่นคั่น (หน่วยชิ้น)
+        try { stObj.extGap = typeof window.__lgqExtGap === 'function' ? window.__lgqExtGap(line, date, stObj) : 0; } catch (e) { stObj.extGap = 0; } try { const co = {}; (partRows.co || []).forEach(function (x) { (co[x.w] = co[x.w] || []).push(x.v); }); let adj = 0, nn = 0; Object.keys(co).forEach(function (w) { const a = co[w]; if (a.length >= 2) { const s = a.reduce(function (p, q) { return p + q; }, 0); adj += s - s / a.length; nn++; } }); stObj.coRun = nn; stObj.coAdj = adj; stObj.extGapRaw = stObj.extGap; stObj.extGap = stObj.extGap - adj; } catch (e) { } /* LG-CORUN-V1 */
+        try { const bw = {}; rows.forEach(function (r) { const w = String(r.WO).trim(); (bw[w] = bw[w] || []).push(!!(pp.nv && pp.done.has(rk(r)))); }); const kw = Object.keys(bw); stObj.totW = kw.length; stObj.doneW = kw.filter(function (w) { return bw[w].every(Boolean); }).length; } catch (e) { stObj.totW = rows.length; stObj.doneW = doneN; } /* LG-CORUN-V2 */
         return stObj;
     }
     // ข้อความ "LG ผลิตถึงไหน" (html)
-    function whereHtml(st) {   // LG-QUEUE-UPH
+    function whereHtml(st) {   // LG-CORUN-V1
+        const en = (function () { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e) { return false; } })();
+        const b = whereHtml0(st), g = st.extGapRaw != null ? st.extGapRaw : st.extGap;
+        const e = g > 0 ? `<b>+เจ้าอื่นคั่น ${num(g)} ชิ้น</b>` : '';
+        const co = st.coRun ? `<b style="color:#b45309">${en ? 'Paired run: ' + st.coRun + ' WO × 2 parts, ÷2 (−' + num(st.coAdj) + ' pcs)' : 'รันคู่ ' + st.coRun + ' WO × 2 พาร์ท ÷2 (−' + num(st.coAdj) + ' ชิ้น)'}</b>` : '';
+        const pill = st.coRun ? `<span style="display:inline-block;border:1px solid #fb923c;background:#fff7ed;color:#c2410c;border-radius:20px;padding:0 8px;font-weight:800;font-size:.72rem;display:inline-block;max-width:100%">⇄ ${en ? 'Paired ×2 parts ÷2 (−' + num(st.coAdj) + ')' : 'รันคู่ ×2 พาร์ท ÷2 (−' + num(st.coAdj) + ')'}</span>` : '';   // LG-CORUN-V2
+        return [pill, b, e].filter(Boolean).join(' · ');
+    }
+    function whereHtml_old(st) {   // LG-QUEUE-UPH
         const b = whereHtml0(st), e = st.extGap > 0 ? `<b>+เจ้าอื่นคั่น ${num(st.extGap)} ชิ้น</b>` : '';
         return b && e ? b + ' · ' + e : (b || e);
     }
@@ -33138,7 +33219,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
             if (!st.doneN && !st.partRows.length) return 'ยังไม่เริ่มผลิต';
             const bits = [];
             if (st.doneN) bits.push(`ผลิตครบ <b>${st.doneN}/${st.rows.length}</b> WO`);
-            st.partRows.slice(0, 2).forEach(x => bits.push(`กำลังผลิต <b>${esc(x.r.WO)}</b> (${num(x.q)}/${num(x.r.orderQty)})`));
+            { const gw = {}, ord = [], dn = String(st.pg && st.pg.doneWOs || '').split(',').map(s => s.trim()); st.partRows.forEach(x => { const w = String(x.r.WO).trim(); if (!gw[w]) { gw[w] = []; ord.push(w); } gw[w].push(x); }); ord.slice(0, 2).forEach(w => { const sib = st.rows.filter(r => String(r.WO).trim() === w); if (sib.length >= 2) bits.push(`กำลังผลิต <b>${esc(w)}</b> ⇄ (${sib.map(r => { const k = rk(r), x = gw[w].find(y => rk(y.r) === k); return num(x ? x.q : (dn.indexOf(k) >= 0 ? parseFloat(r.orderQty) || 0 : 0)) + '/' + num(r.orderQty); }).join(' + ')})`); else bits.push(`กำลังผลิต <b>${esc(w)}</b> (${num(gw[w][0].q)}/${num(gw[w][0].r.orderQty)})`); }); }   // LG-CORUN-V3
             return bits.join(' · ');
         }
         return String(st.pg.WO).trim() === '-' ? 'ยังไม่เริ่มผลิต' : `ผลิตถึง <b>${esc(st.pg.WO)}</b> (${num(st.pg.producedQty)}/${num(st.cur ? st.cur.orderQty : 0)})`;
@@ -33446,6 +33527,26 @@ renderLGTagPrintWindow = function(tags, printWin) {
     }
     window.lgUhtSettings = openSettings;
 
+     /* LG-CORUN-V2: WO เดียวกัน 2 พาร์ท (รันคู่) → รวมเป็นแถวเดียวในหน้าต่างติ๊ก */
+    function coKeys(row) { try { const g = JSON.parse(row.getAttribute('data-g') || 'null'); if (g && g.length) return g; } catch (e) { } return [row.getAttribute('data-k')]; }
+    function coRowsHtml(st, ed) {
+        const en = (function () { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e) { return false; } })();
+        if (!document.getElementById('lgco-css')) { const s = document.createElement('style'); s.id = 'lgco-css'; s.textContent = '.lgu-co{border-color:#fb923c!important;background:#fff7ed;position:relative;margin-top:14px}.lgu-co.done{background:#f0fdf4}.lgu-cotag{position:absolute;top:-10px;left:14px;background:#f97316;color:#fff;font-size:.68rem;font-weight:800;padding:1px 10px;border-radius:20px}.lgu-pl{display:inline-block;border:1px solid #fdba74;background:#fff;color:#c2410c;border-radius:20px;padding:0 8px;margin:0 4px 2px 0;font-weight:700}.lgu-co .tx small.lgu-cohint{color:#c2410c;font-weight:600}.lgu-co .qt{white-space:nowrap}'; document.head.appendChild(s); }
+        const grp = [], mp = {};
+        st.rows.forEach(function (r) { const w = String(r.WO).trim(); if (mp[w] == null) { mp[w] = grp.length; grp.push([]); } grp[mp[w]].push(r); });
+        return grp.map(function (g, gi) {
+            if (g.length < 2) {
+                const r = g[0], k = rk(r), dn = ed.done.has(k), o = parseFloat(r.orderQty) || 0, pq = ed.part[k] != null && ed.part[k] !== '' ? ed.part[k] : '';
+                return `<div class="lgu-w2 ${dn ? 'done' : ''}" data-i="${gi}" data-k="${esc(k)}"><input type="checkbox" class="ck" ${dn ? 'checked' : ''}><div class="tx"><b>${esc(r.WO)}</b> · ${esc(r.partNo)}<small>แพลน ${num(o)} · ส่งแล้ว ${num(r.scanned)}</small></div>${dn ? `<span class="okb"><i class="bi bi-check-circle-fill"></i> ผลิตครบ ${num(o)}</span>` : `<span class="qt">ผลิตแล้ว<input type="number" min="0" max="${o}" step="1" inputmode="numeric" class="pq" placeholder="0" value="${esc(pq)}">ชิ้น</span>`}</div>`;
+            }
+            const keys = g.map(rk), os = g.map(function (r) { return parseFloat(r.orderQty) || 0; }), mx = Math.max.apply(null, os);
+            const dn = keys.every(function (k) { return ed.done.has(k); });
+            const q = Math.max.apply(null, keys.map(function (k, j) { return ed.done.has(k) ? os[j] : (parseFloat(ed.part[k]) || 0); }));
+            const sent = g.reduce(function (a, r) { return a + (parseFloat(r.scanned) || 0); }, 0);
+            const pills = g.map(function (r) { return '<span class="lgu-pl">' + esc(r.partNo) + ' ' + num(parseFloat(r.orderQty) || 0) + '</span>'; }).join('');
+            return `<div class="lgu-w2 lgu-co ${dn ? 'done' : ''}" data-i="${gi}" data-k="${esc(keys[0])}" data-g="${esc(JSON.stringify(keys))}"><span class="lgu-cotag">⇄ ${en ? 'Paired run · ' + g.length + ' parts' : 'รันคู่ ' + g.length + ' พาร์ท'}</span><input type="checkbox" class="ck" ${dn ? 'checked' : ''}><div class="tx"><b>${esc(g[0].WO)}</b> · ${en ? 'WO qty' : 'ยอด WO'} <b>${num(mx)}</b><small>${pills}</small><small>${en ? 'Sent total' : 'ส่งแล้วรวม'} ${num(sent)}</small><small class="lgu-cohint">${en ? 'Tick = all parts done · type = per part' : 'ติ๊ก = ครบทั้งคู่ · กรอก = พาร์ทละเท่านี้'}</small></div>${dn ? `<span class="okb"><i class="bi bi-check-circle-fill"></i> ${en ? 'Done' : 'ผลิตครบ'} ${num(mx)}</span>` : `<span class="qt">${en ? 'Produced' : 'ผลิตแล้ว'}<input type="number" min="0" max="${mx}" step="1" inputmode="numeric" class="pq" placeholder="0" value="${esc(q > 0 ? q : '')}">/ ${num(mx)}</span>`}</div>`;
+        }).join('');
+    }
     async function openProgress(line0, date0) {
         if (!canProg()) { Swal.fire(tr('ไม่มีสิทธิ์'), tr('ต้องเป็นผู้ดูแล หรือมีสิทธิ์รับแท็ก LG / แก้ไขแพลน LG ถึงจะอัปเดตได้'), 'warning'); return; }
         const date = date0 || lgTodayStr();
@@ -33484,7 +33585,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
                 let lastTick = -1;
                 function draw() {
                     const st = lineState(cur, date), ed = getEd(cur);
-                    wos.innerHTML = st.rows.map((r, i) => {
+                    wos.innerHTML = coRowsHtml(st, ed) || '<div class="hint" style="padding:10px">ไลน์นี้ไม่มี WO</div>'; /* LG-CORUN-V2 */ if (0) wos.innerHTML = st.rows.map((r, i) => {
                         const k = rk(r), dn = ed.done.has(k), o = parseFloat(r.orderQty) || 0, pq = ed.part[k] != null && ed.part[k] !== '' ? ed.part[k] : '';
                         return `<div class="lgu-w2 ${dn ? 'done' : ''}" data-i="${i}" data-k="${esc(k)}"><input type="checkbox" class="ck" ${dn ? 'checked' : ''}><div class="tx"><b>${esc(r.WO)}</b> · ${esc(r.partNo)}<small>แพลน ${num(o)} · ส่งแล้ว ${num(r.scanned)}</small></div>${dn ? `<span class="okb"><i class="bi bi-check-circle-fill"></i> ผลิตครบ ${num(o)}</span>` : `<span class="qt">ผลิตแล้ว<input type="number" min="0" max="${o}" step="1" inputmode="numeric" class="pq" placeholder="0" value="${esc(pq)}">ชิ้น</span>`}</div>`;
                     }).join('') || '<div class="hint" style="padding:10px">ไลน์นี้ไม่มี WO</div>';
@@ -33497,9 +33598,21 @@ renderLGTagPrintWindow = function(tags, printWin) {
                     if (!u) { pv.className = 'lgu-pv lgu-none'; pv.innerHTML = `ผลิตครบ ${st.doneN}/${st.rows.length} WO · ถึง LG ${num(st.sent)} · เหลือ ${num(st.rem)} ชิ้น<small>ยังไม่ได้ตั้ง UPH ของไลน์นี้ จึงยังคำนวณชั่วโมงไม่ได้</small>`; return; }
                     const h = (st.rem + st.extGap) / u, s = status(h);
                     pv.className = 'lgu-pv lgu-' + s;
-                    pv.innerHTML = `เหลืองานอยู่ได้ ${hh(h)} ชม.<small>ถึง LG ${num(st.sent)} − LG ผลิตแล้ว ${num(st.produced)} = เหลือ ${num(st.rem)} ชิ้น ÷ UPH ${num(u)}</small>`;
+                    pv.innerHTML = `เหลืองานอยู่ได้ ${hh(h)} ชม.<small>ถึง LG ${num(st.sent)} − LG ผลิตแล้ว ${num(st.produced)} = เหลือ ${num(st.rem)} ชิ้น${st.coRun ? (sessionStorage.getItem('currentLanguage') === 'en' ? ' · paired run ÷2 −' : ' · รันคู่ ÷2 −') + num(st.coAdj) : ''} ÷ UPH ${num(u)}</small>`;
                 }
-                wos.addEventListener('click', (e) => {
+                wos.addEventListener('click', (e) => {   // LG-CORUN-V2
+                    const ck = e.target.closest && e.target.closest('input.ck'), tx = e.target.closest && e.target.closest('.tx');
+                    const row = e.target.closest && e.target.closest('.lgu-w2');
+                    if (!row || (!ck && !tx)) return;
+                    const ed = getEd(cur), i = parseInt(row.getAttribute('data-i'), 10), ks = coKeys(row);
+                    const on = ck ? ck.checked : !ks.every(function (x) { return ed.done.has(x); });
+                    const list = Array.from(wos.querySelectorAll('.lgu-w2'));
+                    const put = function (el) { coKeys(el).forEach(function (x) { if (on) ed.done.add(x); else ed.done.delete(x); }); };
+                    if (e.shiftKey && lastTick >= 0) { const a = Math.min(lastTick, i), b = Math.max(lastTick, i); for (let j = a; j <= b; j++) put(list[j]); }
+                    else put(row);
+                    lastTick = i; ed.dirty = true; draw();
+                });
+                wos.addEventListener('click', (e) => { return;   // LG-CORUN-V2 (ตัวเดิม ไม่ทำงานแล้ว)
                     const ck = e.target.closest && e.target.closest('input.ck'), tx = e.target.closest && e.target.closest('.tx');
                     const row = e.target.closest && e.target.closest('.lgu-w2');
                     if (!row || (!ck && !tx)) return;
@@ -33510,7 +33623,16 @@ renderLGTagPrintWindow = function(tags, printWin) {
                     else if (on) ed.done.add(k); else ed.done.delete(k);
                     lastTick = i; ed.dirty = true; draw();
                 });
-                wos.addEventListener('input', (e) => {
+                wos.addEventListener('input', (e) => {   // LG-CORUN-V2
+                    if (!e.target.classList || !e.target.classList.contains('pq')) return;
+                    const row = e.target.closest('.lgu-w2'), ed = getEd(cur), ks = coKeys(row);
+                    const mx = parseFloat(e.target.getAttribute('max')) || 0; let v = parseFloat(e.target.value);
+                    if (v > mx) { v = mx; e.target.value = mx; }
+                    const oo = {}; lineState(cur, date).rows.forEach(function (r) { oo[rk(r)] = parseFloat(r.orderQty) || 0; });
+                    ks.forEach(function (k) { ed.part[k] = e.target.value === '' ? '' : Math.min(v, oo[k] != null ? oo[k] : v); if (ks.length > 1) ed.done.delete(k); });
+                    ed.dirty = true; preview();
+                });
+                wos.addEventListener('input', (e) => { return;   // LG-CORUN-V2 (ตัวเดิม ไม่ทำงานแล้ว)
                     if (!e.target.classList || !e.target.classList.contains('pq')) return;
                     const row = e.target.closest('.lgu-w2'), ed = getEd(cur), k = row.getAttribute('data-k');
                     const mx = parseFloat(e.target.getAttribute('max')) || 0; let v = parseFloat(e.target.value);
@@ -33543,7 +33665,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
             try { localStorage.setItem(PLSK, JSON.stringify(db.lgLineProgress)); } catch (e) { }
             const body = list.map(v => {
                 const st = lineState(v.line, date), u = uhtOf(v.line), full = fullSent(st), h = u ? (st.rem + st.extGap) / u : 0, s = full ? 'ok' : (u ? status(h) : 'none');
-                return `<div class="lgu-rs ${s}"><span class="nm">ไลน์ ${esc(v.line)}</span><span style="font-size:.78rem;color:#475569;flex:1">ผลิตครบ <b>${st.doneN}/${st.rows.length}</b> WO<small>เหลือ ${num(st.rem)} ชิ้น${u ? ' ÷ UPH ' + num(u) : ''}</small></span><span class="hr">${full ? '100%' : (u ? hh(h) + ' ชม.' : 'ยังไม่ตั้ง UPH')}</span></div>`;
+                return `<div class="lgu-rs ${s}"><span class="nm">ไลน์ ${esc(v.line)}</span><span style="font-size:.78rem;color:#475569;flex:1">ผลิตครบ <b>${st.doneW}/${st.totW}</b> WO<small>เหลือ ${num(st.rem)} ชิ้น${u ? ' ÷ UPH ' + num(u) : ''}</small></span><span class="hr">${full ? '100%' : (u ? hh(h) + ' ชม.' : 'ยังไม่ตั้ง UPH')}</span></div>`;
             }).join('');
             popDone('อัปเดตแล้ว', 'บันทึกความคืบหน้าการผลิต ' + list.length + ' ไลน์', body);
             refreshAll();
@@ -33578,7 +33700,7 @@ const sig = date + '|' + L.map(x => x.line + ':' + x.st.planLeft + ':' + x.st.pl
         if (strip.getAttribute('data-sig') === sig) return;
         strip.setAttribute('data-sig', sig);
         strip.innerHTML = L.length
-            ? `<span class="lb"><i class="bi bi-speedometer2"></i> แพลนที่เหลืออยู่ได้ (ขั้นต่ำ ${minH()} ชม.):</span>${L.map(x => x.st.complete ? `<span class="lgu-chip lgu-ok">ไลน์ ${esc(x.line)} <b>ผลิตครบ ${x.st.doneN}/${x.st.rows.length}</b></span>` : fullSent(x.st) ? `<span class="lgu-chip lgu-ok">ไลน์ ${esc(x.line)} <b>ส่งครบแพลน 100%</b> <small>${num(x.st.sent)} / ${num(x.st.planTotal)}</small></span>` : chipHtml(x.line, x.st.planLeft, x.st.hasProg ? 'แพลนที่ LG ยังไม่ได้ผลิต' : 'ยอดแพลน')).join('')}${btn}`
+            ? `<span class="lb"><i class="bi bi-speedometer2"></i> แพลนที่เหลืออยู่ได้ (ขั้นต่ำ ${minH()} ชม.):</span>${L.map(x => x.st.complete ? `<span class="lgu-chip lgu-ok">ไลน์ ${esc(x.line)} <b>ผลิตครบ ${x.st.doneW}/${x.st.totW}</b></span>` : fullSent(x.st) ? `<span class="lgu-chip lgu-ok">ไลน์ ${esc(x.line)} <b>ส่งครบแพลน 100%</b> <small>${num(x.st.sent)} / ${num(x.st.planTotal)}</small></span>` : chipHtml(x.line, x.st.planLeft, x.st.hasProg ? 'แพลนที่ LG ยังไม่ได้ผลิต' : 'ยอดแพลน')).join('')}${btn}`
             : `<span class="lb text-muted">ยังไม่มีแพลนของวันที่เลือก</span>${btn}`;
         const b = document.getElementById('lgu-set-btn'); if (b) b.addEventListener('click', openSettings);
         const p = document.getElementById('lgu-prog-btn'); if (p) p.addEventListener('click', () => openProgress('', date));
