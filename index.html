@@ -21268,6 +21268,364 @@ window.renderLGMatchTable = function() {
     }, 500);
 })();
 /* ===== จบ LG-CORUN-TAG-V1 ===== */
+(function () {
+    if (window.__lgDeliveryNo) return; window.__lgDeliveryNo = true;
+    var FMT = /^\d+\/\d+$/;
+    function en() { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e) { return false; } }
+    function T(th, e) { return en() ? e : th; }
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function me() { try { return (typeof currentUser !== 'undefined' && currentUser) || {}; } catch (e) { return {}; } }
+    function uname() { return String(me().username || ''); }
+    function truthy(v) { return v === true || String(v).toUpperCase() === 'TRUE'; }
+    function canEdit() { var u = me(); return u.username === 'admin' || String(u.role || '').toLowerCase() === 'admin' || truthy(u.canEditDeliveryNo); }
+    function norm(v) {
+        return String(v == null ? '' : v).replace(/[๐-๙]/g, function (c) { return String(c.charCodeAt(0) - 0x0E50); })
+            .replace(/[／⁄∕]/g, '/').replace(/\s+/g, '').slice(0, 40);
+    }
+    function docOf(raw) { return String(raw == null ? '' : raw).replace(/[\x02\x03]/g, '').split(/¿|\x1D/)[0].trim().toUpperCase(); }
+    function dm(t) { var d = new Date(t); if (isNaN(d)) return '-'; return ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2); }
+    function dmhm(t) { var d = new Date(t); if (isNaN(d)) return '-'; return dm(t) + ' ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
+ 
+    // ---------- เลขที่ใช้อยู่ (จำไว้ในเครื่องจนกว่าจะเปลี่ยน แยกตามผู้ใช้) ----------
+    var cur = '', bound = null, editing = false, prefill = '', ver = 0;
+    function loadCur() { try { cur = norm(localStorage.getItem('lgdn_cur_' + uname()) || ''); } catch (e) { cur = ''; } }
+    function saveCur() { try { localStorage.setItem('lgdn_cur_' + uname(), cur); } catch (e) { } }
+    function locked() { return !cur || editing; }
+ 
+    // ---------- ดัชนีเลขแท็ก → เลขที่ใบส่งของ (จาก db.lgScanLog) ----------
+    var ix = { key: null, len: -1, ver: -1, doc: {}, dn: {} }, srv = {}, done = {}, asked = {};
+    function build() {
+        var L = (typeof db !== 'undefined' && db.lgScanLog) || [];
+        if (ix.key === L && ix.len === L.length && ix.ver === ver) return ix;
+        var d = {}, n = {};
+        for (var i = 0; i < L.length; i++) {
+            var r = L[i], v = norm(r.deliveryNo); if (!v) continue;
+            var k = docOf(r.rawBarcode); if (!k) continue;
+            d[k] = v;
+            var o = n[v] || (n[v] = { docs: {}, cnt: 0, last: 0 });
+            if (!o.docs[k]) { o.docs[k] = 1; o.cnt++; }
+            var t = new Date(r.scannedAt).getTime(); if (t > o.last) o.last = t;
+        }
+        ix = { key: L, len: L.length, ver: ver, doc: d, dn: n }; return ix;
+    }
+    function count(v) { var o = v ? build().dn[v] : null; return o ? o.cnt : 0; }
+    function dnOfDoc(doc) { var k = docOf(doc); return (k && (build().doc[k] || srv[k])) || ''; }
+    window.__lgdnOfDoc = dnOfDoc;
+    function lookup(docs) {   // ถามเซิร์ฟเวอร์เฉพาะแท็กที่ยังไม่รู้เลข (ครั้งเดียวต่อแท็ก)
+        var list = [];
+        (docs || []).forEach(function (d) { var k = docOf(d); if (k && !build().doc[k] && !srv[k] && !asked[k]) { asked[k] = 1; list.push(k); } });
+        if (!list.length) return Promise.resolve();
+        var jobs = [];
+        for (var i = 0; i < list.length; i += 150) {
+            (function (part) {
+                jobs.push(callAppsScript('getLGDeliveryByDocs', { docs: part }).then(function (r) {
+                    var m = (r && r.map) || {};
+                    part.forEach(function (k) { if (m[k]) srv[k] = norm(m[k]); done[k] = 1; });
+                }).catch(function () { part.forEach(function (k) { done[k] = 1; }); }));
+            })(list.slice(i, i + 150));
+        }
+        return Promise.all(jobs);
+    }
+    window.__lgdnChip = function (doc) { return chipHtml(dnOfDoc(doc), true); };
+ 
+    // ---------- สไตล์ ----------
+    function css() {
+        if (document.getElementById('lgdn-css')) return;
+        var s = document.createElement('style'); s.id = 'lgdn-css';
+        s.textContent = '#lgdn-box{margin-bottom:12px}.lgdn{border-radius:14px;padding:12px 14px}'
+            + '.lgdn-need{border:2px solid #f59e0b;background:#fffbeb}.lgdn-need.req{border-color:#ef4444;background:#fef2f2}'
+            + '.lgdn-ok{border:2px solid #22c55e;background:#f0fdf4;display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}'
+            + '.lgdn-lb{font-size:12px;font-weight:700;color:#475569;margin-bottom:4px}.lgdn-lb b{color:#dc2626}'
+            + '.lgdn-num{font-size:30px;font-weight:900;color:#166534;line-height:1.1;letter-spacing:.5px;word-break:break-all}'
+            + '.lgdn-pill{background:#16a34a;color:#fff;border-radius:20px;padding:3px 12px;font-size:13px;font-weight:800;white-space:nowrap}'
+            + '.lgdn-btns{margin-left:auto;display:flex;flex-wrap:wrap;gap:6px}'
+            + '.lgdn-btns button,.lgdn-cancel{border:1px solid #cbd5e1;background:#fff;border-radius:10px;padding:5px 12px;font-size:13px;font-weight:700;color:#334155}'
+            + '.lgdn-btns button:hover{background:#f1f5f9}.lgdn-btns .fix{border-color:#fdba74;color:#c2410c}'
+            + '.lgdn-ed{display:flex;gap:8px;flex-wrap:wrap}.lgdn-ed input{flex:1;min-width:180px}'
+            + '.lgdn-hint{font-size:12px;color:#64748b;margin-top:6px}.lgdn-alert{margin-top:8px;font-size:13px;font-weight:800;color:#b91c1c}'
+            + '.lgdn-chip{display:inline-block;background:#fff7ed;color:#c2410c;border:1px solid #fdba74;border-radius:20px;padding:0 8px;font-size:11px;font-weight:800;margin-left:6px;line-height:1.6;white-space:nowrap;vertical-align:middle}'
+            + '.lgdn-chip.none{background:#f1f5f9;color:#94a3b8;border-color:#e2e8f0}.lgdn-line{margin-top:2px}.lgdn-line .lgdn-chip{margin-left:0}'
+            + '.lgdn-fb{margin-top:4px;font-weight:700}.lgdn-shake{animation:lgdnsh .35s}@keyframes lgdnsh{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}'
+            + '.lgdn-fixw{font-size:14px}.lgdn-fixw label{display:block;font-weight:700;margin:10px 0 4px;color:#334155}.lgdn-fixw input.fi{width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:8px 10px;font-weight:700}'
+            + '.lgdn-fl{max-height:230px;overflow:auto;border:1px solid #e2e8f0;border-radius:10px;margin-top:8px}.lgdn-fl .r{display:flex;gap:8px;align-items:center;padding:6px 10px;border-bottom:1px solid #f1f5f9}.lgdn-fl .r small{color:#64748b}'
+            + '.lgdn-fl .e{padding:14px;text-align:center;color:#94a3b8}';
+        document.head.appendChild(s);
+    }
+    function chipHtml(dn, known) {
+        if (dn) return '<span class="lgdn-chip">' + T('ใบส่งของ ', 'Delivery note ') + esc(dn) + '</span>';
+        return known ? '<span class="lgdn-chip none">' + T('ใบส่งของ —', 'Delivery note —') + '</span>' : '';
+    }
+ 
+    // ---------- กล่องกรอกเลขในการ์ดสแกนแท็ก ----------
+    function focusScan() { var i = document.getElementById('lg-scan-input'); if (i) { applyLock(); try { i.focus(); } catch (e) { } } }
+    function focusDn(sel) { setTimeout(function () { var i = document.getElementById('lgdn-in'); if (i) { i.focus(); if (sel) i.select(); } }, 30); }
+    function shake() { var b = document.getElementById('lgdn-box'); if (!b) return; b.classList.remove('lgdn-shake'); void b.offsetWidth; b.classList.add('lgdn-shake'); }
+    function looksLikeTag(v) {
+        if (/[¿\x1D\x02\x03]/.test(v) || v.length > 30) return true;
+        try { var p = parseLGBarcode(v); if (p && p.partNo && p.groups && p.groups.length) return true; } catch (e) { }
+        return false;
+    }
+    async function commit(raw) {
+        var v = norm(raw);
+        if (!v) { shake(); focusDn(); return; }
+        if (looksLikeTag(String(raw))) {
+            var oi = document.getElementById('lgdn-in'); if (oi) oi.value = '';
+            shake();
+            Swal.fire({ icon: 'warning', title: T('นี่คือบาร์โค้ดแท็ก ไม่ใช่เลขที่ใบส่งของ', 'That is a tag barcode, not a delivery note number'), text: T('พิมพ์เลขที่ใบส่งของ เช่น 302/15052 ในช่องนี้ก่อน แล้วค่อยสแกนแท็ก', 'Type the delivery note number (e.g. 302/15052) here first, then scan tags'), confirmButtonText: 'OK' }).then(function () { focusDn(); });
+            return;
+        }
+        if (v === cur) { editing = false; render(true); focusScan(); return; }
+        if (!FMT.test(v)) {
+            var r1 = await Swal.fire({
+                icon: 'question', title: T('รูปแบบไม่เหมือนตัวอย่าง 302/15052', 'Format differs from the example 302/15052'),
+                html: '<div style="font-size:22px;font-weight:900;color:#c2410c">' + esc(v) + '</div><div class="mt-2">' + T('ใช้เลขนี้จริงไหม?', 'Use this number anyway?') + '</div>',
+                showCancelButton: true, confirmButtonText: T('ใช้เลขนี้', 'Use this'), cancelButtonText: T('แก้เลข', 'Edit'), reverseButtons: true
+            });
+            if (!r1.isConfirmed) { focusDn(true); return; }
+        }
+        var o = build().dn[v];
+        if (o && o.cnt > 0) {
+            var r2 = await Swal.fire({
+                icon: 'question', title: T('เลขนี้เคยใช้แล้ว', 'This number was already used'),
+                html: '<div style="font-size:22px;font-weight:900;color:#c2410c">' + esc(v) + '</div><div class="mt-2">' + T('เคยใช้เมื่อ ', 'Used on ') + esc(dm(o.last)) + ' (' + o.cnt + T(' แท็ก) — ต่อใบเดิมใช่ไหม?', ' tags) — continue the same note?') + '</div>',
+                showCancelButton: true, confirmButtonText: T('ต่อใบเดิม', 'Continue'), cancelButtonText: T('ไม่ใช่', 'No'), reverseButtons: true
+            });
+            if (!r2.isConfirmed) { focusDn(true); return; }
+        }
+        cur = v; editing = false; saveCur(); render(true); focusScan();
+    }
+    function render(force) {
+        css();
+        var inp = document.getElementById('lg-scan-input'); if (!inp) return;
+        var row = inp.closest('.d-flex'); if (!row || !row.parentNode) return;
+        if (!uname()) return;
+        if (bound !== uname()) { bound = uname(); loadCur(); editing = false; force = true; }
+        var box = document.getElementById('lgdn-box');
+        if (!box) { box = document.createElement('div'); box.id = 'lgdn-box'; row.parentNode.insertBefore(box, row); force = true; }
+        var n = count(cur), sig = [cur, editing, n, en(), canEdit()].join('|');
+        if (!force && box.getAttribute('data-sig') === sig) { applyLock(); return; }
+        var oi = document.getElementById('lgdn-in'), typed = oi ? oi.value : null, hadFocus = !!oi && document.activeElement === oi;
+        box.setAttribute('data-sig', sig);
+        var fixBtn = canEdit() ? '<button type="button" class="fix" id="lgdn-fix"><i class="bi bi-pencil-square"></i> ' + T('แก้เลขที่ยิงไปแล้ว', 'Fix saved numbers') + '</button>' : '';
+        if (editing || !cur) {
+            box.innerHTML = '<div class="lgdn lgdn-need ' + (cur ? '' : 'req') + '">'
+                + '<div class="lgdn-lb"><i class="bi bi-file-earmark-text"></i> ' + T('เลขที่ใบส่งของ', 'Delivery note no.') + ' <b>*</b></div>'
+                + '<div class="lgdn-ed"><input id="lgdn-in" class="form-control form-control-lg fw-bold" autocomplete="off" placeholder="' + T('เช่น 302/15052', 'e.g. 302/15052') + '">'
+                + '<button type="button" class="btn btn-' + (cur ? 'warning' : 'danger') + ' fw-bold" id="lgdn-okb">' + T('ตกลง', 'OK') + '</button>'
+                + (cur ? '<button type="button" class="lgdn-cancel" id="lgdn-cx">' + T('ยกเลิก', 'Cancel') + '</button>' : '') + '</div>'
+                + '<div class="lgdn-hint">' + (cur ? T('เปลี่ยนเลขสำหรับแท็กที่จะยิงต่อจากนี้ (แท็กที่ยิงไปแล้วไม่เปลี่ยน)', 'Applies to tags scanned from now on (already scanned tags keep their number)')
+                    : T('ใส่ครั้งเดียว ระบบจำไว้ให้จนกว่าจะเปลี่ยนใบ — แท็กทุกใบที่ยิงจะบันทึกเลขนี้', 'Enter once — it is remembered until you change it, and every tag scanned is saved with it')) + '</div>'
+                + (cur ? '' : '<div class="lgdn-alert">🔒 ' + T('ใส่เลขที่ใบส่งของก่อน จึงจะสแกนแท็กได้', 'Enter the delivery note number first to scan tags') + '</div>')
+                + (fixBtn ? '<div class="mt-2 lgdn-btns" style="margin-left:0">' + fixBtn + '</div>' : '') + '</div>';
+            var ni = document.getElementById('lgdn-in');
+            ni.value = typed !== null ? typed : prefill;
+            ni.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); commit(ni.value); } });
+            document.getElementById('lgdn-okb').addEventListener('click', function () { commit(ni.value); });
+            var cx = document.getElementById('lgdn-cx'); if (cx) cx.addEventListener('click', function () { editing = false; prefill = ''; render(true); focusScan(); });
+            if (hadFocus || typed === null) focusDn(false);
+        } else {
+            box.innerHTML = '<div class="lgdn lgdn-ok"><div><div class="lgdn-lb">' + T('เลขที่ใบส่งของที่ใช้อยู่', 'Current delivery note no.') + '</div><div class="lgdn-num">' + esc(cur) + '</div></div>'
+                + '<span class="lgdn-pill">' + T('ใบนี้ยิงแล้ว ' + n + ' แท็ก', 'Scanned ' + n + ' tag' + (n === 1 ? '' : 's') + ' on this note') + '</span>'
+                + '<div class="lgdn-btns"><button type="button" id="lgdn-chg"><i class="bi bi-pencil"></i> ' + T('แก้เลข', 'Edit no.') + '</button>'
+                + '<button type="button" id="lgdn-new"><i class="bi bi-plus-lg"></i> ' + T('เริ่มใบใหม่', 'New note') + '</button>' + fixBtn + '</div></div>';
+            document.getElementById('lgdn-chg').addEventListener('click', function () { prefill = cur; editing = true; render(true); focusDn(true); });
+            document.getElementById('lgdn-new').addEventListener('click', function () { prefill = ''; editing = true; render(true); focusDn(false); });
+        }
+        var fx = document.getElementById('lgdn-fix'); if (fx) fx.addEventListener('click', openFix);
+        applyLock();
+    }
+    function applyLock() {
+        var inp = document.getElementById('lg-scan-input'), cam = document.getElementById('lg-camera-toggle-btn'), lk = locked() && !!uname();
+        if (inp) {
+            if (!inp.__lgdnF) { inp.__lgdnF = 1; inp.addEventListener('focus', function () { if (locked()) { var d = document.getElementById('lgdn-in'); if (d) { inp.blur(); d.focus(); } } }); }
+            if (lk) {
+                if (inp.dataset.lgdnLk !== '1') { inp.dataset.lgdnPh = inp.getAttribute('placeholder') || ''; inp.dataset.lgdnLk = '1'; }
+                inp.readOnly = true; inp.placeholder = '🔒 ' + T('ใส่เลขที่ใบส่งของก่อน จึงจะสแกนแท็กได้', 'Enter the delivery note number first to scan tags'); inp.style.background = '#f3f4f6';
+            } else if (inp.dataset.lgdnLk === '1') {
+                inp.readOnly = false; inp.placeholder = inp.dataset.lgdnPh || ''; inp.style.background = ''; inp.dataset.lgdnLk = '0';
+            }
+        }
+        if (cam) {
+            var c = document.getElementById('lg-camera-container'), open = !!c && !c.classList.contains('d-none');
+            var off = lk && !open; cam.disabled = off; cam.style.opacity = off ? '.45' : '';
+        }
+    }
+ 
+    // ---------- ครอบฟังก์ชันสแกน: ล็อกถ้ายังไม่ใส่เลข + บอกผลว่าแท็กนี้อยู่ใบไหน ----------
+    function patchRows(from, dn) {
+        var L = (typeof db !== 'undefined' && db.lgScanLog) || [], ch = false;
+        for (var i = Math.max(0, from); i < L.length; i++) { if (!L[i].deliveryNo) { L[i].deliveryNo = dn; ch = true; } }
+        if (ch) ver++;
+    }
+    function installScan() {
+        if (typeof processLGScanRaw !== 'function' || processLGScanRaw.__dn) return;
+        var orig = processLGScanRaw;
+        var w = async function (raw, fb) {
+            if (!raw || !String(raw).trim()) return orig.apply(this, arguments);
+            if (locked() && uname()) {
+                if (fb) fb.innerHTML = '<div class="alert alert-danger mb-0"><i class="bi bi-lock-fill me-1"></i><b>' + T('ยังไม่ได้ใส่เลขที่ใบส่งของ', 'No delivery note number yet') + '</b> — ' + T('ใส่เลขก่อน แล้วสแกนใหม่', 'enter it, then scan again') + '</div>';
+                if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+                shake(); focusDn(false); return;
+            }
+            var L0 = ((typeof db !== 'undefined' && db.lgScanLog) || []).length, dn0 = cur;
+            var r = await orig.apply(this, arguments);
+            try {
+                var L1 = ((typeof db !== 'undefined' && db.lgScanLog) || []).length;
+                if (dn0 && L1 > L0) {
+                    patchRows(L0, dn0);
+                    var al = fb && fb.querySelector('.alert');
+                    if (al && !al.getAttribute('data-lgdn-fb')) {
+                        al.setAttribute('data-lgdn-fb', '1');
+                        al.insertAdjacentHTML('beforeend', '<div class="lgdn-fb">📄 ' + T('ใบส่งของ ', 'Delivery note ') + '<b>' + esc(dn0) + '</b> — ' + T('แท็กที่ ' + count(dn0) + ' ของใบนี้', 'tag #' + count(dn0) + ' on this note') + '</div>');
+                    }
+                    render(false);
+                }
+            } catch (e) { if (window.console) console.warn('LG-DELIVERY-NO', e); }
+            return r;
+        };
+        w.__dn = true; processLGScanRaw = w;
+    }
+    var lastRecv = { doc: '', at: 0 };
+    function installCall() {
+        if (typeof callAppsScript !== 'function' || callAppsScript.__dn) return;
+        var orig = callAppsScript;
+        var w = async function (action, payload) {
+            if (action === 'submitLGScan' && payload && !(payload.manual === true || String(payload.manual).toLowerCase() === 'true')) {
+                if (cur) payload.deliveryNo = cur;
+                var res = await orig.apply(this, arguments), body = payload;
+                if (norm(body.deliveryNo)) setTimeout(function () {
+                    var L = (typeof db !== 'undefined' && db.lgScanLog) || [];
+                    for (var i = L.length - 1; i >= Math.max(0, L.length - 60); i--) {
+                        var r = L[i];
+                        if (!r.id && String(r.WO) === String(body.WO) && r.rawBarcode === body.rawBarcode) { if (!r.deliveryNo) r.deliveryNo = norm(body.deliveryNo); if (res && res.id) r.id = res.id; ver++; break; }
+                    }
+                }, 0);
+                return res;
+            }
+            if (action === 'submitLGReceive' && payload && payload.docNumber) lastRecv = { doc: docOf(payload.docNumber), at: Date.now() };
+            return orig.apply(this, arguments);
+        };
+        w.__dn = true; callAppsScript = w;
+    }
+    function installCam() {
+        var f = window.toggleLGCameraScanner; if (typeof f !== 'function' || f.__dn) return;
+        var w = function () {
+            var c = document.getElementById('lg-camera-container'), open = !!c && !c.classList.contains('d-none');
+            if (!open && locked() && uname()) {
+                shake(); focusDn(false);
+                Swal.fire({ icon: 'warning', title: T('ใส่เลขที่ใบส่งของก่อน', 'Enter the delivery note number first'), text: T('ต้องมีเลขที่ใบส่งของ จึงจะเปิดกล้องสแกนแท็กได้', 'A delivery note number is required before scanning tags') }).then(function () { focusDn(false); });
+                return;
+            }
+            return f.apply(this, arguments);
+        };
+        w.__dn = true; window.toggleLGCameraScanner = w;
+    }
+    function installAll() { try { installScan(); installCall(); installCam(); } catch (e) { if (window.console) console.warn('LG-DELIVERY-NO install', e); } }
+    installAll();
+    document.addEventListener('DOMContentLoaded', installAll);
+    window.addEventListener('load', installAll);
+    setTimeout(installAll, 1500); setTimeout(installAll, 5000);
+ 
+    // ---------- แก้เลขที่ยิงไปแล้ว (เฉพาะแอดมิน / คนที่ได้สิทธิ์) ----------
+    async function openFix() {
+        if (!canEdit()) return;
+        try {
+            if (typeof fetchWithRetry === 'function' && typeof SCRIPT_URL !== 'undefined') {
+                Swal.fire({ title: T('กำลังโหลดข้อมูลล่าสุด...', 'Loading latest data...'), allowOutsideClick: false, didOpen: function () { Swal.showLoading(); } });
+                var rr = await fetchWithRetry(SCRIPT_URL + '?action=getData&t=' + Date.now(), { method: 'GET', cache: 'no-store', redirect: 'follow' });
+                var jj = await rr.json(); if (jj && jj.lgScanLog) { db.lgScanLog = jj.lgScanLog; ver++; }
+            }
+        } catch (e) { }
+        var html = '<div class="text-start lgdn-fixw"><label>' + T('เลขที่ใบส่งของเดิม (ที่ต้องการแก้)', 'Current delivery note no. (to change)') + '</label><input id="lgdn-f-src" class="fi" value="' + esc(cur) + '" autocomplete="off">'
+            + '<label>' + T('กรองเลขแท็ก / WO', 'Filter tag / WO') + '</label><input id="lgdn-f-q" class="fi" autocomplete="off"><div id="lgdn-f-list" class="lgdn-fl"></div>'
+            + '<label>' + T('เลขที่ใบส่งของใหม่', 'New delivery note no.') + '</label><input id="lgdn-f-new" class="fi" placeholder="' + T('เช่น 302/15052', 'e.g. 302/15052') + '" autocomplete="off"></div>';
+        function g(id) { var e = document.getElementById(id); return e ? e.value : ''; }
+        function draw() {
+            var src = norm(g('lgdn-f-src')), q = g('lgdn-f-q').trim().toLowerCase(), box = document.getElementById('lgdn-f-list'); if (!box) return;
+            var m = {}, order = [], noId = 0;
+            ((typeof db !== 'undefined' && db.lgScanLog) || []).forEach(function (r) {
+                if (!src || norm(r.deliveryNo) !== src) return;
+                if (!r.id) { noId++; return; }
+                var k = docOf(r.rawBarcode); if (!k) return;
+                var o = m[k]; if (!o) { o = m[k] = { doc: k, ids: [], wos: [], t: r.scannedAt, by: r.scannedBy }; order.push(k); }
+                o.ids.push(r.id); if (o.wos.indexOf(r.WO) < 0) o.wos.push(r.WO);
+            });
+            order = order.filter(function (k) { var o = m[k]; return !q || (o.doc + ' ' + o.wos.join(' ')).toLowerCase().indexOf(q) >= 0; });
+            if (!order.length) { box.innerHTML = '<div class="e">' + (src ? T('ไม่พบแท็กของเลขนี้', 'No tags found for this number') : T('ใส่เลขเดิมก่อน', 'Enter the current number first')) + '</div>'; return; }
+            box.innerHTML = '<div class="r" style="background:#f8fafc"><label style="margin:0"><input type="checkbox" id="lgdn-f-all" checked> ' + T('เลือกทั้งหมด', 'Select all') + ' (' + order.length + ')</label></div>'
+                + order.slice(0, 300).map(function (k) { var o = m[k]; return '<div class="r"><input type="checkbox" class="lgdn-f-c" checked data-ids="' + esc(o.ids.join(',')) + '"><div><b>' + esc(o.doc) + '</b> <small>· ' + esc(o.wos.join(', ')) + '</small><br><small>' + esc(dmhm(o.t)) + (o.by ? ' · ' + esc(o.by) : '') + '</small></div></div>'; }).join('')
+                + (noId ? '<div class="e" style="font-size:12px">' + T(noId + ' แท็กเพิ่งยิง ยังไม่มีรหัส — ปิดแล้วเปิดใหม่อีกครั้ง', noId + ' just-scanned rows have no id yet — close and reopen') + '</div>' : '');
+            var all = document.getElementById('lgdn-f-all');
+            if (all) all.addEventListener('change', function () { Array.prototype.forEach.call(box.querySelectorAll('.lgdn-f-c'), function (c) { c.checked = all.checked; }); });
+        }
+        var res = await Swal.fire({
+            title: T('แก้เลขที่ใบส่งของที่ยิงไปแล้ว', 'Fix delivery note numbers already saved'), html: html, width: 640, showCancelButton: true, focusConfirm: false,
+            confirmButtonText: T('บันทึกเลขใหม่', 'Save new number'), cancelButtonText: T('ยกเลิก', 'Cancel'),
+            didOpen: function () { draw(); ['lgdn-f-src', 'lgdn-f-q'].forEach(function (id) { var e = document.getElementById(id); if (e) e.addEventListener('input', draw); }); },
+            preConfirm: function () {
+                var nn = norm(g('lgdn-f-new')), ids = [];
+                Array.prototype.forEach.call(document.querySelectorAll('.lgdn-f-c:checked'), function (c) { String(c.getAttribute('data-ids')).split(',').forEach(function (x) { if (x) ids.push(x); }); });
+                if (!nn) { Swal.showValidationMessage(T('ใส่เลขที่ใบส่งของใหม่', 'Enter the new number')); return false; }
+                if (!ids.length) { Swal.showValidationMessage(T('เลือกแท็กอย่างน้อย 1 ใบ', 'Select at least one tag')); return false; }
+                return { nn: nn, ids: ids };
+            }
+        });
+        if (!res.isConfirmed || !res.value) return;
+        var nn = res.value.nn, ids = res.value.ids;
+        if (!FMT.test(nn)) {
+            var c1 = await Swal.fire({ icon: 'question', title: T('รูปแบบไม่เหมือนตัวอย่าง 302/15052', 'Format differs from the example 302/15052'), html: '<b>' + esc(nn) + '</b><br>' + T('ใช้เลขนี้จริงไหม?', 'Use this number anyway?'), showCancelButton: true, confirmButtonText: T('ใช้เลขนี้', 'Use this'), cancelButtonText: T('ยกเลิก', 'Cancel') });
+            if (!c1.isConfirmed) return;
+        }
+        Swal.fire({ title: T('กำลังบันทึก...', 'Saving...'), allowOutsideClick: false, didOpen: function () { Swal.showLoading(); } });
+        try {
+            var r = await callAppsScript('updateLGScanDelivery', { ids: ids, deliveryNo: nn, by: uname() });
+            var set = {}; ids.forEach(function (x) { set[String(x)] = 1; });
+            ((typeof db !== 'undefined' && db.lgScanLog) || []).forEach(function (row) { if (set[String(row.id)]) row.deliveryNo = nn; });
+            ver++; render(true);
+            Swal.fire({ icon: 'success', title: T('แก้แล้ว ' + ((r && r.updated) != null ? r.updated : ids.length) + ' รายการ → ' + nn, 'Updated ' + ((r && r.updated) != null ? r.updated : ids.length) + ' rows → ' + nn), timer: 2500, showConfirmButton: false });
+        } catch (e) {
+            Swal.fire({ icon: 'error', title: T('แก้ไม่สำเร็จ', 'Could not update'), text: String((e && e.message) || e) });
+        }
+    }
+ 
+    // ---------- ฝั่ง LG: ชิปเลขที่ใบส่งของในรายการ + การ์ดผลรับแท็ก ----------
+    function sweep() {
+        var miss = [], stampLang = en() ? 'e' : 't';
+        function deco(host, doc, line) {
+            var dn = dnOfDoc(doc), known = !!done[docOf(doc)], stamp = (dn || '') + '|' + (known ? 1 : 0) + stampLang;
+            if (host.getAttribute('data-lgdn') === stamp) return;
+            var old = host.querySelector(line ? '.lgdn-line' : '.lgdn-chip'); if (old) old.remove();
+            var h = chipHtml(dn, known);
+            if (h) host.insertAdjacentHTML('beforeend', line ? '<div class="lgdn-line">' + h + '</div>' : h);
+            host.setAttribute('data-lgdn', stamp);
+            if (!dn && !known) miss.push(doc);
+        }
+        Array.prototype.forEach.call(document.querySelectorAll('.row2 input[data-d]'), function (inp) {
+            var host = inp.parentNode && inp.parentNode.querySelector('.doc'); if (host) deco(host, inp.getAttribute('data-d'), false);
+        });
+        Array.prototype.forEach.call(document.querySelectorAll('#lgr2 .lgr2-row[data-doc]'), function (row) {
+            var host = row.querySelector('.mid'); if (host) deco(host, row.getAttribute('data-doc'), true);
+        });
+        if (miss.length) lookup(miss).then(function () { try { sweep(); } catch (e) { } });
+        var rs = document.getElementById('lgr-result');
+        if (rs && !rs.__lgdnObs) {
+            rs.__lgdnObs = 1;
+            new MutationObserver(function () {
+                var c = rs.querySelector('.lgr-card.ok'); if (!c || c.getAttribute('data-lgdn')) return;
+                c.setAttribute('data-lgdn', '1');
+                var doc = lastRecv.doc; if (!doc || Date.now() - lastRecv.at > 60000) return;
+                var add = function () {
+                    if (!c.isConnected) return; var dn = dnOfDoc(doc);
+                    c.insertAdjacentHTML('beforeend', '<div class="lgr-note">📄 ' + T('ใบส่งของ ', 'Delivery note ') + (dn ? '<b>' + esc(dn) + '</b>' : '—') + '</div>');
+                };
+                if (dnOfDoc(doc)) add(); else lookup([doc]).then(add);
+            }).observe(rs, { childList: true });
+        }
+    }
+    setInterval(function () { try { render(false); sweep(); } catch (e) { if (window.console) console.warn('LG-DELIVERY-NO', e); } }, 800);
+    window.__lgdnState = function () { return { cur: cur, locked: locked(), editing: editing }; };
+})();
+// ===== จบ LG-DELIVERY-NO-V1 =====
 // ดาวน์โหลดเทมเพลต Excel สำหรับอัปโหลดแพลน
 (function () {
     if (window.__tagMenuV1) return; window.__tagMenuV1 = true;
@@ -27792,7 +28150,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
         return c.list.slice(0, 8).map(g => {
             const isToday = g.t && dayKey(g.t) === c.today;
             const wos = g.wos.join(', ');
-            return `<div class="lgr2-row ${g.doc === flashDoc ? 'new' : ''}">
+            return `<div class="lgr2-row ${g.doc === flashDoc ? 'new' : ''}" data-doc="${esc(g.doc)}">
                 <div class="tm"><b>${g.t ? esc(hm(g.t)) : '-'}</b>${isToday ? '' : `<small>${esc(dmy(g.t))}</small>`}</div>
                 <div class="mid"><div class="wo">${esc(wos)}</div><div class="pn">${esc(g.part)}${g.by ? ` · <i class="bi bi-person-fill"></i> ${esc(g.by)}` : ''}</div></div>
                 <div class="rt"><span class="q">${(g.qty || 0).toLocaleString('en-US')}<small> ชิ้น</small></span>${g.flag ? '<span class="fl"><i class="bi bi-exclamation-triangle-fill"></i> ไม่มีสแกนออก</span>' : ''}</div>
@@ -28200,7 +28558,7 @@ renderLGTagPrintWindow = function(tags, printWin) {
         return base.filter(g => {
             if (S.date && (!g.t || dayKey(g.t) !== S.date)) return false;
             if (!words.length) return true;
-            const hay = [g.doc, g.wos.join(' '), g.part, g.by].join(' ').toLowerCase();
+            const hay = [g.doc, g.wos.join(' '), g.part, g.by, (window.__lgdnOfDoc ? window.__lgdnOfDoc(g.doc) : '')].join(' ').toLowerCase();   // LG-DELIVERY-NO
             return words.every(w => hay.indexOf(w) >= 0);
         });
     }
@@ -34576,6 +34934,7 @@ return (_acc && _d.get ? _d.get.call(window) : _plain).apply(this, arguments);
     CATS[CATS.length - 1].items.push(['canManageArchive', 'จัดการ Archive ประวัติเก่า', 'ย้ายล็อตที่ปิดจบแล้วไปเก็บใน Archive', 'archive']);
     (CATS.find(c => c.items.some(it => it[0] === 'canManageDeliveryPlan')) || CATS[0]).items.push(['canApproveVehicleReq', 'จัดการคำขอจองรถ', 'กดอนุมัติ / ปฏิเสธ / แก้ไขเวลา / ยกเลิก คำขอจองรถในหน้า Delivery plan', 'truck']); EXTRA_KEYS.push('canApproveVehicleReq');   // VRQ-PERM
     CATS[0].items.push(['canReverseHistory', 'ยกเลิกรายการในประวัติ', 'กดยกเลิก (ย้อนกลับ) รายการรับ/จ่ายในหน้า "ประวัติการทำรายการ"', 'arrow-counterclockwise']); EXTRA_KEYS.push('canReverseHistory');   // REVERSE-PERM
+    (CATS.find(c => c.name === 'งาน LG') || CATS[CATS.length - 1]).items.push(['canEditDeliveryNo', 'แก้เลขที่ใบส่งของ', 'แก้เลขที่ใบส่งของของแท็กที่ยิงออกไปแล้ว', 'pencil-square', () => window.__lgDeliveryNo]); EXTRA_KEYS.push('canEditDeliveryNo');   // LG-DELIVERY-NO
     const LEGACY_KEYS = ['canLGPrintTags', 'canLGManualPlan', 'canLGPrintPlan'];
     const onOf = (u, k) => {
         const v = u ? u[k] : undefined;
@@ -45978,6 +46337,7 @@ window.pkFilter = window.pkFilter || 'all';
     const LEGACY_ON = ['canLGPrintTags', 'canLGManualPlan', 'canLGPrintPlan'];   // ยังไม่เคยตั้งค่า = เปิดอยู่ (ตามแพตช์ LG เดิม)
     LABEL.canApproveVehicleReq = 'จัดการคำขอจองรถ';   // VRQ-PERM
     LABEL.canReverseHistory = 'ยกเลิกรายการในประวัติ';   // REVERSE-PERM
+    LABEL.canEditDeliveryNo = 'แก้เลขที่ใบส่งของ';   // LG-DELIVERY-NO
     const BASE_KEYS = ['canImport', 'canExport', 'canViewHistory', 'canCountStock', 'canManageProducts', 'canManageUsers', 'canManageAnnouncements', 'canManageDeliveryPlan', 'canConvertPart', 'canManageRack', 'canForecast', 'canManageLotHold', 'canManageSupport', 'canCheckLGTags'];
     let dlg = null, busy = false;
  
