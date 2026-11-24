@@ -21612,8 +21612,253 @@ window.renderLGMatchTable = function() {
     setInterval(function () { try { paint(); } catch (e) { if (window.console) console.warn('LG-BLOCK', e); } }, 1500);
     window.__lgBlockSim = sim;
 })();
+(function () {
+    if (window.__lgBlockV1) return; window.__lgBlockV1 = true;
+    var AHEAD = 3;   // ไล่คิวต่อไปอีกกี่วัน
+    var isEn = function () { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e) { return false; } };
+    function T(th, e) { return isEn() ? e : th; }
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function up(s) { return String(s == null ? '' : s).trim().toUpperCase(); }
+    function p2(n) { return String(n).padStart(2, '0'); }
+    function fmt(d) { return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+    function today() { try { return lgTodayStr(); } catch (e) { return fmt(new Date()); } }
+    function addDays(s, n) { var p = String(s).split('-'); var d = new Date(+p[0], +p[1] - 1, +p[2], 12, 0, 0); d.setDate(d.getDate() + n); return fmt(d); }
+    function dm(s) { var a = String(s).split('-'); return a.length === 3 ? a[2] + '/' + a[1] : s; }
+    function f1(n) { return (Math.round(n * 10) / 10).toFixed(1); }
+    function num(n) { return (Math.round(n) || 0).toLocaleString('en-US'); }
+    function rk(p) { return up(p.WO) + '|' + up(p.partNo); }
+    function lineOf(p) { return String(p && p.line != null ? p.line : '').trim() || '-'; }
+    function isExt(p) { try { return typeof window.lgIsExtPlan === 'function' ? !!window.lgIsExtPlan(p) : false; } catch (e) { return false; } }
+    function $(s, r) { return (r || document).querySelector(s); }
+    function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+    function recvMap() { var m = {}; try { (db.lgReceiveLog || []).forEach(function (x) { var k = up(x.WO) + '|' + up(x.partNo); m[k] = (m[k] || 0) + (parseFloat(x.qty) || 0); }); } catch (e) { } return m; }
+ 
+    // แบ่งยอดที่ LG รับแล้วให้แต่ละแถวแพลน (WO+พาร์ทเดียวกันที่อยู่หลายวัน): แถววันก่อนได้ก่อน ที่เหลือค่อยตกถึงวันถัดไป — กันนับของ WO เดียวกันซ้ำ 2 วัน
+    function pid(p) { return p.id != null ? String(p.id) : [lgPlanDateOf(p), lineOf(p), rk(p)].join('~'); }
+    function allocRV(lastDate) {
+        var left = recvMap(), out = {}, byDL = {};
+        try { (db.lgPlan || []).forEach(function (p) { if (!p || p.planCancelledAt || isExt(p)) return; var d = lgPlanDateOf(p); if (!d || d > lastDate) return; var k = d + '\u0001' + lineOf(p); (byDL[k] = byDL[k] || []).push(p); }); } catch (e) { }
+        Object.keys(byDL).sort().forEach(function (k) {
+            var rows = byDL[k]; try { rows = lgSortPlans(rows); } catch (e) { }
+            rows.forEach(function (p) { var key = rk(p), o = parseFloat(p.orderQty) || 0, t = Math.min(o, left[key] || 0); out[pid(p)] = t; left[key] = (left[key] || 0) - t; });
+        });
+        return out;
+    }
+    // ไล่คิวของไลน์ตามลำดับที่ LG ผลิตจริง จากความคืบหน้าล่าสุด — หาจุดแรกที่ "ของที่ LG รับแล้ว" ไม่พอผลิตให้จบ WO นั้น
+    function sim(line, d0) {
+        var A = window.__lguApi; if (!A) return null;
+        var u = A.uhtOf(line); if (!u) return null;
+        var RV = allocRV(addDays(d0, AHEAD)), h = 0, blocked = null, behind = 0;
+        for (var i = 0; i <= AHEAD; i++) {
+            var d = addDays(d0, i), all = [];
+            try { all = lgSortPlans((db.lgPlan || []).filter(function (p) { return p && !p.planCancelledAt && lgPlanDateOf(p) === d && lineOf(p) === line; })); } catch (e) { all = []; }
+            if (!all.length) continue;
+            var done = {}, part = {}, start = 0;
+            if (i === 0) {
+                var st = null; try { st = A.lineState(line, d); } catch (e) { st = null; }
+                if (!(st && st.hasProg)) return { line: line, noProg: true };   // LG ยังไม่อัปเดตว่าผลิตถึงไหน → ยังไม่นับเวลา
+                if (st.nv) {
+                    String(st.pg.doneWOs == null ? '' : st.pg.doneWOs).split(',').map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (k) { done[up(k.split('|')[0]) + '|' + up(k.split('|')[1])] = 1; });
+                    (st.partRows || []).forEach(function (x) { part[rk(x.r)] = x.q; });
+                } else if (st.idx >= 0) {
+                    st.rows.forEach(function (r, j) { if (j < st.idx) done[rk(r)] = 1; });
+                    var o = parseFloat(st.cur.orderQty) || 0, q = Math.min(o, parseFloat(st.pg.producedQty) || 0);
+                    if (q >= o && o > 0) done[rk(st.cur)] = 1; else part[rk(st.cur)] = q;
+                }
+                var cur = all.findIndex(function (p) { return !isExt(p) && !done[rk(p)]; });
+                if (cur < 0) continue; start = cur;
+            }
+            for (var j = start; j < all.length; j++) {
+                var p = all[j], ord = parseFloat(p.orderQty) || 0;
+                if (isExt(p)) { h += ord / u; continue; }
+                if (done[rk(p)]) continue;
+                var made = Math.min(ord, part[rk(p)] || 0), rem = Math.max(0, ord - made);
+                var nco = all.filter(function (q) { return !isExt(q) && up(q.WO) === up(p.WO); }).length, kdiv = nco >= 2 ? nco : 1;
+                var avail = Math.max(0, Math.min(ord, RV[pid(p)] || 0) - made);   // ของที่ LG รับแล้วแต่ยังไม่ได้ผลิต
+                var seg = { date: d, WO: String(p.WO).trim(), partNo: String(p.partNo).trim(), ord: ord, rem: rem, avail: avail };
+                if (!blocked) { if (i === 0 && avail < rem) blocked =   /* เตือนเฉพาะ WO ของวันที่เลือก — ของแพลนวันถัดไปยังไม่ถึงเวลาส่ง */ { seg: seg, atH: h + avail / u / kdiv, miss: rem - avail }; }
+                else behind += avail;
+                h += rem / u / kdiv;
+            }
+        }
+        return { line: line, u: u, blocked: blocked, behind: behind, behindH: behind / u };
+    }
+ 
+    function level(r) {
+        if (!r || !r.blocked) return null;
+        var m = 2; try { m = window.__lguApi.minH(); } catch (e) { }
+        return r.blocked.atH < m * 0.5 ? 'bad' : (r.blocked.atH < m ? 'warn' : null);
+    }
+    function msg(r, d0, short) {
+        var b = r.blocked, s = b.seg, eta = new Date(Date.now() + b.atH * 3600e3);
+        var wo = (s.date !== d0 ? dm(s.date) + ' ' : '') + s.WO;
+        var head = b.atH < 0.05 ? T('⛔ ตอนนี้ติดที่ WO ', '⛔ Stuck now at WO ') : T('⚠ จะติดที่ WO ', '⚠ Will get stuck at WO ');
+        var t = head + '<b>' + esc(wo) + '</b>' + (s.partNo ? ' <span style="opacity:.75">(' + esc(s.partNo) + ')</span>' : '')
+            + T(' — ยังส่งไม่ครบ ขาด ', ' — not fully delivered, short ') + '<b>' + num(b.miss) + '</b>' + T(' ชิ้น', ' pcs');
+        if (b.atH >= 0.05) t += T(' · ของที่มีผลิตได้อีก ', ' · stock lasts only ') + '<b>' + f1(b.atH) + T(' ชม.', ' h') + '</b> ' + T('(ถึง ~', '(until ~') + p2(eta.getHours()) + ':' + p2(eta.getMinutes()) + ')';
+        if (!short && r.behind > 0) t += '<div class="lgb-sub">' + T('WO ถัดไปที่ส่งล่วงหน้าไว้ ', 'Later WOs already delivered: ') + num(r.behind) + T(' ชิ้น (≈', ' pcs (≈') + f1(r.behindH) + T(' ชม.) ใช้ไม่ได้จนกว่า ', ' h) cannot be used until ') + esc(s.WO) + T(' จะครบ', ' is complete') + '</div>';
+        return t;
+    }
+ 
+    var css = document.createElement('style');
+    css.textContent = '.lgb-w{margin-top:8px;border-radius:10px;padding:7px 11px;font-size:12.5px;line-height:1.45;font-weight:600}.lgb-w.bad{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c}.lgb-w.warn{background:#fffbeb;border:1px solid #fde68a;color:#b45309}'
+        + '.lgb-sub{font-weight:500;font-size:12px;opacity:.9;margin-top:2px}'
+        + '.lgb-ban{margin-bottom:10px;border-radius:12px;padding:9px 13px;font-size:13px;font-weight:700;display:flex;gap:10px;align-items:flex-start}.lgb-ban.bad{background:#fee2e2;border:1px solid #fca5a5;color:#991b1b}.lgb-ban.warn{background:#fef3c7;border:1px solid #fcd34d;color:#92400e}.lgb-ban b.l{background:#fff;border-radius:6px;padding:0 6px}';
+    document.head.appendChild(css);
+ 
+    function selDate() { var d = document.getElementById('lgd-date'); return (d && d.value) || today(); }
+    function lineOfCard(ln) { var sp = ln.querySelector('.t span'), m = sp ? /^(?:ไลน์|Line)\s+(.+)$/.exec(sp.textContent.trim()) : null; return m ? m[1].trim() : ''; }
+    function paint() {
+        var ring = document.getElementById('lgd-ring'); if (!ring || ring.offsetParent === null || document.hidden) return;
+        var d0 = selDate(), bans = [], worst = 'warn';
+        $$('.lgd-ln', ring).forEach(function (ln) {
+            var l = lineOfCard(ln); if (!l) return;
+            var r = null; try { r = sim(l, d0); } catch (e) { r = null; }
+            var lv = level(r), sig = lv ? lv + '|' + msg(r, d0, false).replace(/\(ถึง ~\d\d:\d\d\)|\(until ~\d\d:\d\d\)/, '') : '';
+            if (lv) { bans.push({ l: l, r: r }); if (lv === 'bad') worst = 'bad'; }
+            var old = ln.querySelector('.lgb-w');
+            if (!lv) { if (old) old.remove(); return; }
+            if (old && old.getAttribute('data-sig') === sig) { if (old.getAttribute('data-eta')) old.innerHTML = msg(r, d0, false); return; }
+            if (old) old.remove();
+            ln.insertAdjacentHTML('beforeend', '<div class="lgb-w ' + lv + '" data-eta="1" data-sig="' + esc(sig) + '">' + msg(r, d0, false) + '</div>');
+        });
+        var ban = ring.querySelector('.lgb-ban');
+        if (!bans.length) { if (ban) ban.remove(); return; }
+        var bs = worst + '|' + bans.map(function (x) { return x.l + x.r.blocked.seg.WO + Math.round(x.r.blocked.atH * 10); }).join(',');
+        if (ban && ban.getAttribute('data-sig') === bs) return;
+        if (ban) ban.remove();
+        ring.insertAdjacentHTML('afterbegin', '<div class="lgb-ban ' + worst + '" data-sig="' + esc(bs) + '"><div>⛔</div><div>' + T('LG จะรอของ: ', 'LG will wait for parts: ')
+            + bans.map(function (x) { return '<b class="l">' + T('ไลน์ ', 'Line ') + esc(x.l) + '</b> ' + T('ติดที่ ', 'stuck at ') + esc(x.r.blocked.seg.WO) + ' ' + T('ขาด ', 'short ') + num(x.r.blocked.miss) + T(' ชิ้น · อีก ', ' pcs · in ') + f1(x.r.blocked.atH) + T(' ชม.', ' h'); }).join(' &nbsp;|&nbsp; ') + '</div></div>');
+    }
+    setInterval(function () { try { paint(); } catch (e) { if (window.console) console.warn('LG-BLOCK', e); } }, 1500);
+    window.__lgBlockSim = sim;
+})();
+// ===== จบ LG-BLOCK-V2 =====
 // ===== จบ LG-BLOCK-V1 =====
 // ===== LG-IDLE-LINE-V1 (จบ) =====
+(function () {
+    if (window.__lgBlockV3) return; window.__lgBlockV3 = true;
+    var AHEAD = 3;   // ไล่คิวต่อไปอีกกี่วัน
+    var isEn = function () { try { return sessionStorage.getItem('currentLanguage') === 'en'; } catch (e) { return false; } };
+    function T(th, e) { return isEn() ? e : th; }
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function up(s) { return String(s == null ? '' : s).trim().toUpperCase(); }
+    function p2(n) { return String(n).padStart(2, '0'); }
+    function fmt(d) { return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+    function today() { try { return lgTodayStr(); } catch (e) { return fmt(new Date()); } }
+    function addDays(s, n) { var p = String(s).split('-'); var d = new Date(+p[0], +p[1] - 1, +p[2], 12, 0, 0); d.setDate(d.getDate() + n); return fmt(d); }
+    function dm(s) { var a = String(s).split('-'); return a.length === 3 ? a[2] + '/' + a[1] : s; }
+    function f1(n) { return (Math.round(n * 10) / 10).toFixed(1); }
+    function num(n) { return (Math.round(n) || 0).toLocaleString('en-US'); }
+    function rk(p) { return up(p.WO) + '|' + up(p.partNo); }
+    function lineOf(p) { return String(p && p.line != null ? p.line : '').trim() || '-'; }
+    function isExt(p) { try { return typeof window.lgIsExtPlan === 'function' ? !!window.lgIsExtPlan(p) : false; } catch (e) { return false; } }
+    function $(s, r) { return (r || document).querySelector(s); }
+    function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+    function recvMap() { var m = {}; try { (db.lgReceiveLog || []).forEach(function (x) { var k = up(x.WO) + '|' + up(x.partNo); m[k] = (m[k] || 0) + (parseFloat(x.qty) || 0); }); } catch (e) { } return m; }
+ 
+    // แบ่งยอดที่ LG รับแล้วให้แต่ละแถวแพลน (WO+พาร์ทเดียวกันที่อยู่หลายวัน): แถววันก่อนได้ก่อน ที่เหลือค่อยตกถึงวันถัดไป — กันนับของ WO เดียวกันซ้ำ 2 วัน
+    function pid(p) { return p.id != null ? String(p.id) : [lgPlanDateOf(p), lineOf(p), rk(p)].join('~'); }
+    function allocRV(lastDate) {
+        var left = recvMap(), out = {}, byDL = {};
+        try { (db.lgPlan || []).forEach(function (p) { if (!p || p.planCancelledAt || isExt(p)) return; var d = lgPlanDateOf(p); if (!d || d > lastDate) return; var k = d + '\u0001' + lineOf(p); (byDL[k] = byDL[k] || []).push(p); }); } catch (e) { }
+        Object.keys(byDL).sort().forEach(function (k) {
+            var rows = byDL[k]; try { rows = lgSortPlans(rows); } catch (e) { }
+            rows.forEach(function (p) { var key = rk(p), o = parseFloat(p.orderQty) || 0, t = Math.min(o, left[key] || 0); out[pid(p)] = t; left[key] = (left[key] || 0) - t; });
+        });
+        return out;
+    }
+    // ไล่คิวของไลน์ตามลำดับที่ LG ผลิตจริง จากความคืบหน้าล่าสุด — หาจุดแรกที่ "ของที่ LG รับแล้ว" ไม่พอผลิตให้จบ WO นั้น
+    function sim(line, d0) {
+        var A = window.__lguApi; if (!A) return null;
+        var u = A.uhtOf(line); if (!u) return null;
+        var RV = allocRV(addDays(d0, AHEAD)), h = 0, blocked = null, behind = 0;
+        for (var i = 0; i <= AHEAD; i++) {
+            var d = addDays(d0, i), all = [];
+            try { all = lgSortPlans((db.lgPlan || []).filter(function (p) { return p && !p.planCancelledAt && lgPlanDateOf(p) === d && lineOf(p) === line; })); } catch (e) { all = []; }
+            if (!all.length) continue;
+            var done = {}, part = {}, start = 0;
+            if (i === 0) {
+                var st = null; try { st = A.lineState(line, d); } catch (e) { st = null; }
+                if (!(st && st.hasProg)) return { line: line, noProg: true };   // LG ยังไม่อัปเดตว่าผลิตถึงไหน → ยังไม่นับเวลา
+                if (st.nv) {
+                    String(st.pg.doneWOs == null ? '' : st.pg.doneWOs).split(',').map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (k) { done[up(k.split('|')[0]) + '|' + up(k.split('|')[1])] = 1; });
+                    (st.partRows || []).forEach(function (x) { part[rk(x.r)] = x.q; });
+                } else if (st.idx >= 0) {
+                    st.rows.forEach(function (r, j) { if (j < st.idx) done[rk(r)] = 1; });
+                    var o = parseFloat(st.cur.orderQty) || 0, q = Math.min(o, parseFloat(st.pg.producedQty) || 0);
+                    if (q >= o && o > 0) done[rk(st.cur)] = 1; else part[rk(st.cur)] = q;
+                }
+                var cur = all.findIndex(function (p) { return !isExt(p) && !done[rk(p)]; });
+                if (cur < 0) continue; start = cur;
+            }
+            for (var j = start; j < all.length; j++) {
+                var p = all[j], ord = parseFloat(p.orderQty) || 0;
+                if (isExt(p)) { h += ord / u; continue; }
+                if (done[rk(p)]) continue;
+                var made = Math.min(ord, part[rk(p)] || 0), rem = Math.max(0, ord - made);
+                var nco = all.filter(function (q) { return !isExt(q) && up(q.WO) === up(p.WO); }).length, kdiv = nco >= 2 ? nco : 1;
+                var avail = Math.max(0, Math.min(ord, RV[pid(p)] || 0) - made);   // ของที่ LG รับแล้วแต่ยังไม่ได้ผลิต
+                var seg = { date: d, WO: String(p.WO).trim(), partNo: String(p.partNo).trim(), ord: ord, rem: rem, avail: avail };
+                if (!blocked) { if (i === 0 && avail < rem) blocked =   /* เตือนเฉพาะ WO ของวันที่เลือก — ของแพลนวันถัดไปยังไม่ถึงเวลาส่ง */ { seg: seg, atH: h + avail / u / kdiv, miss: rem - avail }; }
+                else behind += avail;
+                h += rem / u / kdiv;
+            }
+        }
+        return { line: line, u: u, blocked: blocked, behind: behind, behindH: behind / u };
+    }
+ 
+    function level(r) {
+        if (!r || !r.blocked) return null;
+        var m = 2; try { m = window.__lguApi.minH(); } catch (e) { }
+        return r.blocked.atH < m * 0.5 ? 'bad' : (r.blocked.atH < m ? 'warn' : null);
+    }
+    function msg(r, d0, short) {
+        var b = r.blocked, s = b.seg, eta = new Date(Date.now() + b.atH * 3600e3);
+        var wo = (s.date !== d0 ? dm(s.date) + ' ' : '') + s.WO;
+        var head = b.atH < 0.05 ? T('⛔ ตอนนี้ติดที่ WO ', '⛔ Stuck now at WO ') : T('⚠ จะติดที่ WO ', '⚠ Will get stuck at WO ');
+        var t = head + '<b>' + esc(wo) + '</b>' + (s.partNo ? ' <span style="opacity:.75">(' + esc(s.partNo) + ')</span>' : '')
+            + T(' — ยังส่งไม่ครบ ขาด ', ' — not fully delivered, short ') + '<b>' + num(b.miss) + '</b>' + T(' ชิ้น', ' pcs');
+        if (b.atH >= 0.05) t += T(' · ของที่มีผลิตได้อีก ', ' · stock lasts only ') + '<b>' + f1(b.atH) + T(' ชม.', ' h') + '</b> ' + T('(ถึง ~', '(until ~') + p2(eta.getHours()) + ':' + p2(eta.getMinutes()) + ')';
+        if (!short && r.behind > 0) t += '<div class="lgc-sub">' + T('WO ถัดไปที่ส่งล่วงหน้าไว้ ', 'Later WOs already delivered: ') + num(r.behind) + T(' ชิ้น (≈', ' pcs (≈') + f1(r.behindH) + T(' ชม.) ใช้ไม่ได้จนกว่า ', ' h) cannot be used until ') + esc(s.WO) + T(' จะครบ', ' is complete') + '</div>';
+        return t;
+    }
+ 
+    var css = document.createElement('style');
+    css.textContent = '.lgc-w{margin-top:8px;border-radius:10px;padding:7px 11px;font-size:12.5px;line-height:1.45;font-weight:600}.lgc-w.bad{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c}.lgc-w.warn{background:#fffbeb;border:1px solid #fde68a;color:#b45309}'
+        + '.lgc-sub{font-weight:500;font-size:12px;opacity:.9;margin-top:2px}'
+        + '.lgc-ban{margin-bottom:10px;border-radius:12px;padding:9px 13px;font-size:13px;font-weight:700;display:flex;gap:10px;align-items:flex-start}.lgc-ban.bad{background:#fee2e2;border:1px solid #fca5a5;color:#991b1b}.lgc-ban.warn{background:#fef3c7;border:1px solid #fcd34d;color:#92400e}.lgc-ban b.l{background:#fff;border-radius:6px;padding:0 6px}';
+    css.textContent += '.lgb-w,.lgb-ban{display:none!important}';   /* ซ่อนคำเตือนของ V1/V2 (ถ้ามี) */
+    document.head.appendChild(css);
+ 
+    function selDate() { var d = document.getElementById('lgd-date'); return (d && d.value) || today(); }
+    function lineOfCard(ln) { var sp = ln.querySelector('.t span'), m = sp ? /^(?:ไลน์|Line)\s+(.+)$/.exec(sp.textContent.trim()) : null; return m ? m[1].trim() : ''; }
+    function paint() {
+        var ring = document.getElementById('lgd-ring'); if (!ring || ring.offsetParent === null || document.hidden) return;
+        var d0 = selDate(), bans = [], worst = 'warn';
+        $$('.lgd-ln', ring).forEach(function (ln) {
+            var l = lineOfCard(ln); if (!l) return;
+            var r = null; try { r = sim(l, d0); } catch (e) { r = null; }
+            var lv = level(r), sig = lv ? lv + '|' + msg(r, d0, false).replace(/\(ถึง ~\d\d:\d\d\)|\(until ~\d\d:\d\d\)/, '') : '';
+            if (lv) { bans.push({ l: l, r: r }); if (lv === 'bad') worst = 'bad'; }
+            var old = ln.querySelector('.lgc-w');
+            if (!lv) { if (old) old.remove(); return; }
+            if (old && old.getAttribute('data-sig') === sig) { if (old.getAttribute('data-eta')) old.innerHTML = msg(r, d0, false); return; }
+            if (old) old.remove();
+            ln.insertAdjacentHTML('beforeend', '<div class="lgc-w ' + lv + '" data-eta="1" data-sig="' + esc(sig) + '">' + msg(r, d0, false) + '</div>');
+        });
+        var ban = ring.querySelector('.lgc-ban');
+        if (!bans.length) { if (ban) ban.remove(); return; }
+        var bs = worst + '|' + bans.map(function (x) { return x.l + x.r.blocked.seg.WO + Math.round(x.r.blocked.atH * 10); }).join(',');
+        if (ban && ban.getAttribute('data-sig') === bs) return;
+        if (ban) ban.remove();
+        ring.insertAdjacentHTML('afterbegin', '<div class="lgc-ban ' + worst + '" data-sig="' + esc(bs) + '"><div>⛔</div><div>' + T('LG จะรอของ: ', 'LG will wait for parts: ')
+            + bans.map(function (x) { return '<b class="l">' + T('ไลน์ ', 'Line ') + esc(x.l) + '</b> ' + T('ติดที่ ', 'stuck at ') + esc(x.r.blocked.seg.WO) + ' ' + T('ขาด ', 'short ') + num(x.r.blocked.miss) + T(' ชิ้น · อีก ', ' pcs · in ') + f1(x.r.blocked.atH) + T(' ชม.', ' h'); }).join(' &nbsp;|&nbsp; ') + '</div></div>');
+    }
+    setInterval(function () { try { paint(); } catch (e) { if (window.console) console.warn('LG-BLOCK', e); } }, 1500);
+    window.__lgBlockSim3 = sim;
+})();
+// ===== จบ LG-BLOCK-V3 =====
 (function () {
     if (window.__lgRepDedup2) return; window.__lgRepDedup2 = true;
     function sty(el) { return (el && el.getAttribute && el.getAttribute('style')) || ''; }
